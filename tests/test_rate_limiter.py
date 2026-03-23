@@ -47,13 +47,14 @@ class TestRateLimiter:
         monkeypatch.setattr(time, "sleep", lambda s: sleeps.append(s))
 
         limiter = RateLimiter(min_delay_ms=100, max_delay_ms=100)
-        limiter.wait()
-        # Simulate time passing
-        time.sleep(0.2)
+        # Simulate an action that happened long ago
+        limiter._last_action_time = time.monotonic() - 1.0  # 1 second ago
+        limiter._last_delay_ms = 100
+
         limiter.wait_if_needed()
 
-        # Only the first wait() should have slept
-        assert len(sleeps) == 1
+        # Should NOT sleep since 1000ms > 100ms min_delay
+        assert len(sleeps) == 0
 
     def test_from_config_creates_limiter(self):
         """RateLimiter can be initialized from RateLimitingConfig dataclass."""
