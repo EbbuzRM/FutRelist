@@ -14,7 +14,7 @@
 **Goal:** Browser automation tool for auto-relisting expired players on FIFA 26 WebApp
 
 ### Current Status:
-Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). Phase 2 Plan 02 (Navigator) completato. 3/6 piani di Phase 2 completati.
+Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). Phase 2 Plan 03 (Detector) completato. 4/6 piani di Phase 2 completati.
 
 ### Completed:
 - [x] Phase 1: Browser Setup & Authentication (BROWSER-01, BROWSER-02, BROWSER-03)
@@ -29,15 +29,16 @@ Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). 
   - [x] tests/test_detector.py (16 tests for parse_price/parse_rating/determine_state)
 - [x] Phase 2 Plan 01: Listing Data Model (models/listing.py)
 - [x] Phase 2 Plan 02: Transfer Market Navigator (browser/navigator.py)
+- [x] Phase 2 Plan 03: DOM Detector (browser/detector.py) — 16 tests pass, DETECT-01/02/03/04 satisfied
 
 ### Next Steps:
-- [ ] Phase 2 Plan 03: DOM Detector (browser/detector.py)
 - [ ] Phase 2 Plan 04: Integration
 - [ ] Phase 3: Auto-Relist Core (RELIST-01, RELIST-02, RELIST-03, RELIST-04)
 - [ ] Phase 4: Configuration System (CONFIG-01, CONFIG-02, CONFIG-03, CONFIG-04)
 - [ ] Phase 5: Logging & Error Handling
 
 ### Current Activity
+[2026-03-23] Phase 2 Plan 03 (DOM Detector) completato. 1 commit: ListingDetector class con scan_listings(), SELECTORS dict con 14 chiavi, parse_price/parse_rating/determine_state helpers. 16 tests pass, import smoke test OK. DETECT-01/02/03/04 satisfied.
 [2026-03-23T00:32:05Z] Phase 2 Plan 02 (Transfer Market Navigator) completato. 1 commit: TransferMarketNavigator class con go_to_transfer_list(), SELECTORS dict con 4 chiavi, _random_delay helper. Import test e selector completeness check passano.
 [2026-03-23T00:27:48Z] Phase 2 Plan 00 (test infrastructure) complete. 4 commits: pytest requirements, test fixtures, 5 model tests, 16 detector tests. 21 tests collectible.
 [2026-03-23T00:17:17.124Z] Nyquist compliance fix applied to Phase 2: Wave 0 test setup plan created, detector plan updated to use pytest, VALIDATION.md set to nyquist_compliant: true, CHECK.md shows 0 warnings
@@ -51,9 +52,10 @@ Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). 
 - Playwright per browser automation
 - AuthManager gestisce login e sessione persistente
 - Navigator pattern: page object + config dict, _random_delay helper, Italian logging, bool returns
+- Detector pattern: bulk DOM extraction via eval_on_selector_all, per-element fallback, Italian/English keyword mapping
 
-Last updated: 2026-03-23T00:34:28.180Z
+Last updated: 2026-03-23T00:38:06.902Z
 
 ## Last Commit
-Hash: 45d96b3
-Message: "feat(02-02): create TransferMarketNavigator for home-to-transfer-list navigation"
+Hash: e46cc8a
+Message: "feat(02-03): create ListingDetector for DOM listing extraction"
