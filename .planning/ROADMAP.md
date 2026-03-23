@@ -29,7 +29,7 @@
 | 01 | Listing Data Model | ✅ Complete | 85db6aa |
 | 02 | Transfer Market Navigator | ✅ Complete | 2026-03-23 |
 | 03 | DOM Detector | ✅ Complete | 2026-03-23 |
-| 04 | Integration | ✅ Complete | 2026-03-23 |
+| 04 | Integration | Complete    | 2026-03-23 |
 
 **Success Criteria:**
 1. System navigates to Transfer Market > My Listings
@@ -78,6 +78,14 @@ Plans:
 ### Phase 5: Logging & Error Handling
 **Goal:** Robust operation with logging and error recovery
 **Requirements:** LOG-01, LOG-02, LOG-03, LOG-04, ERROR-01, ERROR-02, ERROR-03, ERROR-04
+
+**Plans:** 4 plans
+
+Plans:
+- [ ] 05-00-PLAN.md — TDD: ActionLogEntry + RateLimiter + ErrorHandler (Wave 1)
+- [ ] 05-01-PLAN.md — Logging integration: JsonFormatter + history CLI (Wave 2)
+- [ ] 05-02-PLAN.md — Error recovery: wire rate limiter + session check + retry (Wave 2)
+- [ ] 05-03-PLAN.md — Console status with rich Live + final integration (Wave 3)
 
 **Success Criteria:**
 1. All relisting actions logged with timestamps
