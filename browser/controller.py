@@ -18,7 +18,7 @@ class BrowserController:
         self.page: Page | None = None
         self._is_running = False
 
-    def start(self) -> Page:
+    def start(self, storage_state_path: str | None = None) -> Page:
         if self._is_running:
             raise RuntimeError("Browser già avviato. Usa stop() prima di ricominciare.")
 
@@ -34,13 +34,18 @@ class BrowserController:
             slow_mo=browser_cfg.get("slow_mo", 500),
         )
 
-        logger.info("Creazione contesto browser...")
-        self.context = self.browser.new_context(
-            viewport={
+        context_args = {
+            "viewport": {
                 "width": viewport.get("width", 1280),
                 "height": viewport.get("height", 720),
             }
-        )
+        }
+        if storage_state_path:
+            logger.info(f"Ripristino stato sessione ({storage_state_path})")
+            context_args["storage_state"] = storage_state_path
+
+        logger.info("Creazione contesto browser...")
+        self.context = self.browser.new_context(**context_args)
 
         logger.info("Creazione pagina...")
         self.page = self.context.new_page()

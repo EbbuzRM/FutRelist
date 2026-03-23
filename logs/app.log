@@ -44,3 +44,338 @@ Call log:
 2026-03-23 10:19:58,367 [ERROR] __main__: Errore autenticazione: Login di recupero fallito
 2026-03-23 10:19:58,368 [INFO] browser.controller: Chiusura browser...
 2026-03-23 10:19:58,684 [INFO] browser.controller: Browser chiuso
+2026-03-23 17:07:19,920 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 17:07:19,921 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 17:07:19,922 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 17:07:19,922 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 17:07:20,667 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 17:07:21,042 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 17:07:21,070 [INFO] browser.controller: Creazione pagina...
+2026-03-23 17:07:21,327 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 17:07:21,328 [INFO] browser.controller: Navigazione a: https://www.ea.com/fifa/ultimate-team/web-app/
+2026-03-23 17:07:24,828 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:07:24,832 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:07:24,862 [INFO] browser.auth: Utente già loggato (URL conferma)
+2026-03-23 17:07:24,862 [INFO] __main__: Già loggato con sessione salvata
+2026-03-23 17:07:24,862 [INFO] __main__: === Autenticazione completata ===
+2026-03-23 17:07:24,863 [INFO] __main__: Avvio loop continuo (intervallo: 3600s). Premi Ctrl+C per fermare.
+2026-03-23 17:07:24,874 [INFO] __main__: === Ciclo 1 ===
+2026-03-23 17:07:24,879 [INFO] browser.error_handler: Sessione scaduta: elemento .ut-app non trovato
+2026-03-23 17:07:24,879 [WARNING] browser.error_handler: Sessione non valida, tentativo di recupero...
+2026-03-23 17:07:24,879 [INFO] browser.auth: Sessione salvata eliminata
+2026-03-23 17:07:28,727 [INFO] browser.auth: Pagina di login rilevata
+2026-03-23 17:07:28,727 [INFO] browser.auth: Tentativo di login...
+2026-03-23 17:07:32,517 [INFO] browser.auth: Email inserita
+2026-03-23 17:07:34,414 [INFO] browser.auth: Bottone Next/Avanti cliccato
+2026-03-23 17:07:37,966 [INFO] browser.auth: Password inserita
+2026-03-23 17:07:37,971 [ERROR] browser.auth: Bottone submit non trovato
+2026-03-23 17:07:37,974 [ERROR] __main__: Errore autenticazione: Login di recupero fallito
+2026-03-23 17:07:37,974 [INFO] browser.controller: Chiusura browser...
+2026-03-23 17:07:38,345 [INFO] browser.controller: Browser chiuso
+2026-03-23 17:16:51,788 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 17:16:51,790 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 17:16:51,790 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 17:16:51,791 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 17:16:52,571 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 17:16:52,899 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 17:16:52,925 [INFO] browser.controller: Creazione pagina...
+2026-03-23 17:16:53,188 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 17:16:53,188 [INFO] browser.controller: Navigazione a: https://www.ea.com/fifa/ultimate-team/web-app/
+2026-03-23 17:16:56,470 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:16:56,473 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:16:56,503 [INFO] browser.auth: Utente già loggato (URL conferma)
+2026-03-23 17:16:56,503 [INFO] __main__: Già loggato con sessione salvata
+2026-03-23 17:16:56,503 [INFO] __main__: === Autenticazione completata ===
+2026-03-23 17:16:56,503 [INFO] __main__: Avvio loop continuo (intervallo: 3600s). Premi Ctrl+C per fermare.
+2026-03-23 17:16:56,516 [INFO] __main__: === Ciclo 1 ===
+2026-03-23 17:16:56,522 [INFO] browser.error_handler: Sessione scaduta: elemento .ut-app non trovato
+2026-03-23 17:16:56,523 [WARNING] browser.error_handler: Sessione non valida, tentativo di recupero...
+2026-03-23 17:16:56,523 [INFO] browser.auth: Sessione salvata eliminata
+2026-03-23 17:17:00,381 [INFO] browser.auth: Pagina di login rilevata
+2026-03-23 17:17:00,382 [INFO] browser.auth: Tentativo di login...
+2026-03-23 17:17:04,203 [INFO] browser.auth: Email inserita
+2026-03-23 17:17:06,095 [INFO] browser.auth: Bottone Next/Avanti cliccato
+2026-03-23 17:17:09,669 [INFO] browser.auth: Password inserita
+2026-03-23 17:17:09,675 [ERROR] browser.auth: Bottone submit non trovato
+2026-03-23 17:17:09,679 [ERROR] __main__: Errore autenticazione: Login di recupero fallito
+2026-03-23 17:17:09,679 [INFO] browser.controller: Chiusura browser...
+2026-03-23 17:17:10,163 [INFO] browser.controller: Browser chiuso
+2026-03-23 17:25:48,356 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 17:25:48,358 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 17:25:48,358 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 17:25:48,359 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 17:25:49,112 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 17:25:49,439 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 17:25:49,474 [INFO] browser.controller: Creazione pagina...
+2026-03-23 17:25:49,780 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 17:25:49,780 [INFO] browser.controller: Navigazione a: https://www.ea.com/fifa/ultimate-team/web-app/
+2026-03-23 17:25:52,962 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:25:52,967 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:25:53,006 [INFO] browser.auth: Utente già loggato (URL conferma)
+2026-03-23 17:25:53,006 [INFO] __main__: Già loggato con sessione salvata
+2026-03-23 17:25:53,006 [INFO] __main__: === Autenticazione completata ===
+2026-03-23 17:25:53,007 [INFO] __main__: Avvio loop continuo (intervallo: 3600s). Premi Ctrl+C per fermare.
+2026-03-23 17:25:53,017 [INFO] __main__: === Ciclo 1 ===
+2026-03-23 17:25:53,023 [INFO] browser.error_handler: Sessione scaduta: elemento .ut-app non trovato
+2026-03-23 17:25:53,024 [WARNING] browser.error_handler: Sessione non valida, tentativo di recupero...
+2026-03-23 17:25:53,024 [INFO] browser.auth: Sessione salvata eliminata
+2026-03-23 17:25:56,899 [INFO] browser.auth: Pagina di login rilevata
+2026-03-23 17:25:56,900 [INFO] browser.auth: Tentativo di login...
+2026-03-23 17:26:00,707 [INFO] browser.auth: Email inserita
+2026-03-23 17:26:02,599 [INFO] browser.auth: Bottone Next/Avanti cliccato
+2026-03-23 17:26:06,163 [INFO] browser.auth: Password inserita
+2026-03-23 17:26:06,169 [ERROR] browser.auth: Bottone submit non trovato
+2026-03-23 17:26:06,172 [ERROR] __main__: Errore autenticazione: Login di recupero fallito
+2026-03-23 17:26:06,173 [INFO] browser.controller: Chiusura browser...
+2026-03-23 17:26:06,683 [INFO] browser.controller: Browser chiuso
+2026-03-23 17:27:33,872 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 17:27:33,873 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 17:27:33,874 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 17:27:33,874 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 17:27:34,613 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 17:27:34,941 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 17:27:34,973 [INFO] browser.controller: Creazione pagina...
+2026-03-23 17:27:35,270 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 17:27:35,270 [INFO] browser.controller: Navigazione a: https://www.ea.com/fifa/ultimate-team/web-app/
+2026-03-23 17:27:40,808 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:27:40,812 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:27:40,842 [INFO] browser.auth: Utente già loggato (URL conferma)
+2026-03-23 17:27:40,842 [INFO] __main__: Già loggato con sessione salvata
+2026-03-23 17:27:40,843 [INFO] __main__: === Autenticazione completata ===
+2026-03-23 17:27:40,843 [INFO] __main__: Avvio loop continuo (intervallo: 3600s). Premi Ctrl+C per fermare.
+2026-03-23 17:27:40,853 [INFO] __main__: === Ciclo 1 ===
+2026-03-23 17:27:40,862 [INFO] browser.error_handler: Sessione scaduta: elemento .ut-app non trovato
+2026-03-23 17:27:40,862 [WARNING] browser.error_handler: Sessione non valida, tentativo di recupero...
+2026-03-23 17:27:40,863 [INFO] browser.auth: Sessione salvata eliminata
+2026-03-23 17:27:45,867 [INFO] browser.auth: Pagina di login rilevata
+2026-03-23 17:27:45,867 [INFO] browser.auth: Tentativo di login...
+2026-03-23 17:27:49,809 [INFO] browser.auth: Email inserita
+2026-03-23 17:27:51,701 [INFO] browser.auth: Bottone Next/Avanti cliccato
+2026-03-23 17:27:55,261 [INFO] browser.auth: Password inserita
+2026-03-23 17:27:56,335 [INFO] browser.auth: Submit cliccato
+2026-03-23 17:27:59,362 [INFO] browser.auth: Verifica identità EA richiesta (prima attivazione)
+2026-03-23 17:28:02,281 [INFO] browser.auth: Verifica identità EA richiesta — inserisci il codice ricevuto
+2026-03-23 17:47:54,371 [INFO] __main__: Interruzione utente
+2026-03-23 17:47:54,372 [INFO] browser.controller: Chiusura browser...
+2026-03-23 17:48:25,114 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 17:48:25,115 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 17:48:25,116 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 17:48:25,116 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 17:48:25,878 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 17:48:26,175 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 17:48:26,230 [INFO] browser.controller: Creazione pagina...
+2026-03-23 17:48:26,524 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 17:48:26,524 [INFO] browser.controller: Navigazione a: https://www.ea.com/fifa/ultimate-team/web-app/
+2026-03-23 17:48:34,797 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:48:34,801 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:48:34,830 [INFO] browser.auth: Utente già loggato (URL conferma)
+2026-03-23 17:48:34,830 [INFO] __main__: Già loggato con sessione salvata
+2026-03-23 17:48:34,830 [INFO] __main__: === Autenticazione completata ===
+2026-03-23 17:48:34,831 [INFO] __main__: Avvio loop continuo (intervallo: 3600s). Premi Ctrl+C per fermare.
+2026-03-23 17:48:34,840 [INFO] __main__: === Ciclo 1 ===
+2026-03-23 17:48:34,849 [INFO] browser.error_handler: Sessione scaduta: elemento .ut-app non trovato
+2026-03-23 17:48:34,850 [WARNING] browser.error_handler: Sessione non valida, tentativo di recupero...
+2026-03-23 17:48:34,850 [INFO] browser.auth: Sessione salvata eliminata
+2026-03-23 17:48:39,383 [INFO] browser.auth: Pagina di login rilevata
+2026-03-23 17:48:39,384 [INFO] browser.auth: Tentativo di login...
+2026-03-23 17:48:43,345 [INFO] browser.auth: Email inserita
+2026-03-23 17:48:45,233 [INFO] browser.auth: Bottone Next/Avanti cliccato
+2026-03-23 17:48:48,793 [INFO] browser.auth: Password inserita
+2026-03-23 17:48:49,804 [INFO] browser.auth: Submit cliccato
+2026-03-23 17:48:52,836 [INFO] browser.auth: Verifica identità EA richiesta (prima attivazione)
+2026-03-23 17:48:55,732 [INFO] browser.auth: ==================================================
+2026-03-23 17:48:55,732 [INFO] browser.auth: VERIFICA 2FA RICHIESTA DA EA
+2026-03-23 17:48:55,732 [INFO] browser.auth: Inserisci il codice ricevuto via mail DIRETTAMENTE NEL BROWSER.
+2026-03-23 17:48:55,733 [INFO] browser.auth: Clicca 'Avanti/Submit' nel browser.
+2026-03-23 17:48:55,733 [INFO] browser.auth: Lo script è in pausa (max 3 minuti) in attesa che tu completi il login...
+2026-03-23 17:48:55,733 [INFO] browser.auth: ==================================================
+2026-03-23 17:49:58,601 [ERROR] browser.auth: Timeout durante l'attesa del completamento manuale della 2FA
+2026-03-23 17:49:58,602 [ERROR] browser.auth: Verifica 2FA fallita o interrotta
+2026-03-23 17:49:58,608 [ERROR] __main__: Errore autenticazione: Login di recupero fallito
+2026-03-23 17:49:58,609 [INFO] browser.controller: Chiusura browser...
+2026-03-23 17:49:59,056 [INFO] browser.controller: Browser chiuso
+2026-03-23 17:59:10,107 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 17:59:10,109 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 17:59:10,109 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 17:59:10,110 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 17:59:10,963 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 17:59:11,302 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 17:59:11,328 [INFO] browser.controller: Creazione pagina...
+2026-03-23 17:59:11,715 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 17:59:11,717 [INFO] browser.controller: Navigazione a: https://www.ea.com/fifa/ultimate-team/web-app/
+2026-03-23 17:59:15,586 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:59:15,590 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 17:59:15,621 [INFO] browser.auth: Utente già loggato (URL conferma)
+2026-03-23 17:59:15,621 [INFO] __main__: Già loggato con sessione salvata
+2026-03-23 17:59:15,621 [INFO] __main__: === Autenticazione completata ===
+2026-03-23 17:59:15,622 [INFO] __main__: Avvio loop continuo (intervallo: 3600s). Premi Ctrl+C per fermare.
+2026-03-23 17:59:15,632 [INFO] __main__: === Ciclo 1 ===
+2026-03-23 17:59:15,644 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 17:59:15,651 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 17:59:15,652 [DEBUG] browser.rate_limiter: Rate limit: attesa 4279ms
+2026-03-23 17:59:19,931 [INFO] __main__: === Ciclo 2 ===
+2026-03-23 17:59:19,940 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 17:59:19,945 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 17:59:19,945 [DEBUG] browser.rate_limiter: Rate limit: attesa 4512ms
+2026-03-23 17:59:24,458 [INFO] __main__: === Ciclo 3 ===
+2026-03-23 17:59:24,466 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 17:59:24,471 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 17:59:24,472 [DEBUG] browser.rate_limiter: Rate limit: attesa 4973ms
+2026-03-23 17:59:29,445 [INFO] __main__: === Ciclo 4 ===
+2026-03-23 17:59:29,454 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 17:59:29,463 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 17:59:29,463 [DEBUG] browser.rate_limiter: Rate limit: attesa 3488ms
+2026-03-23 17:59:32,952 [INFO] __main__: === Ciclo 5 ===
+2026-03-23 17:59:32,960 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 17:59:32,965 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 17:59:32,965 [DEBUG] browser.rate_limiter: Rate limit: attesa 3721ms
+2026-03-23 17:59:36,687 [INFO] __main__: === Ciclo 6 ===
+2026-03-23 17:59:36,695 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 17:59:36,701 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 17:59:36,701 [DEBUG] browser.rate_limiter: Rate limit: attesa 2811ms
+2026-03-23 17:59:39,512 [INFO] __main__: === Ciclo 7 ===
+2026-03-23 17:59:39,520 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 17:59:39,524 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 17:59:39,525 [DEBUG] browser.rate_limiter: Rate limit: attesa 2595ms
+2026-03-23 17:59:42,120 [INFO] __main__: === Ciclo 8 ===
+2026-03-23 17:59:42,127 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 17:59:42,132 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 17:59:42,132 [DEBUG] browser.rate_limiter: Rate limit: attesa 4963ms
+2026-03-23 17:59:47,096 [INFO] __main__: === Ciclo 9 ===
+2026-03-23 17:59:47,106 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 17:59:47,112 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 17:59:47,112 [DEBUG] browser.rate_limiter: Rate limit: attesa 3176ms
+2026-03-23 17:59:50,289 [INFO] __main__: === Ciclo 10 ===
+2026-03-23 17:59:50,298 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 17:59:50,303 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 17:59:50,304 [DEBUG] browser.rate_limiter: Rate limit: attesa 4049ms
+2026-03-23 17:59:54,353 [INFO] __main__: === Ciclo 11 ===
+2026-03-23 17:59:54,362 [ERROR] __main__: Errore: Page.query_selector: Target page, context or browser has been closed
+Traceback (most recent call last):
+  File "C:\App\fifa-relist\main.py", line 202, in main
+    ensure_session(page, auth, controller, get_credentials)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\App\fifa-relist\browser\error_handler.py", line 123, in ensure_session
+    if not is_session_expired(page):
+           ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\App\fifa-relist\browser\error_handler.py", line 70, in is_session_expired
+    ut_app = page.query_selector(".ut-app")
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\sync_api\_generated.py", line 8126, in query_selector
+    self._sync(self._impl_obj.query_selector(selector=selector, strict=strict))
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ~~~~~~~~~~~^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_page.py", line 407, in query_selector
+    return await self._main_frame.query_selector(selector, strict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_frame.py", line 348, in query_selector
+    await self._channel.send("querySelector", None, locals_to_params(locals()))
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TargetClosedError: Page.query_selector: Target page, context or browser has been closed
+2026-03-23 17:59:54,367 [INFO] browser.controller: Chiusura browser...
+2026-03-23 17:59:54,628 [INFO] browser.controller: Browser chiuso
+2026-03-23 18:01:58,528 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 18:01:58,528 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 18:01:58,529 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 18:01:58,529 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 18:01:59,266 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 18:01:59,546 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 18:01:59,580 [INFO] browser.controller: Creazione pagina...
+2026-03-23 18:01:59,846 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 18:01:59,846 [INFO] browser.controller: Navigazione a: https://www.ea.com/fifa/ultimate-team/web-app/
+2026-03-23 18:02:03,642 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 18:02:03,645 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 18:02:03,678 [INFO] browser.auth: Utente già loggato (URL conferma)
+2026-03-23 18:02:03,678 [INFO] __main__: Già loggato con sessione salvata
+2026-03-23 18:02:03,679 [INFO] __main__: === Autenticazione completata ===
+2026-03-23 18:02:03,680 [INFO] __main__: Avvio loop continuo (intervallo: 3600s). Premi Ctrl+C per fermare.
+2026-03-23 18:02:03,691 [INFO] __main__: === Ciclo 1 ===
+2026-03-23 18:02:03,703 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:03,713 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:03,713 [DEBUG] browser.rate_limiter: Rate limit: attesa 4119ms
+2026-03-23 18:02:07,833 [INFO] __main__: === Ciclo 2 ===
+2026-03-23 18:02:07,843 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:07,850 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:07,850 [DEBUG] browser.rate_limiter: Rate limit: attesa 4668ms
+2026-03-23 18:02:12,519 [INFO] __main__: === Ciclo 3 ===
+2026-03-23 18:02:12,527 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:12,532 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:12,532 [DEBUG] browser.rate_limiter: Rate limit: attesa 3003ms
+2026-03-23 18:02:15,536 [INFO] __main__: === Ciclo 4 ===
+2026-03-23 18:02:15,544 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:15,549 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:15,549 [DEBUG] browser.rate_limiter: Rate limit: attesa 2760ms
+2026-03-23 18:02:18,310 [INFO] __main__: === Ciclo 5 ===
+2026-03-23 18:02:18,319 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:18,326 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:18,327 [DEBUG] browser.rate_limiter: Rate limit: attesa 2555ms
+2026-03-23 18:02:20,882 [INFO] __main__: === Ciclo 6 ===
+2026-03-23 18:02:20,890 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:20,894 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:20,894 [DEBUG] browser.rate_limiter: Rate limit: attesa 2150ms
+2026-03-23 18:02:23,045 [INFO] __main__: === Ciclo 7 ===
+2026-03-23 18:02:23,053 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:23,056 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:23,057 [DEBUG] browser.rate_limiter: Rate limit: attesa 4024ms
+2026-03-23 18:02:27,081 [INFO] __main__: === Ciclo 8 ===
+2026-03-23 18:02:27,089 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:27,094 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:27,094 [DEBUG] browser.rate_limiter: Rate limit: attesa 2929ms
+2026-03-23 18:02:30,024 [INFO] __main__: === Ciclo 9 ===
+2026-03-23 18:02:30,032 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:30,036 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:30,036 [DEBUG] browser.rate_limiter: Rate limit: attesa 3091ms
+2026-03-23 18:02:33,128 [INFO] __main__: === Ciclo 10 ===
+2026-03-23 18:02:33,136 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:33,140 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:33,140 [DEBUG] browser.rate_limiter: Rate limit: attesa 3623ms
+2026-03-23 18:02:36,763 [INFO] __main__: === Ciclo 11 ===
+2026-03-23 18:02:36,770 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:36,775 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:36,775 [DEBUG] browser.rate_limiter: Rate limit: attesa 4027ms
+2026-03-23 18:02:40,803 [INFO] __main__: === Ciclo 12 ===
+2026-03-23 18:02:40,811 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:02:40,815 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:02:40,815 [DEBUG] browser.rate_limiter: Rate limit: attesa 2428ms
+2026-03-23 18:02:41,728 [INFO] __main__: Interruzione utente
+2026-03-23 18:02:41,729 [INFO] browser.controller: Chiusura browser...
+2026-03-23 18:06:52,806 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 18:06:52,807 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 18:06:52,808 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 18:06:52,808 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 18:06:53,563 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 18:06:53,832 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 18:06:53,862 [INFO] browser.controller: Creazione pagina...
+2026-03-23 18:06:54,179 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 18:06:54,184 [INFO] browser.controller: Navigazione a: https://www.ea.com/fifa/ultimate-team/web-app/
+2026-03-23 18:06:57,505 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 18:06:57,508 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 18:06:57,544 [INFO] __main__: Login richiesto...
+2026-03-23 18:06:58,924 [INFO] browser.auth: Pagina di login rilevata
+2026-03-23 18:06:58,924 [INFO] browser.auth: Tentativo di login...
+2026-03-23 18:07:00,176 [INFO] browser.auth: Pulsante Login iniziale cliccato
+2026-03-23 18:07:00,176 [INFO] browser.auth: Controllo caricamento... (attesa max 15s)
+2026-03-23 18:07:01,018 [INFO] browser.auth: Email inserita
+2026-03-23 18:07:02,918 [INFO] browser.auth: Bottone Next/Avanti cliccato
+2026-03-23 18:07:06,470 [INFO] browser.auth: Password inserita
+2026-03-23 18:07:07,478 [INFO] browser.auth: Submit cliccato
+2026-03-23 18:07:10,504 [INFO] browser.auth: Verifica identità EA richiesta (prima attivazione)
+2026-03-23 18:07:13,409 [INFO] browser.auth: ==================================================
+2026-03-23 18:07:13,409 [INFO] browser.auth: VERIFICA 2FA RICHIESTA DA EA
+2026-03-23 18:07:13,410 [INFO] browser.auth: Inserisci il codice ricevuto via mail DIRETTAMENTE NEL BROWSER.
+2026-03-23 18:07:13,410 [INFO] browser.auth: Clicca 'Avanti/Submit' nel browser.
+2026-03-23 18:07:13,410 [INFO] browser.auth: Lo script è in pausa (max 3 minuti) in attesa che tu completi il login...
+2026-03-23 18:07:13,410 [INFO] browser.auth: ==================================================
+2026-03-23 18:10:13,432 [ERROR] browser.auth: Timeout durante l'attesa del completamento manuale della 2FA
+2026-03-23 18:10:13,432 [ERROR] browser.auth: Verifica 2FA fallita o interrotta
+2026-03-23 18:10:13,433 [ERROR] __main__: Errore autenticazione: Login fallito
+2026-03-23 18:10:13,433 [INFO] browser.controller: Chiusura browser...
+2026-03-23 18:10:13,830 [INFO] browser.controller: Browser chiuso

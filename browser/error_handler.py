@@ -68,16 +68,16 @@ def is_session_expired(page: "Page") -> bool:
         return True
 
     ut_app = page.query_selector(".ut-app")
-    if ut_app is None:
-        logger.info("Sessione scaduta: elemento .ut-app non trovato")
-        return True
-
     ea_app = page.query_selector(".ea-app")
-    if ea_app is None:
-        logger.info("Sessione scaduta: elemento .ea-app non trovato")
-        return True
+    
+    if ut_app is not None or ea_app is not None:
+        return False
 
-    return False
+    if "web-app" in url:
+        return False
+
+    logger.info("Sessione scaduta: elementi WebApp non trovati e URL diverso")
+    return True
 
 
 def handle_element_not_found(
@@ -138,9 +138,6 @@ def ensure_session(
         email, password = get_credentials_fn()
         if not auth.perform_login(page, email, password):
             raise AuthError("Login di recupero fallito")
-
-        if not auth.handle_verification_if_needed(page):
-            raise AuthError("Verifica identità fallita durante recupero")
 
         auth.save_session(controller.context)
         logger.info("Sessione recuperata con successo")

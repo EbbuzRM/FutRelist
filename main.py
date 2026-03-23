@@ -106,9 +106,6 @@ def authenticate(controller, auth, page) -> None:
     if not auth.perform_login(page, email, password):
         raise AuthError("Login fallito")
 
-    if not auth.handle_verification_if_needed(page):
-        raise AuthError("Verifica identità fallita")
-
     auth.save_session(controller.context)
     logger.info("Login completato e sessione salvata")
 
@@ -171,7 +168,9 @@ def main() -> None:
 
         controller = BrowserController(config)
         auth = AuthManager(config)
-        page = controller.start()
+        
+        state_path = str(auth.state_file) if auth.state_file.exists() else None
+        page = controller.start(storage_state_path=state_path)
 
         controller.navigate_to_webapp()
         logger.info(f"WebApp caricata: {page.title()}")

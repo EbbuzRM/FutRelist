@@ -17,7 +17,7 @@ SELECTORS = {
     "email_input": 'input[type="email"], input[name="email"], #email',
     "next_button": '#logInBtn, button:has-text("Next"), button:has-text("Avanti"), button:has-text("next")',
     "password_input": 'input[type="password"], #password',
-    "submit_button": 'button[type="submit"], button:has-text("Accedi"), button:has-text("Log In")',
+    "submit_button": '#logInBtn, button[type="submit"], button:has-text("Accedi"), button:has-text("Log In"), button:has-text("Sign In")',
     "verification_send_code": '#btnSendCode, button:has-text("Send Code"), button:has-text("Invia codice")',
     "verification_code_input": '#twoFactorCode, input[name="twoFactorCode"], #verificationCode',
     "verification_submit": '#btnSubmit, button:has-text("Submit"), button:has-text("Verifica")',
@@ -73,17 +73,20 @@ class AuthManager:
     
     def is_logged_in(self, page: Page) -> bool:
         try:
+            # Check URL — se non siamo più sulla pagina di login, siamo dentro
+            url = page.url.lower()
+            if "web-app" in url and "login" not in url:
+                logger.info("Utente loggato (URL conferma)")
+                return True
+
+            # Check elementi DOM
             home_element = page.query_selector(SELECTORS["webapp_home"])
             if home_element:
-                logger.info("Utente già loggato (home WebApp rilevata)")
+                logger.info("Utente loggato (WebApp rilevata)")
                 return True
-            
-            if "web-app" in page.url and "login" not in page.url.lower():
-                logger.info("Utente già loggato (URL conferma)")
-                return True
-            
+
             return False
-            
+
         except Exception:
             return False
     
@@ -108,7 +111,17 @@ class AuthManager:
             login_btn = page.query_selector(SELECTORS["login_button"])
             if login_btn:
                 login_btn.click()
-                page.wait_for_timeout(2000)
+                logger.info("Pulsante Login iniziale cliccato")
+                
+                try:
+                    logger.info("Controllo caricamento... (attesa max 15s)")
+                    page.wait_for_selector(f'{SELECTORS["webapp_home"]}, {SELECTORS["email_input"]}', timeout=15000)
+                except Exception:
+                    logger.warning("Timeout attesa caricamento post-login")
+                
+                if self.is_logged_in(page):
+                    logger.info("Login automatico effettuato tramite sessione ripristinata!")
+                    return True
 
             # Step 1: Inserisci email
             email_input = page.query_selector(SELECTORS["email_input"])
@@ -149,13 +162,24 @@ class AuthManager:
                 logger.error("Bottone submit non trovato")
                 return False
 
+            # Attendi redirect post-login (può essere lento)
+            logger.info("Attesa redirect post-login...")
             page.wait_for_timeout(5000)
 
-            if self.is_logged_in(page):
-                logger.info("Login riuscito!")
-                return True
+            # Gestione eventuale 2FA EA
+            if not self.handle_verification_if_needed(page):
+                logger.error("Verifica 2FA fallita o interrotta")
+                return False
 
-            logger.warning("Login potrebbe non essere riuscito")
+            # Attendi caricamento WebApp fino a 30s
+            logger.info("Attesa caricamento WebApp...")
+            for _ in range(30):
+                if self.is_logged_in(page):
+                    logger.info("Login riuscito!")
+                    return True
+                page.wait_for_timeout(1000)
+
+            logger.warning("Login fallito — WebApp non rilevata dopo 30s")
             return False
 
         except Exception as e:
@@ -167,62 +191,47 @@ class AuthManager:
 
         Ritorna True se la verifica è passata o non necessaria, False se fallita.
         """
-        # Check se appare il pulsante "Send Code" (prima attivazione 2FA)
-        send_code_btn = page.query_selector(SELECTORS["verification_send_code"])
-        if send_code_btn:
-            logger.info("Verifica identità EA richiesta (prima attivazione)")
-            send_code_btn.click()
-            page.wait_for_timeout(2000)
-
         # Check se appare il campo codice verifica
         code_input = page.query_selector(SELECTORS["verification_code_input"])
-        if not code_input:
+        send_code_btn = page.query_selector(SELECTORS["verification_send_code"])
+
+        if not code_input and not send_code_btn:
             return True
 
-        logger.info("Verifica identità EA richiesta — inserisci il codice ricevuto")
-
-        for attempt in range(3):
-            code = input(f"Codice verifica (tentativo {attempt + 1}/3): ").strip()
-            if not code:
-                logger.warning("Codice vuoto, riprova")
-                continue
-
+        # Se c'è il pulsante "Send Code", cliccalo
+        if send_code_btn:
+            logger.info("Verifica identità EA — invio codice...")
+            send_code_btn.click()
+            page.wait_for_timeout(2000)
             code_input = page.query_selector(SELECTORS["verification_code_input"])
-            if not code_input:
-                logger.error("Campo codice scomparso")
-                return False
 
-            code_input.fill(code)
+        if code_input:
+            logger.info("==================================================")
+            logger.info("VERIFICA 2FA — Inserisci il codice NEL BROWSER.")
+            logger.info("Lo script attende max 2 minuti...")
+            logger.info("==================================================")
 
-            submit_btn = page.query_selector(SELECTORS["verification_submit"])
-            if submit_btn:
-                submit_btn.click()
-                page.wait_for_timeout(3000)
+            try:
+                # Polling: ogni 2s controlla se siamo nell'app
+                for _ in range(60):
+                    page.wait_for_timeout(2000)
+                    if self.is_logged_in(page):
+                        logger.info("Verifica completata!")
+                        return True
+                    # Se il campo codice è scomparso, probabilmente siamo dentro
+                    if not page.query_selector(SELECTORS["verification_code_input"]):
+                        page.wait_for_timeout(2000)
+                        if self.is_logged_in(page):
+                            logger.info("Verifica completata (campo codice scomparso)!")
+                            return True
+                        break
+            except Exception:
+                pass
 
-            # Check se il codice era errato
-            error_el = page.query_selector(SELECTORS["verification_error"])
-            if error_el:
-                error_text = error_el.inner_text()
-                logger.warning(f"Codice errato: {error_text}")
-                continue
+            logger.error("Timeout verifica 2FA")
+            return False
 
-            # Check se siamo loggati
-            if self.is_logged_in(page):
-                logger.info("Verifica completata con successo!")
-                return True
-
-            # Il campo codice potrebbe essere ancora visibile (altro errore)
-            code_input = page.query_selector(SELECTORS["verification_code_input"])
-            if code_input:
-                logger.warning("Codice non accettato, riprova")
-                continue
-
-            # Campo scomparso ma non loggati — stato sconosciuto
-            logger.warning("Stato verifica incerto")
-            return True
-
-        logger.error("Verifica fallita dopo 3 tentativi")
-        return False
+        return True
     
     def delete_saved_session(self) -> None:
         if self.cookies_file.exists():
