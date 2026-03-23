@@ -9,10 +9,10 @@
 - [ ] **BROWSER-04**: System navigates to Transfer Market > My Listings automatically
 
 ### DETECT - Listing Detection
-- [ ] **DETECT-01**: System detects when player listings have expired
-- [ ] **DETECT-02**: System reads player name, rating, and current listing price
-- [ ] **DETECT-03**: System distinguishes between active and expired listings
-- [ ] **DETECT-04**: System detects "no listings" state (empty transfer list)
+- [x] **DETECT-01**: System detects when player listings have expired
+- [x] **DETECT-02**: System reads player name, rating, and current listing price
+- [x] **DETECT-03**: System distinguishes between active and expired listings
+- [x] **DETECT-04**: System detects "no listings" state (empty transfer list)
 
 ### RELIST - Auto-Relisting
 - [ ] **RELIST-01**: System relists expired players with one-click action

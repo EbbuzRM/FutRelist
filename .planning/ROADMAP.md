@@ -26,7 +26,7 @@
 |------|------|--------|--------|
 | 00 | Test Infrastructure Setup | ✅ Complete | 4554109 |
 | 01 | Listing Data Model | ⬜ Pending | - |
-| 02 | Transfer Market Navigator | ⬜ Pending | - |
+| 02 | 3/6 | In Progress|  |
 | 03 | DOM Detector | ⬜ Pending | - |
 | 04 | Integration | ⬜ Pending | - |
 
