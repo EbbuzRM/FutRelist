@@ -76,9 +76,15 @@ class AuthManager:
             # Se siamo su signin.ea.com, non siamo loggati
             if "signin.ea.com" in url:
                 return False
-            # Se siamo sulla WebApp, siamo loggati
+            # Se siamo sulla WebApp, check se c'è la navigation bar
+            # La nav bar con "Home" appare SOLO dopo login
             if "web-app" in url:
-                return True
+                try:
+                    home_btn = page.get_by_role("button", name="Home")
+                    if home_btn.count() > 0:
+                        return True
+                except Exception:
+                    pass
             return False
         except Exception:
             return False
@@ -195,28 +201,24 @@ class AuthManager:
             return True
 
         logger.info("==================================================")
-        logger.info("VERIFICA 2FA — Controlla la tua email per il codice.")
-        logger.info("Inseriscilo NEL BROWSER aperto.")
-        logger.info("Lo script attende max 2 minuti...")
+        logger.info("VERIFICA 2FA")
+        logger.info("1. Controlla la tua email per il codice a 6 cifre")
+        logger.info("2. Inseriscilo NEL BROWSER aperto")
+        logger.info("3. Clicca 'Sign in' nel browser")
+        logger.info("4. Premi INVIO qui quando sei dentro la WebApp")
         logger.info("==================================================")
 
         try:
-            for _ in range(60):
-                page.wait_for_timeout(2000)
-                if self.is_logged_in(page):
-                    logger.info("Verifica completata!")
-                    return True
-                # Se il campo codice è scomparso, probabilmente siamo dentro
-                if not page.get_by_role("textbox", name="Code").count():
-                    page.wait_for_timeout(2000)
-                    if self.is_logged_in(page):
-                        logger.info("Verifica completata!")
-                        return True
-                    break
-        except Exception:
+            input("")  # Attendi conferma utente (niente polling)
+        except EOFError:
             pass
 
-        logger.error("Timeout verifica 2FA")
+        # Verifica che siamo sulla WebApp
+        if self.is_logged_in(page):
+            logger.info("Verifica completata!")
+            return True
+
+        logger.warning("Non sembri essere nella WebApp")
         return False
 
         # Se c'è il pulsante "Send Code", cliccalo
