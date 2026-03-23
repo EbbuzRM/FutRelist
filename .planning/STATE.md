@@ -1,6 +1,6 @@
 # Project State
 
-## Current Phase: FIFA 26 Auto-Relist Tool - Phase 4 In Progress (1/3 plans complete)
+## Current Phase: FIFA 26 Auto-Relist Tool - Phase 4 In Progress (2/3 plans complete)
 
 ### Previous Milestones:
 - [x] Contact Management System v1.0 - Completed
@@ -14,7 +14,7 @@
 **Goal:** Browser automation tool for auto-relisting expired players on FIFA 26 WebApp
 
 ### Current Status:
-Phase 1, 2, 3 complete. Phase 4: 1/3 plans done (Plan 00 TDD config model ✅). Ready for Plan 01 (ConfigManager+CLI).
+Phase 1, 2, 3 complete. Phase 4: 2/3 plans done (Plan 00 TDD config model ✅, Plan 01 ConfigManager+CLI ✅). Ready for Plan 02 (integration + human verify).
 
 ### Completed:
 - [x] Phase 1: Browser Setup & Authentication (BROWSER-01, BROWSER-02, BROWSER-03)
@@ -46,14 +46,20 @@ Phase 1, 2, 3 complete. Phase 4: 1/3 plans done (Plan 00 TDD config model ✅). 
   - [x] from_dict()/to_dict() matching existing config.json format
   - [x] tests/test_config.py (15 tests, all passing)
   - [x] Full suite: 50/50 tests pass
+- [x] Phase 4 Plan 01: ConfigManager + CLI subcommands (CONFIG-01, CONFIG-02, CONFIG-03, CONFIG-04)
+  - [x] ConfigManager class: load/save/set_value/reset_defaults with deep-merge migration
+  - [x] _FIELD_CASTS mapping for type coercion via dotted key notation
+  - [x] CLI subcommands: config show/set/reset via argparse
+  - [x] Unknown key preservation (fifa_webapp_url, auth) across save operations
+  - [x] 2 commits: ConfigManager class, CLI subcommands
+  - [x] Full suite: 50/50 tests pass
 
 ### Next Steps:
-- [ ] Phase 4 Plan 01: ConfigManager + CLI subcommands (Wave 2)
 - [ ] Phase 4 Plan 02: Integration + human verify (Wave 3)
 - [ ] Phase 5: Logging & Error Handling
 
 ### Current Activity
-[2026-03-23T01:36:24Z] Phase 4 Plan 00 complete (TDD). 2 commits: test file (15 tests), config/config.py implementation. 15/15 config tests pass, 50/50 full suite. CONFIG-01/02/03/04 satisfied. Ready for Plan 01 (ConfigManager+CLI).
+[2026-03-23T01:48:07Z] Phase 4 Plan 01 complete (ConfigManager+CLI). 2 commits: ConfigManager class (48b3418), CLI subcommands (a552937). ConfigManager with load/save/set_value/reset_defaults, deep-merge migration, dotted key notation. CLI: config show/set/reset. 50/50 tests pass. CONFIG-01/02/03/04 all satisfied. Ready for Plan 02 (integration + human verify).
 [2026-03-23T01:33:17.955Z] Phase 4 planning complete: 3 plans in 3 waves. RESEARCH.md + VALIDATION.md created. Plans verified by gsd-plan-checker (VERIFICATION PASSED with warnings). Requirements CONFIG-01/02/03/04 all covered. Ready for execution.
 [2026-03-23T01:16:14.461Z] Phase 3 complete (3/3 plans, 35/35 tests pass, 14/14 must-haves verified). Human verification deferred (live WebApp test). Starting Phase 4.
 [2026-03-23T01:08:40Z] Phase 3 Plan 01 completato (RelistExecutor). 2 commits: SELECTORS+skeleton, dialog+relist methods. 14/14 tests pass. RELIST-01/02/04 satisfied. Ready per Plan 02 (integration).
@@ -84,9 +90,10 @@ Phase 1, 2, 3 complete. Phase 4: 1/3 plans done (Plan 00 TDD config model ✅). 
 - Result tracking: RelistResult per-listing + RelistBatchResult with from_results() aggregation
 - RelistExecutor pattern: __init__(page, config), _random_delay(), handle_dialog(), relist_single() → RelistResult, relist_expired() → RelistBatchResult
 - Config dataclass pattern: nested sub-configs with __post_init__ validation, from_dict()/to_dict() for JSON round-trip
+- ConfigManager pattern: _raw dict + _config AppConfig for unknown key preservation, _FIELD_CASTS for type coercion
 
-Last updated: 2026-03-23T01:40:12.475Z
+Last updated: 2026-03-23T01:53:40.375Z
 
 ## Last Commit
-Hash: 50f3483
-Message: "feat(04-00): implement config dataclasses with validation"
+Hash: a552937
+Message: "feat(04-01): add CLI subcommands for config management"

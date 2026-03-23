@@ -64,7 +64,7 @@ Plans:
 
 Plans:
 - [x] 04-00-PLAN.md — TDD: Config data model + validation tests (Wave 1) ✅ 2026-03-23
-- [ ] 04-01-PLAN.md — ConfigManager class + CLI subcommands (Wave 2)
+- [x] 04-01-PLAN.md — ConfigManager class + CLI subcommands (Wave 2) ✅ 2026-03-23
 - [ ] 04-02-PLAN.md — Integration: wire into main.py + human verify (Wave 3)
 
 **Success Criteria:**

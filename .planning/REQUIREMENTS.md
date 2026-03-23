@@ -21,10 +21,10 @@
 - [x] **RELIST-04**: System handles relist confirmation dialogs
 
 ### CONFIG - Configuration
-- [ ] **CONFIG-01**: User can configure default listing duration (1h, 3h, 6h, 12h, 24h, 3 days)
-- [ ] **CONFIG-02**: User can set price rules (min price, max price, undercut %)
-- [ ] **CONFIG-03**: User can configure scan interval (how often to check listings)
-- [ ] **CONFIG-04**: Configuration persists in JSON file
+- [x] **CONFIG-01**: User can configure default listing duration (1h, 3h, 6h, 12h, 24h, 3 days)
+- [x] **CONFIG-02**: User can set price rules (min price, max price, undercut %)
+- [x] **CONFIG-03**: User can configure scan interval (how often to check listings)
+- [x] **CONFIG-04**: Configuration persists in JSON file
 
 ### LOG - Logging
 - [ ] **LOG-01**: System logs all relisting actions with timestamp
