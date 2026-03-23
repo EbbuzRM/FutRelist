@@ -17,6 +17,7 @@ from browser.auth import AuthManager
 from browser.navigator import TransferMarketNavigator
 from browser.detector import ListingDetector
 from browser.relist import RelistExecutor
+from config.config import ConfigManager, AppConfig
 
 
 def setup_logging() -> None:
@@ -39,6 +40,7 @@ def setup_logging() -> None:
 
 
 def load_config() -> dict:
+    """DEPRECATED: Use ConfigManager.load() instead. Kept for backward compat."""
     config_path = Path(__file__).parent / "config" / "config.json"
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -67,8 +69,11 @@ def main() -> None:
     controller = None
 
     try:
-        config = load_config()
+        cm = ConfigManager()
+        app_config = cm.load()
+        config = app_config.to_dict()
         logger.info("Config caricata")
+        logger.info(f"Scan interval: {app_config.scan_interval_seconds}s")
 
         controller = BrowserController(config)
         auth = AuthManager(config)
@@ -141,6 +146,8 @@ def main() -> None:
                     logger.info("Nessun listing scaduto da rilistare")
         else:
             logger.error("Impossibile raggiungere il Transfer List")
+
+        cm.save()
 
         input("\nPremi INVIO per chiudere il browser...")
         controller.stop()
