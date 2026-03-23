@@ -14,6 +14,7 @@ from browser.controller import BrowserController
 from browser.auth import AuthManager
 from browser.navigator import TransferMarketNavigator
 from browser.detector import ListingDetector
+from browser.relist import RelistExecutor
 
 
 def setup_logging() -> None:
@@ -121,10 +122,21 @@ def main() -> None:
                 logger.info(f"  Venduti: {result.sold_count}")
 
                 if result.expired_count > 0:
-                    logger.info(f"-> {result.expired_count} listing scaduti da rilistare (Phase 3)")
-                    for listing in result.listings:
-                        if listing.needs_relist:
-                            logger.info(f"  [{listing.index}] {listing.player_name} OVR {listing.rating} - {listing.current_price or '?'} coins")
+                    logger.info(f"=== Rilist di {result.expired_count} listing scaduti ===")
+
+                    executor = RelistExecutor(page, config)
+                    expired = [l for l in result.listings if l.needs_relist]
+                    batch_result = executor.relist_expired(expired)
+
+                    logger.info(f"=== Rilist completato: {batch_result.succeeded}/{batch_result.total} successi ({batch_result.success_rate:.1f}%) ===")
+
+                    if batch_result.failed > 0:
+                        logger.warning(f"  {batch_result.failed} rilist falliti:")
+                        for r in batch_result.results:
+                            if not r.success:
+                                logger.warning(f"    [{r.listing_index}] {r.player_name}: {r.error}")
+                else:
+                    logger.info("Nessun listing scaduto da rilistare")
         else:
             logger.error("Impossibile raggiungere il Transfer List")
 
