@@ -13,16 +13,14 @@ class AuthError(Exception):
     """Autenticazione fallita. Il chiamante decide se terminare o recuperare."""
 
 SELECTORS = {
-    "login_button": 'button:has-text("Accedi"), button:has-text("Login"), button:has-text("Sign In")',
-    "email_input": 'input[type="email"], input[name="email"], #email',
-    "next_button": '#logInBtn, button:has-text("Next"), button:has-text("Avanti"), button:has-text("next")',
-    "password_input": 'input[type="password"], #password',
-    "submit_button": '#logInBtn, button[type="submit"], button:has-text("Accedi"), button:has-text("Log In"), button:has-text("Sign In")',
-    "verification_send_code": '#btnSendCode, button:has-text("Send Code"), button:has-text("Invia codice")',
-    "verification_code_input": '#twoFactorCode, input[name="twoFactorCode"], #verificationCode',
-    "verification_submit": '#btnSubmit, button:has-text("Submit"), button:has-text("Verifica")',
-    "verification_error": '#origin-tfa-container .general-error, .error-message',
-    "webapp_home": '.ut-app, .ea-app'
+    "login_button": 'button:has-text("Login")',
+    "email_input": 'input[placeholder*="phone or email"], input[placeholder*="email"]',
+    "next_button": 'button:has-text("NEXT")',
+    "password_input": 'input[placeholder*="password"]',
+    "submit_button": 'button:has-text("Sign in")',
+    "verification_code_input": '#twoFactorCode, input[name="twoFactorCode"]',
+    "verification_submit": '#btnSubmit, button:has-text("Submit")',
+    "webapp_home": '.ut-app, .ea-app',
 }
 
 class AuthManager:
@@ -34,22 +32,6 @@ class AuthManager:
         self.storage_dir.mkdir(exist_ok=True)
         self.cookies_file = self.storage_dir / "cookies.json"
         self.state_file = self.storage_dir / "browser_state.json"
-
-    def _get_search_target(self, page: Page):
-        """Ritorna il target per le query (iframe WebApp o page diretta).
-
-        La WebApp EA carica spesso il contenuto dentro un iframe.
-        """
-        # Cerca iframe della WebApp
-        iframe_selectors = ['#webApp', 'iframe[src*="web-app"]', 'iframe[src*="webapp"]', 'iframe']
-        for sel in iframe_selectors:
-            frame_el = page.query_selector(sel)
-            if frame_el:
-                frame = frame_el.content_frame()
-                if frame:
-                    logger.debug(f"Trovato iframe: {sel}")
-                    return frame
-        return page
 
     def has_saved_session(self) -> bool:
         return self.cookies_file.exists() and self.state_file.exists()
@@ -92,14 +74,11 @@ class AuthManager:
             # Check URL — se non siamo più sulla pagina di login, siamo dentro
             url = page.url.lower()
             if "web-app" in url and "login" not in url:
-                logger.info("Utente loggato (URL conferma)")
                 return True
 
-            # Check elementi DOM (dentro iframe se presente)
-            target = self._get_search_target(page)
-            home_element = target.query_selector(SELECTORS["webapp_home"])
+            # Check elementi DOM
+            home_element = page.query_selector(SELECTORS["webapp_home"])
             if home_element:
-                logger.info("Utente loggato (WebApp rilevata)")
                 return True
 
             return False
@@ -120,55 +99,26 @@ class AuthManager:
             return False
     
     def perform_login(self, page: Page, email: str, password: str) -> bool:
-        """Esegue il login EA in due step: email → Next → password → Log In."""
+        """Esegue il login EA in due step: email → NEXT → password → Sign in.
+
+        Il login avviene su signin.ea.com (redirect completo dalla WebApp).
+        """
         try:
             logger.info("Tentativo di login...")
 
-            # Il contenuto della WebApp può essere dentro un iframe
-            target = self._get_search_target(page)
-
-            # Clicca il pulsante login se presente
-            login_selectors = [
-                'button:has-text("Accedi")',
-                'button:has-text("Login")',
-                'button:has-text("Sign In")',
-                'a:has-text("Accedi")',
-                'a:has-text("Login")',
-                'a:has-text("Sign In")',
-            ]
-
-            login_btn = None
-            for sel in login_selectors:
-                login_btn = target.query_selector(sel)
-                if login_btn:
-                    logger.info(f"Login button trovato con: {sel}")
-                    break
-
+            # Se siamo sulla WebApp, clicca "Login" per andare alla pagina signin
+            login_btn = page.query_selector(SELECTORS["login_button"])
             if login_btn:
-                try:
-                    login_btn.scroll_into_view_if_needed()
-                except Exception:
-                    pass
                 login_btn.click()
-                logger.info("Pulsante Login iniziale cliccato")
+                logger.info("Pulsante Login cliccato, attesa redirect a signin.ea.com...")
+                # Attendi navigazione alla pagina di login
+                page.wait_for_load_state("networkidle", timeout=15000)
+                page.wait_for_timeout(2000)
 
-                # Attendi che appaia email o WebApp (login automatico)
-                try:
-                    target.wait_for_selector(
-                        f'{SELECTORS["webapp_home"]}, {SELECTORS["email_input"]}',
-                        timeout=15000,
-                    )
-                except Exception:
-                    logger.warning("Timeout attesa post-click login")
-
-                if self.is_logged_in(page):
-                    logger.info("Login automatico effettuato!")
-                    return True
-            else:
-                logger.info("Nessun bottone login trovato, cerco campo email diretto...")
-
-            # Step 1: Inserisci email
-            email_input = target.query_selector(SELECTORS["email_input"])
+            # Step 1: Inserisci email (campo su signin.ea.com)
+            email_input = page.wait_for_selector(
+                SELECTORS["email_input"], state="visible", timeout=15000
+            )
             if not email_input:
                 logger.error("Campo email non trovato")
                 return False
@@ -176,38 +126,39 @@ class AuthManager:
             email_input.fill(email)
             logger.info("Email inserita")
 
-            # Step 2: Clicca "Next" / "Avanti" per mostrare il campo password
+            # Step 2: Clicca "NEXT"
             page.wait_for_timeout(1000)
-            next_btn = target.query_selector(SELECTORS["next_button"])
+            next_btn = page.query_selector(SELECTORS["next_button"])
             if next_btn:
                 next_btn.click()
-                logger.info("Bottone Next/Avanti cliccato")
+                logger.info("NEXT cliccato")
                 page.wait_for_timeout(3000)
             else:
-                logger.warning("Bottone Next non trovato, provo comunque...")
+                logger.error("Bottone NEXT non trovato")
+                return False
 
-            # Step 3: Inserisci password (appare dopo il click su Next)
-            pwd_input = target.wait_for_selector(
+            # Step 3: Inserisci password (appare dopo NEXT)
+            pwd_input = page.wait_for_selector(
                 SELECTORS["password_input"], state="visible", timeout=10000
             )
             if not pwd_input:
-                logger.error("Campo password non trovato dopo Next")
+                logger.error("Campo password non trovato dopo NEXT")
                 return False
 
             pwd_input.fill(password)
             logger.info("Password inserita")
 
-            # Step 4: Clicca submit / Log In
-            submit_btn = target.query_selector(SELECTORS["submit_button"])
+            # Step 4: Clicca "Sign in"
+            submit_btn = page.query_selector(SELECTORS["submit_button"])
             if submit_btn:
                 submit_btn.click()
-                logger.info("Submit cliccato")
+                logger.info("Sign in cliccato")
             else:
-                logger.error("Bottone submit non trovato")
+                logger.error("Bottone Sign in non trovato")
                 return False
 
-            # Attendi redirect post-login (può essere lento)
-            logger.info("Attesa redirect post-login...")
+            # Attendi redirect da signin.ea.com → WebApp
+            logger.info("Attesa redirect a WebApp...")
             page.wait_for_timeout(5000)
 
             # Gestione eventuale 2FA EA
@@ -217,11 +168,13 @@ class AuthManager:
 
             # Attendi caricamento WebApp fino a 30s
             logger.info("Attesa caricamento WebApp...")
-            for _ in range(30):
+            for i in range(30):
                 if self.is_logged_in(page):
                     logger.info("Login riuscito!")
                     return True
                 page.wait_for_timeout(1000)
+                if i % 10 == 0 and i > 0:
+                    logger.info(f"  ...ancora in attesa ({i}s)")
 
             logger.warning("Login fallito — WebApp non rilevata dopo 30s")
             return False
@@ -235,14 +188,36 @@ class AuthManager:
 
         Ritorna True se la verifica è passata o non necessaria, False se fallita.
         """
-        target = self._get_search_target(page)
-
         # Check se appare il campo codice verifica
-        code_input = target.query_selector(SELECTORS["verification_code_input"])
-        send_code_btn = target.query_selector(SELECTORS["verification_send_code"])
+        code_input = page.query_selector(SELECTORS["verification_code_input"])
 
-        if not code_input and not send_code_btn:
+        if not code_input:
             return True
+
+        logger.info("==================================================")
+        logger.info("VERIFICA 2FA — Inserisci il codice NEL BROWSER.")
+        logger.info("Lo script attende max 2 minuti...")
+        logger.info("==================================================")
+
+        try:
+            # Polling: ogni 2s controlla se siamo nell'app
+            for _ in range(60):
+                page.wait_for_timeout(2000)
+                if self.is_logged_in(page):
+                    logger.info("Verifica completata!")
+                    return True
+                # Se il campo codice è scomparso, probabilmente siamo dentro
+                if not page.query_selector(SELECTORS["verification_code_input"]):
+                    page.wait_for_timeout(2000)
+                    if self.is_logged_in(page):
+                        logger.info("Verifica completata (campo codice scomparso)!")
+                        return True
+                    break
+        except Exception:
+            pass
+
+        logger.error("Timeout verifica 2FA")
+        return False
 
         # Se c'è il pulsante "Send Code", cliccalo
         if send_code_btn:

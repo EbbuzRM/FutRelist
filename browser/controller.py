@@ -59,7 +59,7 @@ class BrowserController:
             raise RuntimeError("Browser non avviato. Usa start() prima.")
 
         url = self.config.get(
-            "fifa_webapp_url", "https://www.ea.com/fifa/ultimate-team/web-app/"
+            "fifa_webapp_url", "https://www.ea.com/ea-sports-fc/ultimate-team/web-app/"
         )
 
         logger.info(f"Navigazione a: {url}")

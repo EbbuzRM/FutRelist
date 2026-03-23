@@ -1,0 +1,33 @@
+- generic [ref=e4]:
+  - img [ref=e5]
+  - generic [ref=e6]:
+    - heading "Sign in to your EA Account" [level=1] [ref=e7]
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - img "Sign in with Google" [ref=e11]
+        - img "Sign in with Facebook" [ref=e13]
+        - img "Sign in with Apple" [ref=e15]
+        - img "Sign in with Steam" [ref=e17]
+        - img "Sign in with Xbox" [ref=e19]
+        - img "Sign in with PSN" [ref=e21]
+      - generic:
+        - textbox
+      - generic [ref=e24]: or
+    - generic [ref=e26]:
+      - textbox
+      - generic [ref=e28]:
+        - generic [ref=e30]:
+          - generic [ref=e31]: Phone or Email
+          - textbox "Phone or Email" [active] [ref=e33]:
+            - /placeholder: Enter your phone or email
+        - text:  
+      - generic [ref=e34]:
+        - generic [ref=e35]:
+          - checkbox "Keep me signed in " [checked] [ref=e36] [cursor=pointer]
+          - generic [ref=e37] [cursor=pointer]:
+            - text: Keep me signed in
+            - img [ref=e39]
+            - text: 
+        - button "NEXT" [ref=e45] [cursor=pointer]
+    - link "Forgot your password, or need to create a new one?" [ref=e48] [cursor=pointer]:
+      - /url: https://signin.ea.com:443/p/juno/resetPassword?fid=RlMwOjMuMDoyLjA6cEVDdjE0RDZWWFFjU3VLejhpSFFEVlV0OnM2ZWJ1&initref=https%3A%2F%2Faccounts.ea.com%3A443%2Fconnect%2Fauth%3Fhide_create%3Dtrue%26display%3Dweb2%252Flogin%26scope%3Dbasic.identity%2Boffline%2Bsignin%2Bbasic.entitlement%2Bbasic.persona%26release_type%3Dprod%26response_type%3Dtoken%26redirect_uri%3Dhttps%253A%252F%252Fwww.ea.com%252Fea-sports-fc%252Fultimate-team%252Fweb-app%252Fauth.html%26accessToken%3D%26locale%3Den_US%26prompt%3Dlogin%26client_id%3DFC26_JS_WEB_APP

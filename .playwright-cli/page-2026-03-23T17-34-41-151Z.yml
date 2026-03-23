@@ -1,0 +1,23 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - textbox
+    - button "Back" [ref=e6] [cursor=pointer]:
+      - img [ref=e8]
+      - text: Back
+  - img [ref=e12]
+  - generic [ref=e13]:
+    - heading "Enter your password" [level=1] [ref=e14]
+    - paragraph [ref=e15]: Enter your password for te*****@test.com
+    - generic [ref=e17]:
+      - textbox
+      - generic [ref=e18]:
+        - generic [ref=e19]: Password
+        - generic [ref=e20]:
+          - textbox "Password" [active] [ref=e21]:
+            - /placeholder: Enter your password
+          - text: 
+          - button "Show password" [ref=e22] [cursor=pointer]:
+            - img [ref=e24]
+      - button "Sign in" [ref=e30] [cursor=pointer]
+    - link "Forgot your password, or need to create a new one?" [ref=e33] [cursor=pointer]:
+      - /url: https://signin.ea.com:443/p/juno/resetPassword?fid=RlMwOjMuMDoyLjA6cEVDdjE0RDZWWFFjU3VLejhpSFFEVlV0OnM2ZWJ1&initref=https%3A%2F%2Faccounts.ea.com%3A443%2Fconnect%2Fauth%3Fhide_create%3Dtrue%26display%3Dweb2%252Flogin%26scope%3Dbasic.identity%2Boffline%2Bsignin%2Bbasic.entitlement%2Bbasic.persona%26release_type%3Dprod%26response_type%3Dtoken%26redirect_uri%3Dhttps%253A%252F%252Fwww.ea.com%252Fea-sports-fc%252Fultimate-team%252Fweb-app%252Fauth.html%26accessToken%3D%26locale%3Den_US%26prompt%3Dlogin%26client_id%3DFC26_JS_WEB_APP

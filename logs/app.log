@@ -444,3 +444,75 @@ playwright._impl._errors.TargetClosedError: Page.query_selector: Target page, co
 2026-03-23 18:22:47,961 [DEBUG] browser.rate_limiter: Rate limit: attesa 3488ms
 2026-03-23 18:22:50,132 [INFO] __main__: Interruzione utente
 2026-03-23 18:22:50,134 [INFO] browser.controller: Chiusura browser...
+2026-03-23 18:29:27,145 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 18:29:27,146 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 18:29:27,147 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 18:29:27,148 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 18:29:27,911 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 18:29:28,282 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 18:29:28,315 [INFO] browser.controller: Creazione pagina...
+2026-03-23 18:29:28,584 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 18:29:28,584 [INFO] browser.controller: Navigazione a: https://www.ea.com/fifa/ultimate-team/web-app/
+2026-03-23 18:29:32,564 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 18:29:32,567 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 18:29:32,568 [INFO] browser.auth: Utente loggato (URL conferma)
+2026-03-23 18:29:32,568 [INFO] __main__: Già loggato con sessione salvata
+2026-03-23 18:29:32,568 [INFO] __main__: === Autenticazione completata ===
+2026-03-23 18:29:32,569 [INFO] __main__: Avvio loop continuo (intervallo: 3600s). Premi Ctrl+C per fermare.
+2026-03-23 18:29:32,577 [INFO] __main__: === Ciclo 1 ===
+2026-03-23 18:29:32,619 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:29:32,625 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:29:32,626 [DEBUG] browser.rate_limiter: Rate limit: attesa 3995ms
+2026-03-23 18:29:36,621 [INFO] __main__: === Ciclo 2 ===
+2026-03-23 18:29:36,630 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:29:36,635 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:29:36,636 [DEBUG] browser.rate_limiter: Rate limit: attesa 2857ms
+2026-03-23 18:29:39,493 [INFO] __main__: === Ciclo 3 ===
+2026-03-23 18:29:39,501 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:29:39,505 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:29:39,506 [DEBUG] browser.rate_limiter: Rate limit: attesa 2330ms
+2026-03-23 18:29:41,836 [INFO] __main__: === Ciclo 4 ===
+2026-03-23 18:29:41,845 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:29:41,849 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:29:41,849 [DEBUG] browser.rate_limiter: Rate limit: attesa 3531ms
+2026-03-23 18:29:45,381 [INFO] __main__: === Ciclo 5 ===
+2026-03-23 18:29:45,391 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:29:45,396 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:29:45,396 [DEBUG] browser.rate_limiter: Rate limit: attesa 3922ms
+2026-03-23 18:29:49,318 [INFO] __main__: === Ciclo 6 ===
+2026-03-23 18:29:49,327 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:29:49,332 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:29:49,333 [DEBUG] browser.rate_limiter: Rate limit: attesa 2505ms
+2026-03-23 18:29:51,838 [INFO] __main__: === Ciclo 7 ===
+2026-03-23 18:29:58,840 [ERROR] __main__: Errore: Page.query_selector: Execution context was destroyed, most likely because of a navigation.
+Traceback (most recent call last):
+  File "C:\App\fifa-relist\main.py", line 199, in main
+    ensure_session(page, auth, controller, get_credentials)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\App\fifa-relist\browser\error_handler.py", line 123, in ensure_session
+    if not is_session_expired(page):
+           ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\App\fifa-relist\browser\error_handler.py", line 70, in is_session_expired
+    ut_app = page.query_selector(".ut-app")
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\sync_api\_generated.py", line 8126, in query_selector
+    self._sync(self._impl_obj.query_selector(selector=selector, strict=strict))
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ~~~~~~~~~~~^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_page.py", line 407, in query_selector
+    return await self._main_frame.query_selector(selector, strict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_frame.py", line 348, in query_selector
+    await self._channel.send("querySelector", None, locals_to_params(locals()))
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.Error: Page.query_selector: Execution context was destroyed, most likely because of a navigation.
+2026-03-23 18:29:58,844 [INFO] browser.controller: Chiusura browser...
+2026-03-23 18:29:59,292 [INFO] browser.controller: Browser chiuso
