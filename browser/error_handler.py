@@ -139,6 +139,9 @@ def ensure_session(
         if not auth.perform_login(page, email, password):
             raise AuthError("Login di recupero fallito")
 
+        if not auth.handle_verification_if_needed(page):
+            raise AuthError("Verifica identità fallita durante recupero")
+
         auth.save_session(controller.context)
         logger.info("Sessione recuperata con successo")
     except AuthError:

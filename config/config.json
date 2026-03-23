@@ -8,13 +8,14 @@
     }
   },
   "listing_defaults": {
-    "duration": "3h",
+    "relist_mode": "all",
+    "duration": "1h",
     "price_adjustment_type": "percentage",
     "price_adjustment_value": 0.0,
     "min_price": 200,
     "max_price": 15000000
   },
-  "scan_interval_seconds": 60,
+  "scan_interval_seconds": 3600,
   "rate_limiting": {
     "min_delay_ms": 2000,
     "max_delay_ms": 5000

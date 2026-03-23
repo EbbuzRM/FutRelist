@@ -106,6 +106,9 @@ def authenticate(controller, auth, page) -> None:
     if not auth.perform_login(page, email, password):
         raise AuthError("Login fallito")
 
+    if not auth.handle_verification_if_needed(page):
+        raise AuthError("Verifica identità fallita")
+
     auth.save_session(controller.context)
     logger.info("Login completato e sessione salvata")
 
@@ -164,7 +167,7 @@ def main() -> None:
         cm = ConfigManager()
         app_config = cm.load()
         config = app_config.to_dict()
-        logger.info(f"Config caricata (scan interval: {app_config.scan_interval_seconds}s)")
+        logger.info(f"Config caricata (intervallo: {app_config.scan_interval_seconds}s, modalità: {app_config.listing_defaults.relist_mode})")
 
         controller = BrowserController(config)
         auth = AuthManager(config)
@@ -213,10 +216,18 @@ def main() -> None:
                     logger.info(f"Scan: {scan_result.total_count} listing (attivi={scan_result.active_count}, scaduti={scan_result.expired_count}, venduti={scan_result.sold_count})")
 
                     if scan_result.expired_count > 0:
-                        expired = [l for l in scan_result.listings if l.needs_relist]
-                        succeeded, failed = relist_expired_listings(
-                            executor, expired, live, f"{label} - Rilist", scan_result.total_count,
-                        )
+                        if executor.relist_mode == "all":
+                            live.update(make_status_table(f"{label} - Re-list All", scan_result.total_count, 0, 0))
+                            batch = executor.relist_all()
+                            succeeded = batch.succeeded
+                            failed = batch.total - succeeded
+                            action_logger.info("Re-list All completato", extra={"action": "relist_all", "success": succeeded > 0})
+                            logger.info(f"Re-list All: {'successo' if succeeded > 0 else 'fallito'}")
+                        else:
+                            expired = [l for l in scan_result.listings if l.needs_relist]
+                            succeeded, failed = relist_expired_listings(
+                                executor, expired, live, f"{label} - Rilist", scan_result.total_count,
+                            )
                         action_logger.info("Batch completato", extra={"action": "batch", "success": True, "total": succeeded + failed, "succeeded": succeeded})
                         logger.info(f"Rilist completato: {succeeded}/{succeeded + failed} successi")
                         live.update(make_status_table(f"{label} - OK", scan_result.total_count, succeeded, failed))

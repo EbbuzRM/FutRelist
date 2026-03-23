@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 VALID_DURATIONS = ["1h", "3h", "6h", "12h", "24h", "3d"]
+VALID_RELIST_MODES = ["all", "per_listing"]
 DEFAULT_CONFIG_PATH = Path(__file__).parent / "config.json"
 
 
@@ -28,13 +29,18 @@ class BrowserConfig:
 class ListingDefaults:
     """Default listing parameters for relist operations."""
 
-    duration: str = "3h"
+    relist_mode: str = "all"
+    duration: str = "1h"
     price_adjustment_type: str = "percentage"
     price_adjustment_value: float = 0.0
     min_price: int = 200
     max_price: int = 15_000_000
 
     def __post_init__(self):
+        if self.relist_mode not in VALID_RELIST_MODES:
+            raise ValueError(
+                f"relist_mode must be one of {VALID_RELIST_MODES}, got '{self.relist_mode}'"
+            )
         if self.duration not in VALID_DURATIONS:
             raise ValueError(
                 f"duration must be one of {VALID_DURATIONS}, got '{self.duration}'"
@@ -107,6 +113,7 @@ class AppConfig:
                 },
             },
             "listing_defaults": {
+                "relist_mode": self.listing_defaults.relist_mode,
                 "duration": self.listing_defaults.duration,
                 "price_adjustment_type": self.listing_defaults.price_adjustment_type,
                 "price_adjustment_value": self.listing_defaults.price_adjustment_value,
@@ -128,6 +135,7 @@ _FIELD_CASTS: dict[str, tuple[str, str, type]] = {
     "browser.slow_mo":              ("browser", "slow_mo", int),
     "browser.viewport_width":       ("browser", "viewport_width", int),
     "browser.viewport_height":      ("browser", "viewport_height", int),
+    "listing_defaults.relist_mode":                 ("listing_defaults", "relist_mode", str),
     "listing_defaults.duration":                ("listing_defaults", "duration", str),
     "listing_defaults.price_adjustment_type":   ("listing_defaults", "price_adjustment_type", str),
     "listing_defaults.price_adjustment_value":  ("listing_defaults", "price_adjustment_value", float),

@@ -9,7 +9,8 @@ logger = logging.getLogger(__name__)
 
 SELECTORS = {
     "relist_button": 'button:has-text("Relist"), .relist-btn',
-    "relist_all_button": 'button:has-text("Relist All"), .relist-all-btn',
+    "relist_all_button": 'button:has-text("Re-list All"), button:has-text("Relist All"), .relist-all-btn',
+    "confirm_yes": 'button:has-text("Yes"), button:has-text("Sì"), .btn-standard.call-to-action',
     "duration_button": 'button:has-text("{duration}"), .duration-option:has-text("{duration}")',
     "price_input": 'input[type="number"], .price-input, .ut-price-input input',
     "confirm_button": 'button:has-text("Confirm"), button:has-text("Ok"), .btn-action',
@@ -30,6 +31,7 @@ class RelistExecutor:
             max_delay_ms=rate_limiting.get("max_delay_ms", 5000),
         )
         defaults = config.get("listing_defaults", {})
+        self.relist_mode = defaults.get("relist_mode", "per_listing")
         self.duration = defaults.get("duration", "3h").upper()
         self.adjustment_type = defaults.get("price_adjustment_type", "percentage")
         self.adjustment_value = defaults.get("price_adjustment_value", 0)
@@ -99,6 +101,43 @@ class RelistExecutor:
         batch = RelistBatchResult.from_results(results)
         logger.info(f"Rilist: {batch.succeeded}/{batch.total} successi ({batch.success_rate:.1f}%)")
         return batch
+
+    def relist_all(self) -> RelistBatchResult:
+        """Clicca 'Re-list All' e auto-accetta il dialog di conferma.
+
+        Ritorna RelistBatchResult con 1 risultato (success/fail).
+        """
+        try:
+            self.page.once("dialog", self.handle_dialog)
+
+            relist_all_btn = self.page.query_selector(SELECTORS["relist_all_button"])
+            if not relist_all_btn:
+                logger.info("Bottone 'Re-list All' non trovato (nessun listing?)")
+                return RelistBatchResult.from_results([])
+
+            relist_all_btn.click()
+            self.page.wait_for_timeout(3000)
+
+            # Il dialog di conferma viene gestito da handle_dialog (page.once)
+            # Aspetta che la pagina si aggiorni
+            self.page.wait_for_timeout(2000)
+            self.rate_limiter.wait()
+
+            logger.info("Re-list All completato")
+            return RelistBatchResult.from_results([
+                RelistResult(
+                    listing_index=-1, player_name="ALL",
+                    old_price=None, new_price=None, success=True,
+                )
+            ])
+        except Exception as e:
+            logger.error(f"Errore Re-list All: {e}")
+            return RelistBatchResult.from_results([
+                RelistResult(
+                    listing_index=-1, player_name="ALL",
+                    old_price=None, new_price=None, success=False, error=str(e),
+                )
+            ])
 
 
 def calculate_adjusted_price(

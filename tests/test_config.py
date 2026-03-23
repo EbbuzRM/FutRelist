@@ -59,6 +59,16 @@ class TestListingDefaults:
         with pytest.raises(ValueError, match="price_adjustment_type"):
             ListingDefaults(price_adjustment_type="absolute")
 
+    def test_relist_mode_valid(self):
+        """relist_mode 'all' and 'per_listing' are accepted."""
+        assert ListingDefaults(relist_mode="all").relist_mode == "all"
+        assert ListingDefaults(relist_mode="per_listing").relist_mode == "per_listing"
+
+    def test_relist_mode_invalid(self):
+        """Invalid relist_mode raises ValueError."""
+        with pytest.raises(ValueError, match="relist_mode"):
+            ListingDefaults(relist_mode="auto")
+
 
 # ── AppConfig tests ────────────────────────────────────────────────
 
@@ -135,7 +145,8 @@ class TestConfigRoundTrip:
         """AppConfig() with no args produces valid defaults."""
         config = AppConfig()
         assert config.scan_interval_seconds == 60
-        assert config.listing_defaults.duration == "3h"
+        assert config.listing_defaults.relist_mode == "all"
+        assert config.listing_defaults.duration == "1h"
         assert config.browser.headless is False
 
 

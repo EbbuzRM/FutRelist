@@ -2,3 +2,45 @@
 2026-03-23 00:28:53,749 [INFO] __main__: URL Web App: https://www.ea.com/fifa/ultimate-team/web-app/
 2026-03-23 00:28:53,749 [INFO] __main__: Intervallo scansione: 60s
 2026-03-23 00:28:53,749 [INFO] __main__: Browser headless: False
+2026-03-23 10:19:14,304 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 10:19:14,305 [INFO] __main__: Config caricata (scan interval: 60s)
+2026-03-23 10:19:14,306 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 10:19:14,307 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 10:19:15,097 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 10:19:15,932 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 10:19:15,979 [INFO] browser.controller: Creazione pagina...
+2026-03-23 10:19:16,274 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 10:19:16,275 [INFO] browser.controller: Navigazione a: https://www.ea.com/fifa/ultimate-team/web-app/
+2026-03-23 10:19:19,883 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 10:19:19,887 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 10:19:19,918 [INFO] browser.auth: Utente già loggato (URL conferma)
+2026-03-23 10:19:19,919 [INFO] __main__: Già loggato con sessione salvata
+2026-03-23 10:19:19,919 [INFO] __main__: === Autenticazione completata ===
+2026-03-23 10:19:19,920 [INFO] __main__: Avvio loop continuo (intervallo: 60s). Premi Ctrl+C per fermare.
+2026-03-23 10:19:19,930 [INFO] __main__: === Ciclo 1 ===
+2026-03-23 10:19:19,938 [INFO] browser.error_handler: Sessione scaduta: elemento .ut-app non trovato
+2026-03-23 10:19:19,938 [WARNING] browser.error_handler: Sessione non valida, tentativo di recupero...
+2026-03-23 10:19:19,938 [INFO] browser.auth: Sessione salvata eliminata
+2026-03-23 10:19:23,975 [INFO] browser.auth: Pagina di login rilevata
+2026-03-23 10:19:23,975 [INFO] browser.auth: Tentativo di login...
+2026-03-23 10:19:27,834 [INFO] browser.auth: Email inserita
+2026-03-23 10:19:58,364 [ERROR] browser.auth: Errore durante login: ElementHandle.fill: Timeout 30000ms exceeded.
+Call log:
+    - fill("fIFA2K23!")
+  - attempting fill action
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+      - waiting 100ms
+    58 × waiting for element to be visible, enabled and editable
+       - element is not visible
+     - retrying fill action
+       - waiting 500ms
+
+2026-03-23 10:19:58,367 [ERROR] __main__: Errore autenticazione: Login di recupero fallito
+2026-03-23 10:19:58,368 [INFO] browser.controller: Chiusura browser...
+2026-03-23 10:19:58,684 [INFO] browser.controller: Browser chiuso
