@@ -56,7 +56,7 @@ Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). 
 - Detector pattern: bulk DOM extraction via eval_on_selector_all, per-element fallback, Italian/English keyword mapping
 - Integration pattern: navigator→detector→summary in main.py after login, before cleanup
 
-Last updated: 2026-03-23T00:42:21.280Z
+Last updated: 2026-03-23T00:45:19.890Z
 
 ## Last Commit
 Hash: d037918
