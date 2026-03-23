@@ -28,7 +28,7 @@
 | 00 | Test Infrastructure Setup | ✅ Complete | 4554109 |
 | 01 | Listing Data Model | ✅ Complete | 85db6aa |
 | 02 | Transfer Market Navigator | Complete    | 2026-03-23 |
-| 03 | DOM Detector | ✅ Complete | e46cc8a |
+| 03 | 1/3 | In Progress|  |
 | 04 | Integration | ✅ Complete | d037918 |
 
 **Success Criteria:**
@@ -42,6 +42,12 @@
 ### Phase 3: Auto-Relist Core
 **Goal:** Execute relisting actions on expired players
 **Requirements:** RELIST-01, RELIST-02, RELIST-03, RELIST-04
+**Plans:** 3 plans
+
+Plans:
+- [ ] 03-00-PLAN.md — TDD: Price adjustment logic + RelistResult model (Wave 1)
+- [ ] 03-01-PLAN.md — RelistExecutor class with dialog handling (Wave 2)
+- [ ] 03-02-PLAN.md — Integration: wire relist into main.py (Wave 3)
 
 **Success Criteria:**
 1. System clicks relist on expired players

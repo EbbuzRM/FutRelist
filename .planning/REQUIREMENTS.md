@@ -16,8 +16,8 @@
 
 ### RELIST - Auto-Relisting
 - [ ] **RELIST-01**: System relists expired players with one-click action
-- [ ] **RELIST-02**: System applies configurable price adjustment (fixed or percentage)
-- [ ] **RELIST-03**: System confirms relisting action completed successfully
+- [x] **RELIST-02**: System applies configurable price adjustment (fixed or percentage)
+- [x] **RELIST-03**: System confirms relisting action completed successfully
 - [ ] **RELIST-04**: System handles relist confirmation dialogs
 
 ### CONFIG - Configuration

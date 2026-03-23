@@ -1,6 +1,6 @@
 # Project State
 
-## Current Phase: FIFA 26 Auto-Relist Tool - Phase 2 Complete
+## Current Phase: FIFA 26 Auto-Relist Tool - Phase 3 In Progress (1/3 plans)
 
 ### Previous Milestones:
 - [x] Contact Management System v1.0 - Completed
@@ -14,7 +14,7 @@
 **Goal:** Browser automation tool for auto-relisting expired players on FIFA 26 WebApp
 
 ### Current Status:
-Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). Phase 2 completata (5/5 piani): models, navigator, detector, integration. Ready per Phase 3.
+Phase 1 e 2 complete. Phase 3 in esecuzione: Plan 00 completato (TDD price+model, 14 tests pass). Ready per Plan 01 (RelistExecutor).
 
 ### Completed:
 - [x] Phase 1: Browser Setup & Authentication (BROWSER-01, BROWSER-02, BROWSER-03)
@@ -31,13 +31,22 @@ Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). 
 - [x] Phase 2 Plan 02: Transfer Market Navigator (browser/navigator.py)
 - [x] Phase 2 Plan 03: DOM Detector (browser/detector.py) — 16 tests pass, DETECT-01/02/03/04 satisfied
 - [x] Phase 2 Plan 04: Integration — navigator/detector wired into main.py, Transfer List scanning active
+- [x] Phase 3 Plan 00: TDD Price Adjustment & Result Model (RELIST-02, RELIST-03)
+  - [x] tests/test_relist.py (14 tests: 8 price + 6 model)
+  - [x] models/relist_result.py (RelistResult + RelistBatchResult)
+  - [x] browser/relist.py (calculate_adjusted_price with FIFA bounds)
 
 ### Next Steps:
-- [ ] Phase 3: Auto-Relist Core (RELIST-01, RELIST-02, RELIST-03, RELIST-04)
+- [ ] Phase 3 Plan 01: RelistExecutor (RELIST-01, RELIST-04)
 - [ ] Phase 4: Configuration System (CONFIG-01, CONFIG-02, CONFIG-03, CONFIG-04)
 - [ ] Phase 5: Logging & Error Handling
 
 ### Current Activity
+[2026-03-23T01:03:00Z] Phase 3 Plan 00 completato (TDD). 3 commits: test file (14 tests), RelistResult model, calculate_adjusted_price(). 14/14 tests pass. RELIST-02/03 satisfied. Ready per Plan 01 (RelistExecutor).
+[2026-03-23T00:58:46.803Z] Phase 3 planning complete: 3 plans in 3 waves. RESEARCH.md + VALIDATION.md created. Plans verified by gsd-plan-checker (VERIFICATION PASSED). Requirements RELIST-01/02/03/04 all covered. Ready for execution.
+[2026-03-23T01:00:00Z] Phase 3 planned: 3 plans across 3 waves (00=TDD price+model, 01=RelistExecutor, 02=integration). All 4 requirements mapped. Ready for execution.
+[2026-03-23T00:46:31.603Z] Phase 2 complete (5/5 plans, 21/21 tests pass, 5/5 requirements satisfied). Starting autonomous execution of Phases 3-5.
+[2026-03-23T00:45:46.449Z] Phase 2 (Transfer Market Navigation) complete. 5/5 plans executed. 21 unit tests passing. Navigator, detector, and integration wired. Ready for Phase 3: Auto-Relist Core.
 [2026-03-23] Phase 2 Plan 04 (Integration) completato. 1 commit: main.py wired with TransferMarketNavigator e ListingDetector. Dopo login, naviga a Transfer List, scansiona listing, mostra summary con count active/expired/sold. Fixed total_items→total_count (model attribute).
 [2026-03-23] Phase 2 Plan 03 (DOM Detector) completato. 1 commit: ListingDetector class con scan_listings(), SELECTORS dict con 14 chiavi, parse_price/parse_rating/determine_state helpers. 16 tests pass, import smoke test OK. DETECT-01/02/03/04 satisfied.
 [2026-03-23T00:32:05Z] Phase 2 Plan 02 (Transfer Market Navigator) completato. 1 commit: TransferMarketNavigator class con go_to_transfer_list(), SELECTORS dict con 4 chiavi, _random_delay helper. Import test e selector completeness check passano.
@@ -55,9 +64,12 @@ Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). 
 - Navigator pattern: page object + config dict, _random_delay helper, Italian logging, bool returns
 - Detector pattern: bulk DOM extraction via eval_on_selector_all, per-element fallback, Italian/English keyword mapping
 - Integration pattern: navigator→detector→summary in main.py after login, before cleanup
+- TDD pattern: tests first (RED), implementation second (GREEN), verify all pass
+- Price adjustment: percentage (multiplier) and fixed (addition) with FIFA bounds (200-15M)
+- Result tracking: RelistResult per-listing + RelistBatchResult with from_results() aggregation
 
-Last updated: 2026-03-23T00:45:19.890Z
+Last updated: 2026-03-23T01:06:09.857Z
 
 ## Last Commit
-Hash: d037918
-Message: "feat(02-04): integrate navigator and detector into main.py"
+Hash: 96c4f0f
+Message: "feat(03-00): implement calculate_adjusted_price() with FIFA bounds clamping"
