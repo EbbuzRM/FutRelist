@@ -11,6 +11,9 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from rich.console import Console
+from rich.live import Live
+from rich.table import Table
 
 from browser.controller import BrowserController
 from browser.auth import AuthManager
@@ -52,6 +55,16 @@ def setup_logging() -> None:
     action_logger.setLevel(logging.INFO)
     action_logger.addHandler(actions_file_handler)
     action_logger.propagate = False
+
+
+def make_status_table(phase: str, scanned: int, relisted: int, errors: int) -> Table:
+    table = Table(title="FIFA Auto-Relist")
+    table.add_column("Fase", style="cyan")
+    table.add_column("Scansionati", justify="right")
+    table.add_column("Rilistati", justify="right", style="green")
+    table.add_column("Errori", justify="right", style="red")
+    table.add_row(phase, str(scanned), str(relisted), str(errors))
+    return table
 
 
 def load_config() -> dict:
@@ -140,69 +153,86 @@ def main() -> None:
             controller.stop()
             sys.exit(1)
 
-        logger.info("Navigazione verso Transfer List...")
-        nav_success = False
-        try:
-            nav_success = navigator.go_to_transfer_list()
-        except Exception as e:
-            logger.warning(f"Timeout durante navigazione, ricarico e riprovo: {e}")
-            page.reload()
-            page.wait_for_timeout(3000)
+        live_console = Console(stderr=True)
+        with Live(
+            make_status_table("In attesa...", 0, 0, 0),
+            refresh_per_second=2,
+            console=live_console,
+        ) as live:
+            logger.info("Navigazione verso Transfer List...")
+            live.update(make_status_table("Navigazione...", 0, 0, 0))
+
+            nav_success = False
             try:
                 nav_success = navigator.go_to_transfer_list()
-            except Exception as e2:
-                logger.error(f"Secondo tentativo di navigazione fallito: {e2}")
+            except Exception as e:
+                logger.warning(f"Timeout durante navigazione, ricarico e riprovo: {e}")
+                page.reload()
+                page.wait_for_timeout(3000)
+                try:
+                    nav_success = navigator.go_to_transfer_list()
+                except Exception as e2:
+                    logger.error(f"Secondo tentativo di navigazione fallito: {e2}")
 
-        if nav_success:
-            logger.info("Transfer List raggiunta, scansione listing...")
-            result = detector.scan_listings()
+            if nav_success:
+                logger.info("Transfer List raggiunta, scansione listing...")
+                result = detector.scan_listings()
 
-            if result.is_empty:
-                logger.info("Nessun listing trovato sul Transfer List")
-            else:
-                logger.info(f"=== Scan completata: {result.total_count} listing trovati ===")
-                logger.info(f"  Attivi: {result.active_count}")
-                logger.info(f"  Scaduti: {result.expired_count}")
-                logger.info(f"  Venduti: {result.sold_count}")
-
-                if result.expired_count > 0:
-                    logger.info(f"=== Rilist di {result.expired_count} listing scaduti ===")
-
-                    executor = RelistExecutor(page, config)
-                    expired = [l for l in result.listings if l.needs_relist]
-                    batch_result = executor.relist_expired(expired)
-
-                    logger.info(f"=== Rilist completato: {batch_result.succeeded}/{batch_result.total} successi ({batch_result.success_rate:.1f}%) ===")
-
-                    # Structured action logging for each result
-                    for r in batch_result.results:
-                        if r.success:
-                            action_logger.info(
-                                "Rilist completato",
-                                extra={"action": "relist", "player_name": r.player_name, "success": True},
-                            )
-                        else:
-                            action_logger.warning(
-                                "Rilist fallito",
-                                extra={"action": "relist", "player_name": r.player_name, "success": False, "error": r.error},
-                            )
-                    action_logger.info(
-                        "Batch completato",
-                        extra={"action": "batch", "success": True, "total": batch_result.total, "succeeded": batch_result.succeeded},
-                    )
-
-                    if batch_result.failed > 0:
-                        logger.warning(f"  {batch_result.failed} rilist falliti:")
-                        for r in batch_result.results:
-                            if not r.success:
-                                logger.warning(f"    [{r.listing_index}] {r.player_name}: {r.error}")
+                if result.is_empty:
+                    logger.info("Nessun listing trovato sul Transfer List")
+                    live.update(make_status_table("Scansione", 0, 0, 0))
                 else:
-                    logger.info("Nessun listing scaduto da rilistare")
-        else:
-            logger.error("Impossibile raggiungere il Transfer List")
+                    logger.info(f"=== Scan completata: {result.total_count} listing trovati ===")
+                    logger.info(f"  Attivi: {result.active_count}")
+                    logger.info(f"  Scaduti: {result.expired_count}")
+                    logger.info(f"  Venduti: {result.sold_count}")
+                    live.update(make_status_table("Scansione", result.total_count, 0, 0))
 
-        # Rate limiting tra cicli di scansione
-        rate_limiter.wait()
+                    if result.expired_count > 0:
+                        logger.info(f"=== Rilist di {result.expired_count} listing scaduti ===")
+
+                        executor = RelistExecutor(page, config)
+                        expired = [l for l in result.listings if l.needs_relist]
+                        succeeded = 0
+                        failed = 0
+
+                        for listing in expired:
+                            r = executor.relist_single(listing)
+                            if r.success:
+                                succeeded += 1
+                                action_logger.info(
+                                    "Rilist completato",
+                                    extra={"action": "relist", "player_name": r.player_name, "success": True},
+                                )
+                            else:
+                                failed += 1
+                                action_logger.warning(
+                                    "Rilist fallito",
+                                    extra={"action": "relist", "player_name": r.player_name, "success": False, "error": r.error},
+                                )
+                            live.update(make_status_table("Rilist in corso", result.total_count, succeeded, failed))
+
+                        total = succeeded + failed
+                        action_logger.info(
+                            "Batch completato",
+                            extra={"action": "batch", "success": True, "total": total, "succeeded": succeeded},
+                        )
+
+                        logger.info(f"=== Rilist completato: {succeeded}/{total} successi ===")
+
+                        if failed > 0:
+                            logger.warning(f"  {failed} rilist falliti")
+
+                        live.update(make_status_table("Completato", result.total_count, succeeded, failed))
+                    else:
+                        logger.info("Nessun listing scaduto da rilistare")
+                        live.update(make_status_table("Completato", result.total_count, 0, 0))
+            else:
+                logger.error("Impossibile raggiungere il Transfer List")
+                live.update(make_status_table("Errore", 0, 0, 0))
+
+            # Rate limiting tra cicli di scansione
+            rate_limiter.wait()
 
         cm.save()
 
