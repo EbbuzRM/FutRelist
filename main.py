@@ -2,6 +2,8 @@
 FIFA 26 Auto-Relist Tool
 Browser automation per rilistare automaticamente giocatori su FIFA 26 WebApp
 """
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -154,5 +156,52 @@ def main() -> None:
         sys.exit(1)
 
 
+def build_parser():
+    """Build CLI argument parser with run and config subcommands."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="fifa-relist",
+        description="FIFA 26 Auto-Relist Tool",
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    # run (default)
+    sub.add_parser("run", help="Start the auto-relist tool")
+
+    # config
+    config_parser = sub.add_parser("config", help="Manage configuration")
+    config_sub = config_parser.add_subparsers(dest="config_action")
+
+    config_sub.add_parser("show", help="Display current settings")
+
+    set_parser = config_sub.add_parser("set", help="Update a setting")
+    set_parser.add_argument("key", help="Dotted key (e.g., listing_defaults.duration)")
+    set_parser.add_argument("value", help="New value")
+
+    config_sub.add_parser("reset", help="Reset all settings to defaults")
+
+    return parser
+
+
 if __name__ == "__main__":
-    main()
+    parser = build_parser()
+    args = parser.parse_args()
+
+    if args.command == "config":
+        from config.config import ConfigManager
+
+        cm = ConfigManager()
+        if args.config_action == "show":
+            cfg = cm.load()
+            print(json.dumps(cfg.to_dict(), indent=2, ensure_ascii=False))
+        elif args.config_action == "set":
+            cm.set_value(args.key, args.value)
+            print(f"OK: {args.key} = {args.value}")
+        elif args.config_action == "reset":
+            cm.reset_defaults()
+            print("OK: Config reset to defaults")
+        else:
+            parser.parse_args(["config", "--help"])
+    else:
+        main()
