@@ -75,14 +75,20 @@ Plans:
 
 ---
 
-### Phase 5: Logging & Error Handling
+### Phase 5: Logging & Error Handling (1/4 plans complete)
 **Goal:** Robust operation with logging and error recovery
 **Requirements:** LOG-01, LOG-02, LOG-03, LOG-04, ERROR-01, ERROR-02, ERROR-03, ERROR-04
 
-**Plans:** 4 plans
+**Progress:**
+| Plan | Name | Status | Commit |
+|------|------|--------|--------|
+| 00 | TDD: ActionLogEntry + RateLimiter + ErrorHandler | ✅ Complete | cd02400 |
+| 01 | Logging integration: JsonFormatter + history CLI | ⬜ Pending | — |
+| 02 | Error recovery: rate limiter + session check + retry | ⬜ Pending | — |
+| 03 | Console status with rich Live + final integration | ⬜ Pending | — |
 
 Plans:
-- [ ] 05-00-PLAN.md — TDD: ActionLogEntry + RateLimiter + ErrorHandler (Wave 1)
+- [x] 05-00-PLAN.md — TDD: ActionLogEntry + RateLimiter + ErrorHandler (Wave 1) ✅ 2026-03-23
 - [ ] 05-01-PLAN.md — Logging integration: JsonFormatter + history CLI (Wave 2)
 - [ ] 05-02-PLAN.md — Error recovery: wire rate limiter + session check + retry (Wave 2)
 - [ ] 05-03-PLAN.md — Console status with rich Live + final integration (Wave 3)

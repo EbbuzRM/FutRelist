@@ -1,6 +1,6 @@
 # Project State
 
-## Current Phase: FIFA 26 Auto-Relist Tool - Phase 4 Complete (3/3 plans complete)
+## Current Phase: FIFA 26 Auto-Relist Tool - Phase 5 In Progress (1/4 plans complete)
 
 ### Previous Milestones:
 - [x] Contact Management System v1.0 - Completed
@@ -14,7 +14,7 @@
 **Goal:** Browser automation tool for auto-relisting expired players on FIFA 26 WebApp
 
 ### Current Status:
-Phase 1, 2, 3 complete. Phase 4: 3/3 plans done (Plan 00 TDD config model ✅, Plan 01 ConfigManager+CLI ✅, Plan 02 Integration ✅). Phase 4 complete. Ready for Phase 5.
+Phase 1, 2, 3, 4 complete. Phase 5: 1/4 plans done (Plan 00 TDD ActionLogEntry+RateLimiter+ErrorHandler ✅). Ready for Plan 01.
 
 ### Completed:
 - [x] Phase 1: Browser Setup & Authentication (BROWSER-01, BROWSER-02, BROWSER-03)
@@ -59,10 +59,19 @@ Phase 1, 2, 3 complete. Phase 4: 3/3 plans done (Plan 00 TDD config model ✅, P
   - [x] cm.save() for runtime config persistence
   - [x] CLI round-trip verified (show/set/reset), 50/50 tests pass
   - [x] 2 commits: main.py ConfigManager migration, RelistExecutor price bounds
+- [x] Phase 5 Plan 00: TDD ActionLogEntry + RateLimiter + ErrorHandler (LOG-01, LOG-02, LOG-04, ERROR-01, ERROR-02, ERROR-03, ERROR-04)
+  - [x] models/action_log.py: ActionLogEntry dataclass + JsonFormatter + parse_action_history()
+  - [x] browser/rate_limiter.py: RateLimiter with wait/wait_if_needed/from_config
+  - [x] browser/error_handler.py: retry_on_timeout, is_session_expired, handle_element_not_found, ensure_session
+  - [x] 3 test files (7 + 5 + 6 = 18 new tests)
+  - [x] requirements.txt: tenacity>=8.0, rich>=13.0 added
+  - [x] 7 commits: TDD RED→GREEN for each task + deps
+  - [x] Full suite: 68/68 tests pass
 
 ### Next Steps:
 - [x] Phase 4 Plan 02: Integration + human verify (Wave 3) ✅
-- [ ] Phase 5: Logging & Error Handling
+- [x] Phase 5 Plan 00: TDD ActionLogEntry + RateLimiter + ErrorHandler ✅
+- [ ] Phase 5 Plan 01: Logging integration - JsonFormatter + history CLI (Wave 2)
 
 ### Current Activity
 [2026-03-23T02:04:00Z] Phase 4 Plan 02 complete (Integration). 2 commits: main.py ConfigManager (a27ce69), RelistExecutor price bounds (4acd6ce). ConfigManager wired into main.py via to_dict() bridge. RelistExecutor reads min_price/max_price from config. CLI round-trip verified (show/set/reset). 50/50 tests pass. Phase 4 complete (3/3 plans). CONFIG-01/02/03/04 all satisfied. Ready for Phase 5.
@@ -97,9 +106,22 @@ Phase 1, 2, 3 complete. Phase 4: 3/3 plans done (Plan 00 TDD config model ✅, P
 - RelistExecutor pattern: __init__(page, config), _random_delay(), handle_dialog(), relist_single() → RelistResult, relist_expired() → RelistBatchResult
 - Config dataclass pattern: nested sub-configs with __post_init__ validation, from_dict()/to_dict() for JSON round-trip
 - ConfigManager pattern: _raw dict + _config AppConfig for unknown key preservation, _FIELD_CASTS for type coercion
+- ActionLog pattern: ActionLogEntry dataclass + JsonFormatter for JSONL logging, follows RelistResult pattern
+- Retry pattern: @retry_on_timeout with tenacity exponential backoff (2-30s, max 3), Italian warning logs
+- RateLimiter pattern: wait()/wait_if_needed() with jitter, from_config() classmethod for RateLimitingConfig
+- Session recovery: is_session_expired checks URL+.ut-app+.ea-app, ensure_session full recovery flow
 
-Last updated: 2026-03-23T02:02:37.683Z
+Last updated: 2026-03-23T02:43:16.630Z
 
 ## Last Commit
-Hash: 4acd6ce
-Message: "feat(04-02): wire config price bounds into RelistExecutor"
+Hash: 274f11e38d9e5aa16cc227e75a6f7b870adc9c33
+Message: "chore(05-00): add tenacity>=8.0 and rich>=13.0 to requirements.txt
+
+- tenacity: retry logic with exponential backoff for error_handler.py
+- rich: console status display for future logging integration"
+
+## Current Activity
+[2026-03-23T02:33:56Z] Phase 5 Plan 00 complete (TDD ActionLogEntry+RateLimiter+ErrorHandler). 7 commits: RED/GREEN for 3 tasks + deps. 18 new tests (7+5+6), full suite 68/68. Requirements LOG-01/02/04 and ERROR-01/02/03/04 satisfied. models/action_log.py, browser/rate_limiter.py, browser/error_handler.py created. requirements.txt updated with tenacity>=8.0, rich>=13.0. Ready for Plan 01 (logging integration).
+[2026-03-23T02:25:41.291Z] Phase 5 planning complete: 4 plans in 3 waves. RESEARCH.md + VALIDATION.md created. Plans verified by gsd-plan-checker (VERIFICATION PASSED). Requirements LOG-01/02/03/04 and ERROR-01/02/03/04 all covered. Ready for execution.
+[2026-03-23T02:08:51.398Z] Phase 4 complete (3/3 plans, 50/50 tests). Verifying and starting Phase 5.
+[2026-03-23T02:07:44.646Z] Phase 4 complete: 3/3 plans, 50/50 tests, CONFIG-01/02/03/04 all satisfied. Config system operational.
