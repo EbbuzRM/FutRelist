@@ -18,6 +18,9 @@ from browser.navigator import TransferMarketNavigator
 from browser.detector import ListingDetector
 from browser.relist import RelistExecutor
 from config.config import ConfigManager, AppConfig
+from models.action_log import JsonFormatter
+
+action_logger = logging.getLogger("actions")
 
 
 def setup_logging() -> None:
@@ -37,6 +40,16 @@ def setup_logging() -> None:
     )
 
     logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
+
+    # Dedicated actions logger: structured JSON to logs/actions.jsonl
+    actions_file_handler = logging.FileHandler(
+        log_dir / "actions.jsonl", mode="a", encoding="utf-8"
+    )
+    actions_file_handler.setLevel(logging.INFO)
+    actions_file_handler.setFormatter(JsonFormatter())
+    action_logger.setLevel(logging.INFO)
+    action_logger.addHandler(actions_file_handler)
+    action_logger.propagate = False
 
 
 def load_config() -> dict:
@@ -136,6 +149,23 @@ def main() -> None:
                     batch_result = executor.relist_expired(expired)
 
                     logger.info(f"=== Rilist completato: {batch_result.succeeded}/{batch_result.total} successi ({batch_result.success_rate:.1f}%) ===")
+
+                    # Structured action logging for each result
+                    for r in batch_result.results:
+                        if r.success:
+                            action_logger.info(
+                                "Rilist completato",
+                                extra={"action": "relist", "player_name": r.player_name, "success": True},
+                            )
+                        else:
+                            action_logger.warning(
+                                "Rilist fallito",
+                                extra={"action": "relist", "player_name": r.player_name, "success": False, "error": r.error},
+                            )
+                    action_logger.info(
+                        "Batch completato",
+                        extra={"action": "batch", "success": True, "total": batch_result.total, "succeeded": batch_result.succeeded},
+                    )
 
                     if batch_result.failed > 0:
                         logger.warning(f"  {batch_result.failed} rilist falliti:")
