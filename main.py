@@ -17,6 +17,8 @@ from browser.auth import AuthManager
 from browser.navigator import TransferMarketNavigator
 from browser.detector import ListingDetector
 from browser.relist import RelistExecutor
+from browser.rate_limiter import RateLimiter
+from browser.error_handler import ensure_session, retry_on_timeout
 from config.config import ConfigManager, AppConfig
 from models.action_log import JsonFormatter
 
@@ -127,9 +129,31 @@ def main() -> None:
         # Phase 2: Navigate to Transfer List and scan listings
         navigator = TransferMarketNavigator(page, config)
         detector = ListingDetector(page)
+        rate_limiter = RateLimiter(
+            min_delay_ms=app_config.rate_limiting.min_delay_ms,
+            max_delay_ms=app_config.rate_limiting.max_delay_ms,
+        )
+
+        # Verifica sessione prima della navigazione
+        if not ensure_session(page, auth, controller):
+            logger.error("Sessione non valida, impossibile procedere con la scansione")
+            controller.stop()
+            sys.exit(1)
 
         logger.info("Navigazione verso Transfer List...")
-        if navigator.go_to_transfer_list():
+        nav_success = False
+        try:
+            nav_success = navigator.go_to_transfer_list()
+        except Exception as e:
+            logger.warning(f"Timeout durante navigazione, ricarico e riprovo: {e}")
+            page.reload()
+            page.wait_for_timeout(3000)
+            try:
+                nav_success = navigator.go_to_transfer_list()
+            except Exception as e2:
+                logger.error(f"Secondo tentativo di navigazione fallito: {e2}")
+
+        if nav_success:
             logger.info("Transfer List raggiunta, scansione listing...")
             result = detector.scan_listings()
 
@@ -176,6 +200,9 @@ def main() -> None:
                     logger.info("Nessun listing scaduto da rilistare")
         else:
             logger.error("Impossibile raggiungere il Transfer List")
+
+        # Rate limiting tra cicli di scansione
+        rate_limiter.wait()
 
         cm.save()
 
