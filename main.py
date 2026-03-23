@@ -132,19 +132,18 @@ def main() -> None:
 
         logger.info("=== Autenticazione completata ===")
 
-        # Phase 2: Navigate to Transfer List and scan listings
+        # Phase 2+: Continuous scan-relist loop
         navigator = TransferMarketNavigator(page, config)
         detector = ListingDetector(page)
+        executor = RelistExecutor(page, config)
         rate_limiter = RateLimiter(
             min_delay_ms=app_config.rate_limiting.min_delay_ms,
             max_delay_ms=app_config.rate_limiting.max_delay_ms,
         )
+        scan_interval = app_config.scan_interval_seconds
+        cycle = 0
 
-        # Verifica sessione prima della navigazione
-        if not ensure_session(page, auth, controller, get_credentials):
-            logger.error("Sessione non valida, impossibile procedere con la scansione")
-            controller.stop()
-            sys.exit(1)
+        logger.info(f"Avvio loop continuo (intervallo: {scan_interval}s). Premi Ctrl+C per fermare.")
 
         live_console = Console(stderr=True)
         with Live(
@@ -152,39 +151,49 @@ def main() -> None:
             refresh_per_second=2,
             console=live_console,
         ) as live:
-            logger.info("Navigazione verso Transfer List...")
-            live.update(make_status_table("Navigazione...", 0, 0, 0))
+            while True:
+                cycle += 1
+                logger.info(f"=== Ciclo {cycle} ===")
 
-            nav_success = False
-            try:
-                nav_success = navigator.go_to_transfer_list()
-            except Exception as e:
-                logger.warning(f"Timeout durante navigazione, ricarico e riprovo: {e}")
-                page.reload()
-                page.wait_for_timeout(3000)
+                # Verifica sessione prima di ogni ciclo
+                if not ensure_session(page, auth, controller, get_credentials):
+                    logger.error("Sessione non valida, impossibile procedere")
+                    break
+
+                # Naviga al Transfer List
+                live.update(make_status_table("Navigazione...", 0, 0, 0))
+                nav_success = False
                 try:
                     nav_success = navigator.go_to_transfer_list()
-                except Exception as e2:
-                    logger.error(f"Secondo tentativo di navigazione fallito: {e2}")
+                except Exception as e:
+                    logger.warning(f"Timeout navigazione, riprovo: {e}")
+                    page.reload()
+                    page.wait_for_timeout(3000)
+                    try:
+                        nav_success = navigator.go_to_transfer_list()
+                    except Exception as e2:
+                        logger.error(f"Secondo tentativo fallito: {e2}")
 
-            if nav_success:
-                logger.info("Transfer List raggiunta, scansione listing...")
+                if not nav_success:
+                    logger.error("Impossibile raggiungere il Transfer List")
+                    live.update(make_status_table("Errore", 0, 0, 0))
+                    rate_limiter.wait()
+                    continue
+
+                # Scansiona listing
+                live.update(make_status_table("Scansione...", 0, 0, 0))
                 result = detector.scan_listings()
 
                 if result.is_empty:
-                    logger.info("Nessun listing trovato sul Transfer List")
-                    live.update(make_status_table("Scansione", 0, 0, 0))
+                    logger.info("Nessun listing trovato")
+                    live.update(make_status_table(f"Ciclo {cycle}", 0, 0, 0))
                 else:
-                    logger.info(f"=== Scan completata: {result.total_count} listing trovati ===")
-                    logger.info(f"  Attivi: {result.active_count}")
-                    logger.info(f"  Scaduti: {result.expired_count}")
-                    logger.info(f"  Venduti: {result.sold_count}")
-                    live.update(make_status_table("Scansione", result.total_count, 0, 0))
+                    logger.info(f"Scan: {result.total_count} listing (attivi={result.active_count}, scaduti={result.expired_count}, venduti={result.sold_count})")
+                    live.update(make_status_table(f"Ciclo {cycle}", result.total_count, 0, 0))
 
+                    # Rilista scaduti
                     if result.expired_count > 0:
-                        logger.info(f"=== Rilist di {result.expired_count} listing scaduti ===")
-
-                        executor = RelistExecutor(page, config)
+                        logger.info(f"Rilist di {result.expired_count} listing scaduti...")
                         expired = [l for l in result.listings if l.needs_relist]
                         succeeded = 0
                         failed = 0
@@ -203,29 +212,24 @@ def main() -> None:
                                     "Rilist fallito",
                                     extra={"action": "relist", "player_name": r.player_name, "success": False, "error": r.error},
                                 )
-                            live.update(make_status_table("Rilist in corso", result.total_count, succeeded, failed))
+                            live.update(make_status_table(f"Ciclo {cycle} - Rilist", result.total_count, succeeded, failed))
 
                         total = succeeded + failed
                         action_logger.info(
                             "Batch completato",
                             extra={"action": "batch", "success": True, "total": total, "succeeded": succeeded},
                         )
-
-                        logger.info(f"=== Rilist completato: {succeeded}/{total} successi ===")
-
-                        if failed > 0:
-                            logger.warning(f"  {failed} rilist falliti")
-
-                        live.update(make_status_table("Completato", result.total_count, succeeded, failed))
+                        logger.info(f"Rilist completato: {succeeded}/{total} successi")
+                        live.update(make_status_table(f"Ciclo {cycle} - OK", result.total_count, succeeded, failed))
                     else:
-                        logger.info("Nessun listing scaduto da rilistare")
-                        live.update(make_status_table("Completato", result.total_count, 0, 0))
-            else:
-                logger.error("Impossibile raggiungere il Transfer List")
-                live.update(make_status_table("Errore", 0, 0, 0))
+                        logger.info("Nessun listing scaduto")
+                        live.update(make_status_table(f"Ciclo {cycle}", result.total_count, 0, 0))
 
-            # Rate limiting tra cicli di scansione
-            rate_limiter.wait()
+                # Attendi prossimo ciclo
+                logger.info(f"Prossimo ciclo tra {scan_interval}s...")
+                rate_limiter.wait()
+                import time
+                time.sleep(scan_interval)
 
         cm.save()
 

@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 SELECTORS = {
     "relist_button": 'button:has-text("Relist"), .relist-btn',
     "relist_all_button": 'button:has-text("Relist All"), .relist-all-btn',
+    "duration_button": 'button:has-text("{duration}"), .duration-option:has-text("{duration}")',
     "price_input": 'input[type="number"], .price-input, .ut-price-input input',
     "confirm_button": 'button:has-text("Confirm"), button:has-text("Ok"), .btn-action',
     "listing_items": '.listFUTItem.player',
@@ -30,6 +31,7 @@ class RelistExecutor:
         )
         # Price adjustment config
         defaults = config.get("listing_defaults", {})
+        self.duration = defaults.get("duration", "3h").upper()
         self.adjustment_type = defaults.get("price_adjustment_type", "percentage")
         self.adjustment_value = defaults.get("price_adjustment_value", 0)
         self.min_price = defaults.get("min_price", 200)
@@ -59,6 +61,14 @@ class RelistExecutor:
             # Click relist
             relist_btn.click()
             self.page.wait_for_timeout(2000)
+
+            # Select listing duration if options appear
+            duration_selector = SELECTORS["duration_button"].format(duration=self.duration)
+            duration_btn = self.page.query_selector(duration_selector)
+            if duration_btn:
+                logger.info(f"  Durata selezionata: {self.duration}")
+                duration_btn.click()
+                self.page.wait_for_timeout(1000)
 
             # Check if price input appeared (individual relist mode)
             price_input = self.page.query_selector(SELECTORS["price_input"])
