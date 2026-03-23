@@ -17,7 +17,7 @@ from rich.live import Live
 from rich.table import Table
 
 from browser.controller import BrowserController
-from browser.auth import AuthManager
+from browser.auth import AuthManager, AuthError
 from browser.navigator import TransferMarketNavigator
 from browser.detector import ListingDetector
 from browser.relist import RelistExecutor
@@ -83,7 +83,7 @@ def get_credentials() -> tuple[str, str]:
 
 
 def authenticate(controller, auth, page) -> None:
-    """Gestisce il flusso di login o ripristino sessione. Esce su fallimento."""
+    """Gestisce il flusso di login o ripristino sessione. Solleva AuthError su fallimento."""
     logger = logging.getLogger(__name__)
 
     if auth.has_saved_session():
@@ -99,19 +99,15 @@ def authenticate(controller, auth, page) -> None:
     logger.info("Login richiesto...")
 
     if not auth.wait_for_login_page(page):
-        logger.error("Pagina di login non trovata")
-        controller.stop()
-        sys.exit(1)
+        raise AuthError("Pagina di login non trovata")
 
     email, password = get_credentials()
 
-    if auth.perform_login(page, email, password):
-        auth.save_session(controller.context)
-        logger.info("Login completato e sessione salvata")
-    else:
-        logger.error("Login fallito")
-        controller.stop()
-        sys.exit(1)
+    if not auth.perform_login(page, email, password):
+        raise AuthError("Login fallito")
+
+    auth.save_session(controller.context)
+    logger.info("Login completato e sessione salvata")
 
 
 def navigate_with_retry(navigator, page) -> bool:
@@ -198,9 +194,7 @@ def main() -> None:
                 cycle += 1
                 logger.info(f"=== Ciclo {cycle} ===")
 
-                if not ensure_session(page, auth, controller, get_credentials):
-                    logger.error("Sessione non valida, impossibile procedere")
-                    break
+                ensure_session(page, auth, controller, get_credentials)
 
                 live.update(make_status_table("Navigazione...", 0, 0, 0))
                 if not navigate_with_retry(navigator, page):
@@ -238,6 +232,11 @@ def main() -> None:
         input("\nPremi INVIO per chiudere il browser...")
         controller.stop()
 
+    except AuthError as e:
+        logger.error(f"Errore autenticazione: {e}")
+        if controller and controller.is_running():
+            controller.stop()
+        sys.exit(1)
     except KeyboardInterrupt:
         logger.info("Interruzione utente")
         if controller and controller.is_running():

@@ -20,6 +20,7 @@ from tenacity import (
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
+    from browser.auth import AuthManager
 
 logger = logging.getLogger(__name__)
 
@@ -109,17 +110,18 @@ def handle_element_not_found(
 
 def ensure_session(
     page: "Page",
-    auth,
+    auth: "AuthManager",
     controller,
     get_credentials_fn: Callable[[], tuple[str, str]] | None = None,
-) -> bool:
+) -> None:
     """Verifica la sessione e tenta il recupero se scaduta.
 
-    Ritorna True se la sessione è valida o recuperata, False altrimenti.
-    get_credentials_fn: callable che ritorna (email, password).
+    Solleva AuthError se la sessione non è recuperabile.
     """
+    from browser.auth import AuthError
+
     if not is_session_expired(page):
-        return True
+        return
 
     logger.warning("Sessione non valida, tentativo di recupero...")
     try:
@@ -128,19 +130,18 @@ def ensure_session(
         page.wait_for_timeout(3000)
 
         if not auth.wait_for_login_page(page):
-            logger.error("Pagina di login non trovata durante recupero")
-            return False
+            raise AuthError("Pagina di login non trovata durante recupero")
 
         if get_credentials_fn is None:
-            logger.error("Nessuna funzione credenziali fornita per il recupero")
-            return False
+            raise AuthError("Nessuna funzione credenziali fornita per il recupero")
 
         email, password = get_credentials_fn()
-        if auth.perform_login(page, email, password):
-            auth.save_session(controller.context)
-            logger.info("Sessione recuperata con successo")
-            return True
-    except Exception as e:
-        logger.error(f"Recupero sessione fallito: {e}")
+        if not auth.perform_login(page, email, password):
+            raise AuthError("Login di recupero fallito")
 
-    return False
+        auth.save_session(controller.context)
+        logger.info("Sessione recuperata con successo")
+    except AuthError:
+        raise
+    except Exception as e:
+        raise AuthError(f"Recupero sessione fallito: {e}") from e

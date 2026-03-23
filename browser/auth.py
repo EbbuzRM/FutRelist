@@ -8,6 +8,10 @@ from playwright.sync_api import Page
 
 logger = logging.getLogger(__name__)
 
+
+class AuthError(Exception):
+    """Autenticazione fallita. Il chiamante decide se terminare o recuperare."""
+
 SELECTORS = {
     "login_button": 'button:has-text("Accedi"), button:has-text("Login"), button:has-text("Sign In")',
     "email_input": 'input[type="email"], input[name="email"], #email',
