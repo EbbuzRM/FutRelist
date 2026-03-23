@@ -15,10 +15,10 @@
 - [x] **DETECT-04**: System detects "no listings" state (empty transfer list)
 
 ### RELIST - Auto-Relisting
-- [ ] **RELIST-01**: System relists expired players with one-click action
+- [x] **RELIST-01**: System relists expired players with one-click action
 - [x] **RELIST-02**: System applies configurable price adjustment (fixed or percentage)
 - [x] **RELIST-03**: System confirms relisting action completed successfully
-- [ ] **RELIST-04**: System handles relist confirmation dialogs
+- [x] **RELIST-04**: System handles relist confirmation dialogs
 
 ### CONFIG - Configuration
 - [ ] **CONFIG-01**: User can configure default listing duration (1h, 3h, 6h, 12h, 24h, 3 days)

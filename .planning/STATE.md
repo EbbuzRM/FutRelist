@@ -1,6 +1,6 @@
 # Project State
 
-## Current Phase: FIFA 26 Auto-Relist Tool - Phase 3 In Progress (1/3 plans)
+## Current Phase: FIFA 26 Auto-Relist Tool - Phase 3 In Progress (2/3 plans)
 
 ### Previous Milestones:
 - [x] Contact Management System v1.0 - Completed
@@ -14,7 +14,7 @@
 **Goal:** Browser automation tool for auto-relisting expired players on FIFA 26 WebApp
 
 ### Current Status:
-Phase 1 e 2 complete. Phase 3 in esecuzione: Plan 00 completato (TDD price+model, 14 tests pass). Ready per Plan 01 (RelistExecutor).
+Phase 1 e 2 complete. Phase 3 in esecuzione: Plan 00 e 01 completati. RelistExecutor con relist_expired(), dialog handler, SELECTORS (6 chiavi). Ready per Plan 02 (integration).
 
 ### Completed:
 - [x] Phase 1: Browser Setup & Authentication (BROWSER-01, BROWSER-02, BROWSER-03)
@@ -35,13 +35,19 @@ Phase 1 e 2 complete. Phase 3 in esecuzione: Plan 00 completato (TDD price+model
   - [x] tests/test_relist.py (14 tests: 8 price + 6 model)
   - [x] models/relist_result.py (RelistResult + RelistBatchResult)
   - [x] browser/relist.py (calculate_adjusted_price with FIFA bounds)
+- [x] Phase 3 Plan 01: RelistExecutor (RELIST-01, RELIST-02, RELIST-04)
+  - [x] SELECTORS dict (6 keys) for relist DOM elements
+  - [x] RelistExecutor class: __init__, _random_delay, handle_dialog, relist_single, relist_expired
+  - [x] Dialog handler auto-accepts WebApp confirmations
+  - [x] Price adjustment integration via calculate_adjusted_price()
 
 ### Next Steps:
-- [ ] Phase 3 Plan 01: RelistExecutor (RELIST-01, RELIST-04)
+- [ ] Phase 3 Plan 02: Integration (wire RelistExecutor into main.py)
 - [ ] Phase 4: Configuration System (CONFIG-01, CONFIG-02, CONFIG-03, CONFIG-04)
 - [ ] Phase 5: Logging & Error Handling
 
 ### Current Activity
+[2026-03-23T01:08:40Z] Phase 3 Plan 01 completato (RelistExecutor). 2 commits: SELECTORS+skeleton, dialog+relist methods. 14/14 tests pass. RELIST-01/02/04 satisfied. Ready per Plan 02 (integration).
 [2026-03-23T01:03:00Z] Phase 3 Plan 00 completato (TDD). 3 commits: test file (14 tests), RelistResult model, calculate_adjusted_price(). 14/14 tests pass. RELIST-02/03 satisfied. Ready per Plan 01 (RelistExecutor).
 [2026-03-23T00:58:46.803Z] Phase 3 planning complete: 3 plans in 3 waves. RESEARCH.md + VALIDATION.md created. Plans verified by gsd-plan-checker (VERIFICATION PASSED). Requirements RELIST-01/02/03/04 all covered. Ready for execution.
 [2026-03-23T01:00:00Z] Phase 3 planned: 3 plans across 3 waves (00=TDD price+model, 01=RelistExecutor, 02=integration). All 4 requirements mapped. Ready for execution.
@@ -67,9 +73,10 @@ Phase 1 e 2 complete. Phase 3 in esecuzione: Plan 00 completato (TDD price+model
 - TDD pattern: tests first (RED), implementation second (GREEN), verify all pass
 - Price adjustment: percentage (multiplier) and fixed (addition) with FIFA bounds (200-15M)
 - Result tracking: RelistResult per-listing + RelistBatchResult with from_results() aggregation
+- RelistExecutor pattern: __init__(page, config), _random_delay(), handle_dialog(), relist_single() → RelistResult, relist_expired() → RelistBatchResult
 
-Last updated: 2026-03-23T01:06:09.857Z
+Last updated: 2026-03-23T01:10:59.493Z
 
 ## Last Commit
-Hash: 96c4f0f
-Message: "feat(03-00): implement calculate_adjusted_price() with FIFA bounds clamping"
+Hash: e746cc2
+Message: "feat(03-01): implement dialog handler, relist_single, and relist_expired"
