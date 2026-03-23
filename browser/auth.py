@@ -72,28 +72,21 @@ class AuthManager:
     
     def is_logged_in(self, page: Page) -> bool:
         try:
-            # Check URL — se siamo sulla WebApp senza login, siamo dentro
             url = page.url.lower()
-            if "web-app" in url and "signin" not in url and "login" not in url:
-                # Doppio check: la navigation bar "Transfers" esiste solo se loggato
-                try:
-                    nav = page.get_by_role("button", name="Transfers")
-                    if nav.count() > 0:
-                        return True
-                except Exception:
-                    pass
-
+            # Se siamo su signin.ea.com, non siamo loggati
+            if "signin.ea.com" in url:
+                return False
+            # Se siamo sulla WebApp, siamo loggati
+            if "web-app" in url:
+                return True
             return False
-
         except Exception:
             return False
     
     def wait_for_login_page(self, page: Page, timeout: int = 30000) -> bool:
         try:
-            page.wait_for_selector(
-                SELECTORS["login_button"],
-                timeout=timeout
-            )
+            login_btn = page.get_by_role("button", name="Login")
+            login_btn.first.wait_for(state="visible", timeout=timeout)
             logger.info("Pagina di login rilevata")
             return True
         except Exception:
@@ -104,60 +97,60 @@ class AuthManager:
         """Esegue il login EA in due step: email → NEXT → password → Sign in.
 
         Il login avviene su signin.ea.com (redirect completo dalla WebApp).
+        Usa get_by_role per compatibilità con la WebApp React.
         """
         try:
             logger.info("Tentativo di login...")
 
             # Se siamo sulla WebApp, clicca "Login" per andare alla pagina signin
-            login_btn = page.query_selector(SELECTORS["login_button"])
-            if login_btn:
-                login_btn.click()
+            login_btn = page.get_by_role("button", name="Login")
+            if login_btn.count():
+                login_btn.first.click()
                 logger.info("Pulsante Login cliccato, attesa redirect a signin.ea.com...")
-                # Attendi navigazione alla pagina di login
-                page.wait_for_load_state("networkidle", timeout=15000)
+                # Attendi navigazione alla pagina signin
+                try:
+                    page.wait_for_url("**/signin.ea.com/**", timeout=15000)
+                except Exception:
+                    page.wait_for_timeout(5000)
                 page.wait_for_timeout(2000)
 
             # Step 1: Inserisci email (campo su signin.ea.com)
-            email_input = page.wait_for_selector(
-                SELECTORS["email_input"], state="visible", timeout=15000
-            )
-            if not email_input:
+            email_input = page.get_by_role("textbox", name="Phone or Email")
+            if not email_input.count():
                 logger.error("Campo email non trovato")
                 return False
 
-            email_input.fill(email)
+            email_input.first.fill(email)
             logger.info("Email inserita")
 
             # Step 2: Clicca "NEXT"
             page.wait_for_timeout(1000)
-            next_btn = page.query_selector(SELECTORS["next_button"])
-            if next_btn:
-                next_btn.click()
-                logger.info("NEXT cliccato")
-                page.wait_for_timeout(3000)
-            else:
+            next_btn = page.get_by_role("button", name="NEXT")
+            if not next_btn.count():
                 logger.error("Bottone NEXT non trovato")
                 return False
 
+            next_btn.first.click()
+            logger.info("NEXT cliccato")
+            page.wait_for_timeout(3000)
+
             # Step 3: Inserisci password (appare dopo NEXT)
-            pwd_input = page.wait_for_selector(
-                SELECTORS["password_input"], state="visible", timeout=10000
-            )
-            if not pwd_input:
+            pwd_input = page.get_by_role("textbox", name="Password")
+            if not pwd_input.count():
                 logger.error("Campo password non trovato dopo NEXT")
                 return False
 
-            pwd_input.fill(password)
+            pwd_input.first.fill(password)
             logger.info("Password inserita")
 
             # Step 4: Clicca "Sign in"
-            submit_btn = page.query_selector(SELECTORS["submit_button"])
-            if submit_btn:
-                submit_btn.click()
-                logger.info("Sign in cliccato")
-            else:
+            sign_in_btn = page.get_by_role("button", name="Sign in")
+            if not sign_in_btn.count():
                 logger.error("Bottone Sign in non trovato")
                 return False
+
+            sign_in_btn.first.click()
+            logger.info("Sign in cliccato")
 
             # Attendi redirect da signin.ea.com → WebApp
             logger.info("Attesa redirect a WebApp...")
@@ -186,20 +179,19 @@ class AuthManager:
             return False
 
     def handle_verification_if_needed(self, page: Page) -> bool:
-        """Gestisce il 2FA/verifica identità EA se richiesto.
-
-        Ritorna True se la verifica è passata o non necessaria, False se fallita.
-        """
+        """Gestisce il 2FA/verifica identità EA se richiesto."""
         # Check se appare il pulsante "Send Code"
-        send_code_btn = page.query_selector(SELECTORS["verification_send_code"])
-        if send_code_btn:
+        send_code_btn = page.get_by_role("button", name="Send Code")
+        if send_code_btn.count():
             logger.info("2FA richiesto — invio codice via email...")
-            send_code_btn.click()
+            send_code_btn.first.click()
             page.wait_for_timeout(3000)
 
-        # Check se appare il campo codice verifica
-        code_input = page.query_selector(SELECTORS["verification_code_input"])
-        if not code_input:
+        # Check se appare il campo codice
+        code_input = page.get_by_role("textbox", name="Code")
+        if not code_input.count():
+            code_input = page.get_by_placeholder("Enter 6 digit code")
+        if not code_input.count():
             return True
 
         logger.info("==================================================")
@@ -214,7 +206,8 @@ class AuthManager:
                 if self.is_logged_in(page):
                     logger.info("Verifica completata!")
                     return True
-                if not page.query_selector(SELECTORS["verification_code_input"]):
+                # Se il campo codice è scomparso, probabilmente siamo dentro
+                if not page.get_by_role("textbox", name="Code").count():
                     page.wait_for_timeout(2000)
                     if self.is_logged_in(page):
                         logger.info("Verifica completata!")
