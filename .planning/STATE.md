@@ -1,6 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: Auto-Relist MVP
+status: unknown
+last_updated: "2026-03-23T07:51:55.147Z"
+progress:
+  total_phases: 5
+  completed_phases: 4
+  total_plans: 18
+  completed_plans: 17
+---
+
 # Project State
 
-## Current Phase: FIFA 26 Auto-Relist Tool - Phase 5 In Progress (1/4 plans complete)
+## Current Phase: FIFA 26 Auto-Relist Tool - Phase 5 In Progress (2/4 plans complete)
 
 ### Previous Milestones:
 - [x] Contact Management System v1.0 - Completed
@@ -14,7 +27,7 @@
 **Goal:** Browser automation tool for auto-relisting expired players on FIFA 26 WebApp
 
 ### Current Status:
-Phase 1, 2, 3, 4 complete. Phase 5: 1/4 plans done (Plan 00 TDD ActionLogEntry+RateLimiter+ErrorHandler ✅). Ready for Plan 01.
+Phase 1, 2, 3, 4 complete. Phase 5: 2/4 plans done (Plan 00 TDD ✅, Plan 01 Logging ✅, Plan 02 Error Recovery ✅). Ready for Plan 03.
 
 ### Completed:
 - [x] Phase 1: Browser Setup & Authentication (BROWSER-01, BROWSER-02, BROWSER-03)
@@ -67,11 +80,20 @@ Phase 1, 2, 3, 4 complete. Phase 5: 1/4 plans done (Plan 00 TDD ActionLogEntry+R
   - [x] requirements.txt: tenacity>=8.0, rich>=13.0 added
   - [x] 7 commits: TDD RED→GREEN for each task + deps
   - [x] Full suite: 68/68 tests pass
+- [x] Phase 5 Plan 01: Logging integration — JsonFormatter + history CLI (LOG-01, LOG-02, LOG-04)
+  - [x] setup_logging() with 3 handlers: app.log, console, actions.jsonl
+  - [x] Dedicated 'actions' logger with JsonFormatter for structured JSONL
+  - [x] 'fifa-relist history' CLI subcommand
+  - [x] 2 commits: JsonFormatter wiring, history subcommand
+- [x] Phase 5 Plan 02: Error recovery & rate limiting integration (ERROR-01, ERROR-02, ERROR-03, ERROR-04)
+  - [x] navigator.py: RateLimiter replaces _random_delay
+  - [x] relist.py: RateLimiter replaces _random_delay
+  - [x] main.py: ensure_session before navigation, retry on timeout, rate_limiter.wait() after relist
+  - [x] 2 commits: navigator+relist RateLimiter, main.py integration
+  - [x] Full suite: 68/68 tests pass
 
 ### Next Steps:
-- [x] Phase 4 Plan 02: Integration + human verify (Wave 3) ✅
-- [x] Phase 5 Plan 00: TDD ActionLogEntry + RateLimiter + ErrorHandler ✅
-- [ ] Phase 5 Plan 01: Logging integration - JsonFormatter + history CLI (Wave 2)
+- [ ] Phase 5 Plan 03: Integration + console status (Wave 3)
 
 ### Current Activity
 [2026-03-23T02:04:00Z] Phase 4 Plan 02 complete (Integration). 2 commits: main.py ConfigManager (a27ce69), RelistExecutor price bounds (4acd6ce). ConfigManager wired into main.py via to_dict() bridge. RelistExecutor reads min_price/max_price from config. CLI round-trip verified (show/set/reset). 50/50 tests pass. Phase 4 complete (3/3 plans). CONFIG-01/02/03/04 all satisfied. Ready for Phase 5.
@@ -97,31 +119,33 @@ Phase 1, 2, 3, 4 complete. Phase 5: 1/4 plans done (Plan 00 TDD ActionLogEntry+R
 - JSON for data persistence
 - Playwright per browser automation
 - AuthManager gestisce login e sessione persistente
-- Navigator pattern: page object + config dict, _random_delay helper, Italian logging, bool returns
+- Navigator pattern: page object + config dict, RateLimiter for delays, Italian logging, bool returns
 - Detector pattern: bulk DOM extraction via eval_on_selector_all, per-element fallback, Italian/English keyword mapping
 - Integration pattern: navigator→detector→summary in main.py after login, before cleanup
 - TDD pattern: tests first (RED), implementation second (GREEN), verify all pass
 - Price adjustment: percentage (multiplier) and fixed (addition) with FIFA bounds (200-15M)
 - Result tracking: RelistResult per-listing + RelistBatchResult with from_results() aggregation
-- RelistExecutor pattern: __init__(page, config), _random_delay(), handle_dialog(), relist_single() → RelistResult, relist_expired() → RelistBatchResult
+- RelistExecutor pattern: __init__(page, config), RateLimiter for delays, handle_dialog(), relist_single() → RelistResult, relist_expired() → RelistBatchResult
 - Config dataclass pattern: nested sub-configs with __post_init__ validation, from_dict()/to_dict() for JSON round-trip
 - ConfigManager pattern: _raw dict + _config AppConfig for unknown key preservation, _FIELD_CASTS for type coercion
 - ActionLog pattern: ActionLogEntry dataclass + JsonFormatter for JSONL logging, follows RelistResult pattern
 - Retry pattern: @retry_on_timeout with tenacity exponential backoff (2-30s, max 3), Italian warning logs
 - RateLimiter pattern: wait()/wait_if_needed() with jitter, from_config() classmethod for RateLimitingConfig
 - Session recovery: is_session_expired checks URL+.ut-app+.ea-app, ensure_session full recovery flow
+- Integration error handling: ensure_session before navigation, try/except with reload retry, rate_limiter.wait() at cycle boundaries
 
-Last updated: 2026-03-23T02:43:16.630Z
+Last updated: 2026-03-23T07:50:23.167Z
 
 ## Last Commit
-Hash: 274f11e38d9e5aa16cc227e75a6f7b870adc9c33
-Message: "chore(05-00): add tenacity>=8.0 and rich>=13.0 to requirements.txt
+Hash: c514c75b8e6b5ab5be7d2c55fbf3639eefb826e0
+Message: "docs(05-03): add plan 03 summary — rich Live status display complete
 
-- tenacity: retry logic with exponential backoff for error_handler.py
-- rich: console status display for future logging integration"
+- Phase 5 complete: all 8 requirements (LOG-01..04, ERROR-01..04) satisfied
+- 68/68 tests pass
+- Rich Live with Console(stderr=True) for non-colliding status display
+- CHECKPOINT auto-approved (user away, all automated checks passed)"
 
 ## Current Activity
+[2026-03-23T07:39:00Z] Phase 5 Plan 02 complete (Error recovery & rate limiting). 2 commits: navigator+relist RateLimiter (f2541d3), main.py session check+retry+rate limiting (ab27995). _random_delay removed from navigator.py and relist.py. ensure_session called before navigation. rate_limiter.wait() after relist batch. 68/68 tests pass. ERROR-01/02/03/04 satisfied. Ready for Plan 03.
+[2026-03-23T02:48:59Z] Phase 5 Plan 01 complete (Logging integration). 2 commits: JsonFormatter wiring (b7db2c7), history subcommand (5a539b2). setup_logging with 3 handlers. action_logger calls in main(). 'fifa-relist history' CLI. LOG-01/02/04 satisfied. Ready for Plan 02.
 [2026-03-23T02:33:56Z] Phase 5 Plan 00 complete (TDD ActionLogEntry+RateLimiter+ErrorHandler). 7 commits: RED/GREEN for 3 tasks + deps. 18 new tests (7+5+6), full suite 68/68. Requirements LOG-01/02/04 and ERROR-01/02/03/04 satisfied. models/action_log.py, browser/rate_limiter.py, browser/error_handler.py created. requirements.txt updated with tenacity>=8.0, rich>=13.0. Ready for Plan 01 (logging integration).
-[2026-03-23T02:25:41.291Z] Phase 5 planning complete: 4 plans in 3 waves. RESEARCH.md + VALIDATION.md created. Plans verified by gsd-plan-checker (VERIFICATION PASSED). Requirements LOG-01/02/03/04 and ERROR-01/02/03/04 all covered. Ready for execution.
-[2026-03-23T02:08:51.398Z] Phase 4 complete (3/3 plans, 50/50 tests). Verifying and starting Phase 5.
-[2026-03-23T02:07:44.646Z] Phase 4 complete: 3/3 plans, 50/50 tests, CONFIG-01/02/03/04 all satisfied. Config system operational.
