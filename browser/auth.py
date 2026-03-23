@@ -27,19 +27,61 @@ SELECTORS = {
 class AuthManager:
     """Gestisce autenticazione e sessione FIFA 26 WebApp."""
 
+    PROFILE_DIR = Path("storage/browser_profile")
+
     def __init__(self, config: dict):
         self.config = config
-        self.storage_dir = Path("storage")
-        self.storage_dir.mkdir(exist_ok=True)
-        self.cookies_file = self.storage_dir / "cookies.json"
-        self.state_file = self.storage_dir / "browser_state.json"
+        self.PROFILE_DIR.mkdir(parents=True, exist_ok=True)
 
     def has_saved_session(self) -> bool:
-        return self.cookies_file.exists() and self.state_file.exists()
-    
-    def load_session(self, context) -> bool:
-        if not self.has_saved_session():
-            logger.info("Nessuna sessione salvata trovata")
+        """True se esiste un profilo browser salvato."""
+        return self.PROFILE_DIR.exists() and any(self.PROFILE_DIR.iterdir())
+
+    def get_profile_dir(self) -> str:
+        """Ritorna il percorso del profilo browser."""
+        return str(self.PROFILE_DIR)
+
+    def save_session(self) -> None:
+        """Salva la sessione — il profilo browser è già persistente."""
+        pass  # Non serve nulla, il profilo Chrome persiste automaticamente
+
+    def load_session(self) -> str | None:
+        """Ritorna il percorso del profilo se esiste."""
+        if self.has_saved_session():
+            return self.get_profile_dir()
+        return None
+
+    def delete_saved_session(self) -> None:
+        """Cancella il profilo browser."""
+        import shutil
+        if self.PROFILE_DIR.exists():
+            shutil.rmtree(self.PROFILE_DIR)
+            logger.info("Profilo browser cancellato")
+
+    def is_logged_in(self, page: Page) -> bool:
+        try:
+            url = page.url.lower()
+            if "signin.ea.com" in url:
+                return False
+            if "web-app" in url:
+                try:
+                    home_btn = page.get_by_role("button", name="Home")
+                    if home_btn.count() > 0:
+                        return True
+                except Exception:
+                    pass
+            return False
+        except Exception:
+            return False
+
+    def wait_for_login_page(self, page: Page, timeout: int = 30000) -> bool:
+        try:
+            login_btn = page.get_by_role("button", name="Login")
+            login_btn.first.wait_for(state="visible", timeout=timeout)
+            logger.info("Pagina di login rilevata")
+            return True
+        except Exception:
+            logger.warning("Pagina di login non rilevata nel timeout")
             return False
         
         try:
@@ -221,44 +263,4 @@ class AuthManager:
         logger.warning("Non sembri essere nella WebApp")
         return False
 
-        # Se c'è il pulsante "Send Code", cliccalo
-        if send_code_btn:
-            logger.info("Verifica identità EA — invio codice...")
-            send_code_btn.click()
-            page.wait_for_timeout(2000)
-            code_input = page.query_selector(SELECTORS["verification_code_input"])
-
-        if code_input:
-            logger.info("==================================================")
-            logger.info("VERIFICA 2FA — Inserisci il codice NEL BROWSER.")
-            logger.info("Lo script attende max 2 minuti...")
-            logger.info("==================================================")
-
-            try:
-                # Polling: ogni 2s controlla se siamo nell'app
-                for _ in range(60):
-                    page.wait_for_timeout(2000)
-                    if self.is_logged_in(page):
-                        logger.info("Verifica completata!")
-                        return True
-                    # Se il campo codice è scomparso, probabilmente siamo dentro
-                    if not page.query_selector(SELECTORS["verification_code_input"]):
-                        page.wait_for_timeout(2000)
-                        if self.is_logged_in(page):
-                            logger.info("Verifica completata (campo codice scomparso)!")
-                            return True
-                        break
-            except Exception:
-                pass
-
-            logger.error("Timeout verifica 2FA")
-            return False
-
         return True
-    
-    def delete_saved_session(self) -> None:
-        if self.cookies_file.exists():
-            self.cookies_file.unlink()
-        if self.state_file.exists():
-            self.state_file.unlink()
-        logger.info("Sessione salvata eliminata")

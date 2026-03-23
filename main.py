@@ -169,8 +169,9 @@ def main() -> None:
         controller = BrowserController(config)
         auth = AuthManager(config)
         
-        state_path = str(auth.state_file) if auth.state_file.exists() else None
-        page = controller.start(storage_state_path=state_path)
+        # Prova a ripristinare il profilo browser esistente
+        profile_dir = auth.load_session()
+        page = controller.start(user_data_dir=profile_dir)
 
         controller.navigate_to_webapp()
         logger.info(f"WebApp caricata: {page.title()}")
