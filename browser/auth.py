@@ -108,20 +108,46 @@ class AuthManager:
             logger.info("Tentativo di login...")
 
             # Clicca il pulsante login se presente (dalla home WebApp)
-            login_btn = page.query_selector(SELECTORS["login_button"])
+            # Proviamo più selettori e logghiamo cosa troviamo
+            login_selectors = [
+                'button:has-text("Accedi")',
+                'button:has-text("Login")',
+                'button:has-text("Sign In")',
+                'a:has-text("Accedi")',
+                'a:has-text("Login")',
+                'a:has-text("Sign In")',
+            ]
+
+            login_btn = None
+            for sel in login_selectors:
+                login_btn = page.query_selector(sel)
+                if login_btn:
+                    logger.info(f"Login button trovato con: {sel}")
+                    break
+
             if login_btn:
+                # Assicuriamoci che il bottone sia visibile e cliccabile
+                try:
+                    login_btn.scroll_into_view_if_needed()
+                except Exception:
+                    pass
                 login_btn.click()
                 logger.info("Pulsante Login iniziale cliccato")
-                
+
+                # Attendi che appaia email o WebApp (login automatico)
                 try:
-                    logger.info("Controllo caricamento... (attesa max 15s)")
-                    page.wait_for_selector(f'{SELECTORS["webapp_home"]}, {SELECTORS["email_input"]}', timeout=15000)
+                    page.wait_for_selector(
+                        f'{SELECTORS["webapp_home"]}, {SELECTORS["email_input"]}',
+                        timeout=15000,
+                    )
                 except Exception:
-                    logger.warning("Timeout attesa caricamento post-login")
-                
+                    logger.warning("Timeout attesa post-click login")
+
                 if self.is_logged_in(page):
-                    logger.info("Login automatico effettuato tramite sessione ripristinata!")
+                    logger.info("Login automatico effettuato!")
                     return True
+            else:
+                logger.info("Nessun bottone login trovato, cerco campo email diretto...")
 
             # Step 1: Inserisci email
             email_input = page.query_selector(SELECTORS["email_input"])
