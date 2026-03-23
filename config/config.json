@@ -1,0 +1,26 @@
+{
+  "fifa_webapp_url": "https://www.ea.com/fifa/ultimate-team/web-app/",
+  "browser": {
+    "headless": false,
+    "slow_mo": 500,
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "auth": {
+    "save_session": true,
+    "session_timeout_hours": 24,
+    "use_env_credentials": true
+  },
+  "scan_interval_seconds": 60,
+  "listing_defaults": {
+    "duration": "3h",
+    "price_adjustment_type": "percentage",
+    "price_adjustment_value": 0
+  },
+  "rate_limiting": {
+    "min_delay_ms": 2000,
+    "max_delay_ms": 5000
+  }
+}
