@@ -67,13 +67,6 @@ def make_status_table(phase: str, scanned: int, relisted: int, errors: int) -> T
     return table
 
 
-def load_config() -> dict:
-    """DEPRECATED: Use ConfigManager.load() instead. Kept for backward compat."""
-    config_path = Path(__file__).parent / "config" / "config.json"
-    with open(config_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
 def get_credentials() -> tuple[str, str]:
     email = os.environ.get("FIFA_EMAIL")
     password = os.environ.get("FIFA_PASSWORD")
@@ -148,7 +141,7 @@ def main() -> None:
         )
 
         # Verifica sessione prima della navigazione
-        if not ensure_session(page, auth, controller):
+        if not ensure_session(page, auth, controller, get_credentials):
             logger.error("Sessione non valida, impossibile procedere con la scansione")
             controller.stop()
             sys.exit(1)

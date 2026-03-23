@@ -50,7 +50,7 @@ class RateLimiter:
         self._last_action_time = time.monotonic()
 
     def wait_if_needed(self) -> None:
-        """Attendi solo se non è passato abbastza tempo dall'ultima azione."""
+        """Attendi solo se non è passato abbastanza tempo dall'ultima azione."""
         if self._last_action_time == 0:
             self.wait()
             return

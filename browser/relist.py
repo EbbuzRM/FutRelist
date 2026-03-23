@@ -50,7 +50,7 @@ class RelistExecutor:
             logger.info(f"Rilistando [{listing.index}] {listing.player_name}...")
 
             # Register dialog handler BEFORE clicking (Playwright requirement)
-            self.page.on("dialog", self.handle_dialog)
+            self.page.once("dialog", self.handle_dialog)
 
             # Get the listing element by index
             listing_el = self.page.locator(SELECTORS["listing_items"]).nth(listing.index)

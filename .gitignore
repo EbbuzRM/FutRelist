@@ -1,1 +1,6 @@
 .env
+storage/
+logs/
+nul
+__pycache__/
+*.pyc

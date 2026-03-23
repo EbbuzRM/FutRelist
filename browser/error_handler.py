@@ -111,10 +111,12 @@ def ensure_session(
     page: "Page",
     auth,
     controller,
+    get_credentials_fn: Callable[[], tuple[str, str]] | None = None,
 ) -> bool:
     """Verifica la sessione e tenta il recupero se scaduta.
 
     Ritorna True se la sessione è valida o recuperata, False altrimenti.
+    get_credentials_fn: callable che ritorna (email, password).
     """
     if not is_session_expired(page):
         return True
@@ -123,10 +125,19 @@ def ensure_session(
     try:
         auth.delete_saved_session()
         page.reload()
-        credentials = controller.get_credentials()
-        if credentials:
-            auth.perform_login(page, credentials)
-            auth.save_session()
+        page.wait_for_timeout(3000)
+
+        if not auth.wait_for_login_page(page):
+            logger.error("Pagina di login non trovata durante recupero")
+            return False
+
+        if get_credentials_fn is None:
+            logger.error("Nessuna funzione credenziali fornita per il recupero")
+            return False
+
+        email, password = get_credentials_fn()
+        if auth.perform_login(page, email, password):
+            auth.save_session(controller.context)
             logger.info("Sessione recuperata con successo")
             return True
     except Exception as e:
