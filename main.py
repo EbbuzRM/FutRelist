@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -81,6 +82,80 @@ def get_credentials() -> tuple[str, str]:
     return email, password
 
 
+def authenticate(controller, auth, page) -> None:
+    """Gestisce il flusso di login o ripristino sessione. Esce su fallimento."""
+    logger = logging.getLogger(__name__)
+
+    if auth.has_saved_session():
+        logger.info("Sessione salvata trovata, tentativo di ripristino...")
+        auth.load_session(controller.context)
+        page.reload()
+        page.wait_for_timeout(3000)
+
+    if auth.is_logged_in(page):
+        logger.info("Già loggato con sessione salvata")
+        return
+
+    logger.info("Login richiesto...")
+
+    if not auth.wait_for_login_page(page):
+        logger.error("Pagina di login non trovata")
+        controller.stop()
+        sys.exit(1)
+
+    email, password = get_credentials()
+
+    if auth.perform_login(page, email, password):
+        auth.save_session(controller.context)
+        logger.info("Login completato e sessione salvata")
+    else:
+        logger.error("Login fallito")
+        controller.stop()
+        sys.exit(1)
+
+
+def navigate_with_retry(navigator, page) -> bool:
+    """Naviga al Transfer List con un retry su timeout."""
+    logger = logging.getLogger(__name__)
+
+    try:
+        return navigator.go_to_transfer_list()
+    except Exception as e:
+        logger.warning(f"Timeout navigazione, riprovo: {e}")
+        page.reload()
+        page.wait_for_timeout(3000)
+        try:
+            return navigator.go_to_transfer_list()
+        except Exception as e2:
+            logger.error(f"Secondo tentativo fallito: {e2}")
+            return False
+
+
+def relist_expired_listings(executor, expired_listings, live, status_label, total_count) -> tuple[int, int]:
+    """Esegue il rilist dei listing scaduti e logga ogni azione. Ritorna (succeeded, failed)."""
+    logger = logging.getLogger(__name__)
+    succeeded = 0
+    failed = 0
+
+    for listing in expired_listings:
+        result = executor.relist_single(listing)
+        if result.success:
+            succeeded += 1
+            action_logger.info(
+                "Rilist completato",
+                extra={"action": "relist", "player_name": result.player_name, "success": True},
+            )
+        else:
+            failed += 1
+            action_logger.warning(
+                "Rilist fallito",
+                extra={"action": "relist", "player_name": result.player_name, "success": False, "error": result.error},
+            )
+        live.update(make_status_table(status_label, total_count, succeeded, failed))
+
+    return succeeded, failed
+
+
 def main() -> None:
     load_dotenv()
     setup_logging()
@@ -93,46 +168,18 @@ def main() -> None:
         cm = ConfigManager()
         app_config = cm.load()
         config = app_config.to_dict()
-        logger.info("Config caricata")
-        logger.info(f"Scan interval: {app_config.scan_interval_seconds}s")
+        logger.info(f"Config caricata (scan interval: {app_config.scan_interval_seconds}s)")
 
         controller = BrowserController(config)
         auth = AuthManager(config)
-
         page = controller.start()
 
         controller.navigate_to_webapp()
         logger.info(f"WebApp caricata: {page.title()}")
 
-        if auth.has_saved_session():
-            logger.info("Sessione salvata trovata, tentativo di ripristino...")
-            auth.load_session(controller.context)
-            page.reload()
-            page.wait_for_timeout(3000)
-
-        if not auth.is_logged_in(page):
-            logger.info("Login richiesto...")
-
-            if not auth.wait_for_login_page(page):
-                logger.error("Pagina di login non trovata")
-                controller.stop()
-                sys.exit(1)
-
-            email, password = get_credentials()
-
-            if auth.perform_login(page, email, password):
-                auth.save_session(controller.context)
-                logger.info("Login completato e sessione salvata")
-            else:
-                logger.error("Login fallito")
-                controller.stop()
-                sys.exit(1)
-        else:
-            logger.info("Già loggato con sessione salvata")
-
+        authenticate(controller, auth, page)
         logger.info("=== Autenticazione completata ===")
 
-        # Phase 2+: Continuous scan-relist loop
         navigator = TransferMarketNavigator(page, config)
         detector = ListingDetector(page)
         executor = RelistExecutor(page, config)
@@ -146,93 +193,48 @@ def main() -> None:
         logger.info(f"Avvio loop continuo (intervallo: {scan_interval}s). Premi Ctrl+C per fermare.")
 
         live_console = Console(stderr=True)
-        with Live(
-            make_status_table("In attesa...", 0, 0, 0),
-            refresh_per_second=2,
-            console=live_console,
-        ) as live:
+        with Live(make_status_table("In attesa...", 0, 0, 0), refresh_per_second=2, console=live_console) as live:
             while True:
                 cycle += 1
                 logger.info(f"=== Ciclo {cycle} ===")
 
-                # Verifica sessione prima di ogni ciclo
                 if not ensure_session(page, auth, controller, get_credentials):
                     logger.error("Sessione non valida, impossibile procedere")
                     break
 
-                # Naviga al Transfer List
                 live.update(make_status_table("Navigazione...", 0, 0, 0))
-                nav_success = False
-                try:
-                    nav_success = navigator.go_to_transfer_list()
-                except Exception as e:
-                    logger.warning(f"Timeout navigazione, riprovo: {e}")
-                    page.reload()
-                    page.wait_for_timeout(3000)
-                    try:
-                        nav_success = navigator.go_to_transfer_list()
-                    except Exception as e2:
-                        logger.error(f"Secondo tentativo fallito: {e2}")
-
-                if not nav_success:
-                    logger.error("Impossibile raggiungere il Transfer List")
+                if not navigate_with_retry(navigator, page):
                     live.update(make_status_table("Errore", 0, 0, 0))
                     rate_limiter.wait()
                     continue
 
-                # Scansiona listing
                 live.update(make_status_table("Scansione...", 0, 0, 0))
-                result = detector.scan_listings()
+                scan_result = detector.scan_listings()
+                label = f"Ciclo {cycle}"
 
-                if result.is_empty:
+                if scan_result.is_empty:
                     logger.info("Nessun listing trovato")
-                    live.update(make_status_table(f"Ciclo {cycle}", 0, 0, 0))
+                    live.update(make_status_table(label, 0, 0, 0))
                 else:
-                    logger.info(f"Scan: {result.total_count} listing (attivi={result.active_count}, scaduti={result.expired_count}, venduti={result.sold_count})")
-                    live.update(make_status_table(f"Ciclo {cycle}", result.total_count, 0, 0))
+                    logger.info(f"Scan: {scan_result.total_count} listing (attivi={scan_result.active_count}, scaduti={scan_result.expired_count}, venduti={scan_result.sold_count})")
 
-                    # Rilista scaduti
-                    if result.expired_count > 0:
-                        logger.info(f"Rilist di {result.expired_count} listing scaduti...")
-                        expired = [l for l in result.listings if l.needs_relist]
-                        succeeded = 0
-                        failed = 0
-
-                        for listing in expired:
-                            r = executor.relist_single(listing)
-                            if r.success:
-                                succeeded += 1
-                                action_logger.info(
-                                    "Rilist completato",
-                                    extra={"action": "relist", "player_name": r.player_name, "success": True},
-                                )
-                            else:
-                                failed += 1
-                                action_logger.warning(
-                                    "Rilist fallito",
-                                    extra={"action": "relist", "player_name": r.player_name, "success": False, "error": r.error},
-                                )
-                            live.update(make_status_table(f"Ciclo {cycle} - Rilist", result.total_count, succeeded, failed))
-
-                        total = succeeded + failed
-                        action_logger.info(
-                            "Batch completato",
-                            extra={"action": "batch", "success": True, "total": total, "succeeded": succeeded},
+                    if scan_result.expired_count > 0:
+                        expired = [l for l in scan_result.listings if l.needs_relist]
+                        succeeded, failed = relist_expired_listings(
+                            executor, expired, live, f"{label} - Rilist", scan_result.total_count,
                         )
-                        logger.info(f"Rilist completato: {succeeded}/{total} successi")
-                        live.update(make_status_table(f"Ciclo {cycle} - OK", result.total_count, succeeded, failed))
+                        action_logger.info("Batch completato", extra={"action": "batch", "success": True, "total": succeeded + failed, "succeeded": succeeded})
+                        logger.info(f"Rilist completato: {succeeded}/{succeeded + failed} successi")
+                        live.update(make_status_table(f"{label} - OK", scan_result.total_count, succeeded, failed))
                     else:
                         logger.info("Nessun listing scaduto")
-                        live.update(make_status_table(f"Ciclo {cycle}", result.total_count, 0, 0))
+                        live.update(make_status_table(label, scan_result.total_count, 0, 0))
 
-                # Attendi prossimo ciclo
                 logger.info(f"Prossimo ciclo tra {scan_interval}s...")
                 rate_limiter.wait()
-                import time
                 time.sleep(scan_interval)
 
         cm.save()
-
         input("\nPremi INVIO per chiudere il browser...")
         controller.stop()
 
