@@ -2,9 +2,9 @@
 Navigazione Transfer Market FIFA 26 WebApp - Dalla home alla Transfer List
 """
 import logging
-import random
-from typing import Optional
 from playwright.sync_api import Page
+
+from browser.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -23,16 +23,10 @@ class TransferMarketNavigator:
         self.page = page
         self.config = config
         rate_limiting = config.get("rate_limiting", {})
-        self.min_delay_ms = rate_limiting.get("min_delay_ms", 2000)
-        self.max_delay_ms = rate_limiting.get("max_delay_ms", 5000)
-
-    def _random_delay(self, min_ms: Optional[int] = None, max_ms: Optional[int] = None) -> None:
-        """Genera un ritardo casuale per resistenza al rilevamento bot."""
-        min_val = min_ms if min_ms is not None else self.min_delay_ms
-        max_val = max_ms if max_ms is not None else self.max_delay_ms
-        delay = random.randint(min_val, max_val)
-        logger.debug(f"Attesa casuale: {delay}ms")
-        self.page.wait_for_timeout(delay)
+        self.rate_limiter = RateLimiter(
+            min_delay_ms=rate_limiting.get("min_delay_ms", 2000),
+            max_delay_ms=rate_limiting.get("max_delay_ms", 5000),
+        )
 
     def go_to_transfer_list(self) -> bool:
         """Naviga dalla Home alla vista Transfer List.
@@ -51,7 +45,7 @@ class TransferMarketNavigator:
             logger.info("Clic su Transfers...")
             transfers_btn.click()
             self.page.wait_for_timeout(3000)
-            self._random_delay()
+            self.rate_limiter.wait()
 
             # Step 2: Clicca il tab Transfer List
             transfer_list_btn = self.page.query_selector(SELECTORS["transfer_list_tab"])
@@ -62,7 +56,7 @@ class TransferMarketNavigator:
             logger.info("Clic su Transfer List...")
             transfer_list_btn.click()
             self.page.wait_for_timeout(3000)
-            self._random_delay()
+            self.rate_limiter.wait()
 
             # Step 3: Attendi che la vista sia pronta
             logger.info("Attesa caricamento vista...")

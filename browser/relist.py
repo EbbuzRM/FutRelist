@@ -1,9 +1,9 @@
 """Relist executor for FIFA 26 WebApp - price adjustment and relist actions."""
 import logging
-import random
 
 from playwright.sync_api import Page
 from models.relist_result import RelistResult, RelistBatchResult
+from browser.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -24,22 +24,16 @@ class RelistExecutor:
         self.page = page
         self.config = config
         rate_limiting = config.get("rate_limiting", {})
-        self.min_delay_ms = rate_limiting.get("min_delay_ms", 2000)
-        self.max_delay_ms = rate_limiting.get("max_delay_ms", 5000)
+        self.rate_limiter = RateLimiter(
+            min_delay_ms=rate_limiting.get("min_delay_ms", 2000),
+            max_delay_ms=rate_limiting.get("max_delay_ms", 5000),
+        )
         # Price adjustment config
         defaults = config.get("listing_defaults", {})
         self.adjustment_type = defaults.get("price_adjustment_type", "percentage")
         self.adjustment_value = defaults.get("price_adjustment_value", 0)
         self.min_price = defaults.get("min_price", 200)
         self.max_price = defaults.get("max_price", 15_000_000)
-
-    def _random_delay(self, min_ms=None, max_ms=None):
-        """Ritardo casuale per anti-detection (stesso pattern di navigator.py)."""
-        min_val = min_ms if min_ms is not None else self.min_delay_ms
-        max_val = max_ms if max_ms is not None else self.max_delay_ms
-        delay = random.randint(min_val, max_val)
-        logger.debug(f"Attesa casuale: {delay}ms")
-        self.page.wait_for_timeout(delay)
 
     def handle_dialog(self, dialog):
         """Gestisce i dialog di conferma del WebApp - accetta automaticamente."""
@@ -87,7 +81,7 @@ class RelistExecutor:
                     confirm_btn.click()
                     self.page.wait_for_timeout(1500)
 
-            self._random_delay()
+            self.rate_limiter.wait()
 
             logger.info(f"  Rilist completato: {listing.player_name}")
             return RelistResult(
