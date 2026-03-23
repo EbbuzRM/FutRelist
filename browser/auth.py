@@ -18,8 +18,9 @@ SELECTORS = {
     "next_button": 'button:has-text("NEXT")',
     "password_input": 'input[placeholder*="password"]',
     "submit_button": 'button:has-text("Sign in")',
-    "verification_code_input": '#twoFactorCode, input[name="twoFactorCode"]',
-    "verification_submit": '#btnSubmit, button:has-text("Submit")',
+    "verification_send_code": 'button:has-text("Send Code")',
+    "verification_code_input": 'input[placeholder*="digit code"], input[placeholder*="verification"]',
+    "verification_submit": 'button:has-text("Sign in")',
     "webapp_home": '.ut-app, .ea-app',
 }
 
@@ -188,29 +189,34 @@ class AuthManager:
 
         Ritorna True se la verifica è passata o non necessaria, False se fallita.
         """
+        # Check se appare il pulsante "Send Code"
+        send_code_btn = page.query_selector(SELECTORS["verification_send_code"])
+        if send_code_btn:
+            logger.info("2FA richiesto — invio codice via email...")
+            send_code_btn.click()
+            page.wait_for_timeout(3000)
+
         # Check se appare il campo codice verifica
         code_input = page.query_selector(SELECTORS["verification_code_input"])
-
         if not code_input:
             return True
 
         logger.info("==================================================")
-        logger.info("VERIFICA 2FA — Inserisci il codice NEL BROWSER.")
+        logger.info("VERIFICA 2FA — Controlla la tua email per il codice.")
+        logger.info("Inseriscilo NEL BROWSER aperto.")
         logger.info("Lo script attende max 2 minuti...")
         logger.info("==================================================")
 
         try:
-            # Polling: ogni 2s controlla se siamo nell'app
             for _ in range(60):
                 page.wait_for_timeout(2000)
                 if self.is_logged_in(page):
                     logger.info("Verifica completata!")
                     return True
-                # Se il campo codice è scomparso, probabilmente siamo dentro
                 if not page.query_selector(SELECTORS["verification_code_input"]):
                     page.wait_for_timeout(2000)
                     if self.is_logged_in(page):
-                        logger.info("Verifica completata (campo codice scomparso)!")
+                        logger.info("Verifica completata!")
                         return True
                     break
         except Exception:

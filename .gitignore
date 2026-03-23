@@ -4,3 +4,5 @@ logs/
 nul
 __pycache__/
 *.pyc
+.playwright-cli/
+*.png
