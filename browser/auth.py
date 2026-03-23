@@ -27,14 +27,30 @@ SELECTORS = {
 
 class AuthManager:
     """Gestisce autenticazione e sessione FIFA 26 WebApp."""
-    
+
     def __init__(self, config: dict):
         self.config = config
         self.storage_dir = Path("storage")
         self.storage_dir.mkdir(exist_ok=True)
         self.cookies_file = self.storage_dir / "cookies.json"
         self.state_file = self.storage_dir / "browser_state.json"
-    
+
+    def _get_search_target(self, page: Page):
+        """Ritorna il target per le query (iframe WebApp o page diretta).
+
+        La WebApp EA carica spesso il contenuto dentro un iframe.
+        """
+        # Cerca iframe della WebApp
+        iframe_selectors = ['#webApp', 'iframe[src*="web-app"]', 'iframe[src*="webapp"]', 'iframe']
+        for sel in iframe_selectors:
+            frame_el = page.query_selector(sel)
+            if frame_el:
+                frame = frame_el.content_frame()
+                if frame:
+                    logger.debug(f"Trovato iframe: {sel}")
+                    return frame
+        return page
+
     def has_saved_session(self) -> bool:
         return self.cookies_file.exists() and self.state_file.exists()
     
@@ -79,8 +95,9 @@ class AuthManager:
                 logger.info("Utente loggato (URL conferma)")
                 return True
 
-            # Check elementi DOM
-            home_element = page.query_selector(SELECTORS["webapp_home"])
+            # Check elementi DOM (dentro iframe se presente)
+            target = self._get_search_target(page)
+            home_element = target.query_selector(SELECTORS["webapp_home"])
             if home_element:
                 logger.info("Utente loggato (WebApp rilevata)")
                 return True
@@ -107,8 +124,10 @@ class AuthManager:
         try:
             logger.info("Tentativo di login...")
 
-            # Clicca il pulsante login se presente (dalla home WebApp)
-            # Proviamo più selettori e logghiamo cosa troviamo
+            # Il contenuto della WebApp può essere dentro un iframe
+            target = self._get_search_target(page)
+
+            # Clicca il pulsante login se presente
             login_selectors = [
                 'button:has-text("Accedi")',
                 'button:has-text("Login")',
@@ -120,13 +139,12 @@ class AuthManager:
 
             login_btn = None
             for sel in login_selectors:
-                login_btn = page.query_selector(sel)
+                login_btn = target.query_selector(sel)
                 if login_btn:
                     logger.info(f"Login button trovato con: {sel}")
                     break
 
             if login_btn:
-                # Assicuriamoci che il bottone sia visibile e cliccabile
                 try:
                     login_btn.scroll_into_view_if_needed()
                 except Exception:
@@ -136,7 +154,7 @@ class AuthManager:
 
                 # Attendi che appaia email o WebApp (login automatico)
                 try:
-                    page.wait_for_selector(
+                    target.wait_for_selector(
                         f'{SELECTORS["webapp_home"]}, {SELECTORS["email_input"]}',
                         timeout=15000,
                     )
@@ -150,7 +168,7 @@ class AuthManager:
                 logger.info("Nessun bottone login trovato, cerco campo email diretto...")
 
             # Step 1: Inserisci email
-            email_input = page.query_selector(SELECTORS["email_input"])
+            email_input = target.query_selector(SELECTORS["email_input"])
             if not email_input:
                 logger.error("Campo email non trovato")
                 return False
@@ -160,7 +178,7 @@ class AuthManager:
 
             # Step 2: Clicca "Next" / "Avanti" per mostrare il campo password
             page.wait_for_timeout(1000)
-            next_btn = page.query_selector(SELECTORS["next_button"])
+            next_btn = target.query_selector(SELECTORS["next_button"])
             if next_btn:
                 next_btn.click()
                 logger.info("Bottone Next/Avanti cliccato")
@@ -169,7 +187,7 @@ class AuthManager:
                 logger.warning("Bottone Next non trovato, provo comunque...")
 
             # Step 3: Inserisci password (appare dopo il click su Next)
-            pwd_input = page.wait_for_selector(
+            pwd_input = target.wait_for_selector(
                 SELECTORS["password_input"], state="visible", timeout=10000
             )
             if not pwd_input:
@@ -180,7 +198,7 @@ class AuthManager:
             logger.info("Password inserita")
 
             # Step 4: Clicca submit / Log In
-            submit_btn = page.query_selector(SELECTORS["submit_button"])
+            submit_btn = target.query_selector(SELECTORS["submit_button"])
             if submit_btn:
                 submit_btn.click()
                 logger.info("Submit cliccato")
@@ -217,9 +235,11 @@ class AuthManager:
 
         Ritorna True se la verifica è passata o non necessaria, False se fallita.
         """
+        target = self._get_search_target(page)
+
         # Check se appare il campo codice verifica
-        code_input = page.query_selector(SELECTORS["verification_code_input"])
-        send_code_btn = page.query_selector(SELECTORS["verification_send_code"])
+        code_input = target.query_selector(SELECTORS["verification_code_input"])
+        send_code_btn = target.query_selector(SELECTORS["verification_send_code"])
 
         if not code_input and not send_code_btn:
             return True
