@@ -27,9 +27,9 @@
 |------|------|--------|--------|
 | 00 | Test Infrastructure Setup | ✅ Complete | 4554109 |
 | 01 | Listing Data Model | ✅ Complete | 85db6aa |
-| 02 | Transfer Market Navigator | Complete    | 2026-03-23 |
-| 03 | 2/3 | In Progress|  |
-| 04 | Integration | ✅ Complete | d037918 |
+| 02 | Transfer Market Navigator | ✅ Complete | 2026-03-23 |
+| 03 | DOM Detector | ✅ Complete | 2026-03-23 |
+| 04 | Integration | ✅ Complete | 2026-03-23 |
 
 **Success Criteria:**
 1. System navigates to Transfer Market > My Listings
@@ -45,8 +45,8 @@
 **Plans:** 3 plans
 
 Plans:
-- [ ] 03-00-PLAN.md — TDD: Price adjustment logic + RelistResult model (Wave 1)
-- [ ] 03-01-PLAN.md — RelistExecutor class with dialog handling (Wave 2)
+- [x] 03-00-PLAN.md — TDD: Price adjustment logic + RelistResult model (Wave 1) ✅ 2026-03-23
+- [x] 03-01-PLAN.md — RelistExecutor class with dialog handling (Wave 2) ✅ 2026-03-23
 - [ ] 03-02-PLAN.md — Integration: wire relist into main.py (Wave 3)
 
 **Success Criteria:**
@@ -63,7 +63,7 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 04-00-PLAN.md — TDD: Config data model + validation tests (Wave 1)
+- [x] 04-00-PLAN.md — TDD: Config data model + validation tests (Wave 1) ✅ 2026-03-23
 - [ ] 04-01-PLAN.md — ConfigManager class + CLI subcommands (Wave 2)
 - [ ] 04-02-PLAN.md — Integration: wire into main.py + human verify (Wave 3)
 

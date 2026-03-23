@@ -1,6 +1,6 @@
 # Project State
 
-## Current Phase: FIFA 26 Auto-Relist Tool - Phase 4 Planning Complete (3 plans, 3 waves)
+## Current Phase: FIFA 26 Auto-Relist Tool - Phase 4 In Progress (1/3 plans complete)
 
 ### Previous Milestones:
 - [x] Contact Management System v1.0 - Completed
@@ -14,7 +14,7 @@
 **Goal:** Browser automation tool for auto-relisting expired players on FIFA 26 WebApp
 
 ### Current Status:
-Phase 1, 2, 3 complete. Phase 4 planned: 3 plans (00=TDD config model, 01=ConfigManager+CLI, 02=integration). Ready for execution.
+Phase 1, 2, 3 complete. Phase 4: 1/3 plans done (Plan 00 TDD config model ✅). Ready for Plan 01 (ConfigManager+CLI).
 
 ### Completed:
 - [x] Phase 1: Browser Setup & Authentication (BROWSER-01, BROWSER-02, BROWSER-03)
@@ -40,15 +40,21 @@ Phase 1, 2, 3 complete. Phase 4 planned: 3 plans (00=TDD config model, 01=Config
   - [x] RelistExecutor class: __init__, _random_delay, handle_dialog, relist_single, relist_expired
   - [x] Dialog handler auto-accepts WebApp confirmations
   - [x] Price adjustment integration via calculate_adjusted_price()
+- [x] Phase 4 Plan 00: TDD Config data model (CONFIG-01, CONFIG-02, CONFIG-03, CONFIG-04)
+  - [x] config/config.py with 4 dataclasses (AppConfig, BrowserConfig, ListingDefaults, RateLimitingConfig)
+  - [x] __post_init__ validation for all constraints
+  - [x] from_dict()/to_dict() matching existing config.json format
+  - [x] tests/test_config.py (15 tests, all passing)
+  - [x] Full suite: 50/50 tests pass
 
 ### Next Steps:
-- [ ] Phase 4 Plan 00: TDD Config data model + tests (Wave 1)
 - [ ] Phase 4 Plan 01: ConfigManager + CLI subcommands (Wave 2)
 - [ ] Phase 4 Plan 02: Integration + human verify (Wave 3)
 - [ ] Phase 5: Logging & Error Handling
 
 ### Current Activity
-[2026-03-23T01:30:00Z] Phase 4 planning complete: 3 plans in 3 waves. RESEARCH.md + VALIDATION.md already existed. Plans verified by gsd-tools (frontmatter + structure valid). Requirements CONFIG-01/02/03/04 all covered. Ready for execution.
+[2026-03-23T01:36:24Z] Phase 4 Plan 00 complete (TDD). 2 commits: test file (15 tests), config/config.py implementation. 15/15 config tests pass, 50/50 full suite. CONFIG-01/02/03/04 satisfied. Ready for Plan 01 (ConfigManager+CLI).
+[2026-03-23T01:33:17.955Z] Phase 4 planning complete: 3 plans in 3 waves. RESEARCH.md + VALIDATION.md created. Plans verified by gsd-plan-checker (VERIFICATION PASSED with warnings). Requirements CONFIG-01/02/03/04 all covered. Ready for execution.
 [2026-03-23T01:16:14.461Z] Phase 3 complete (3/3 plans, 35/35 tests pass, 14/14 must-haves verified). Human verification deferred (live WebApp test). Starting Phase 4.
 [2026-03-23T01:08:40Z] Phase 3 Plan 01 completato (RelistExecutor). 2 commits: SELECTORS+skeleton, dialog+relist methods. 14/14 tests pass. RELIST-01/02/04 satisfied. Ready per Plan 02 (integration).
 [2026-03-23T01:03:00Z] Phase 3 Plan 00 completato (TDD). 3 commits: test file (14 tests), RelistResult model, calculate_adjusted_price(). 14/14 tests pass. RELIST-02/03 satisfied. Ready per Plan 01 (RelistExecutor).
@@ -77,9 +83,10 @@ Phase 1, 2, 3 complete. Phase 4 planned: 3 plans (00=TDD config model, 01=Config
 - Price adjustment: percentage (multiplier) and fixed (addition) with FIFA bounds (200-15M)
 - Result tracking: RelistResult per-listing + RelistBatchResult with from_results() aggregation
 - RelistExecutor pattern: __init__(page, config), _random_delay(), handle_dialog(), relist_single() → RelistResult, relist_expired() → RelistBatchResult
+- Config dataclass pattern: nested sub-configs with __post_init__ validation, from_dict()/to_dict() for JSON round-trip
 
-Last updated: 2026-03-23T01:26:00.288Z
+Last updated: 2026-03-23T01:40:12.475Z
 
 ## Last Commit
-Hash: e746cc2
-Message: "feat(03-01): implement dialog handler, relist_single, and relist_expired"
+Hash: 50f3483
+Message: "feat(04-00): implement config dataclasses with validation"
