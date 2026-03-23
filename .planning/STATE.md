@@ -1,6 +1,6 @@
 # Project State
 
-## Current Phase: FIFA 26 Auto-Relist Tool - Phase 3 In Progress (2/3 plans)
+## Current Phase: FIFA 26 Auto-Relist Tool - Phase 4 Planning Complete (3 plans, 3 waves)
 
 ### Previous Milestones:
 - [x] Contact Management System v1.0 - Completed
@@ -14,7 +14,7 @@
 **Goal:** Browser automation tool for auto-relisting expired players on FIFA 26 WebApp
 
 ### Current Status:
-Phase 1 e 2 complete. Phase 3 in esecuzione: Plan 00 e 01 completati. RelistExecutor con relist_expired(), dialog handler, SELECTORS (6 chiavi). Ready per Plan 02 (integration).
+Phase 1, 2, 3 complete. Phase 4 planned: 3 plans (00=TDD config model, 01=ConfigManager+CLI, 02=integration). Ready for execution.
 
 ### Completed:
 - [x] Phase 1: Browser Setup & Authentication (BROWSER-01, BROWSER-02, BROWSER-03)
@@ -42,11 +42,14 @@ Phase 1 e 2 complete. Phase 3 in esecuzione: Plan 00 e 01 completati. RelistExec
   - [x] Price adjustment integration via calculate_adjusted_price()
 
 ### Next Steps:
-- [ ] Phase 3 Plan 02: Integration (wire RelistExecutor into main.py)
-- [ ] Phase 4: Configuration System (CONFIG-01, CONFIG-02, CONFIG-03, CONFIG-04)
+- [ ] Phase 4 Plan 00: TDD Config data model + tests (Wave 1)
+- [ ] Phase 4 Plan 01: ConfigManager + CLI subcommands (Wave 2)
+- [ ] Phase 4 Plan 02: Integration + human verify (Wave 3)
 - [ ] Phase 5: Logging & Error Handling
 
 ### Current Activity
+[2026-03-23T01:30:00Z] Phase 4 planning complete: 3 plans in 3 waves. RESEARCH.md + VALIDATION.md already existed. Plans verified by gsd-tools (frontmatter + structure valid). Requirements CONFIG-01/02/03/04 all covered. Ready for execution.
+[2026-03-23T01:16:14.461Z] Phase 3 complete (3/3 plans, 35/35 tests pass, 14/14 must-haves verified). Human verification deferred (live WebApp test). Starting Phase 4.
 [2026-03-23T01:08:40Z] Phase 3 Plan 01 completato (RelistExecutor). 2 commits: SELECTORS+skeleton, dialog+relist methods. 14/14 tests pass. RELIST-01/02/04 satisfied. Ready per Plan 02 (integration).
 [2026-03-23T01:03:00Z] Phase 3 Plan 00 completato (TDD). 3 commits: test file (14 tests), RelistResult model, calculate_adjusted_price(). 14/14 tests pass. RELIST-02/03 satisfied. Ready per Plan 01 (RelistExecutor).
 [2026-03-23T00:58:46.803Z] Phase 3 planning complete: 3 plans in 3 waves. RESEARCH.md + VALIDATION.md created. Plans verified by gsd-plan-checker (VERIFICATION PASSED). Requirements RELIST-01/02/03/04 all covered. Ready for execution.
@@ -75,7 +78,7 @@ Phase 1 e 2 complete. Phase 3 in esecuzione: Plan 00 e 01 completati. RelistExec
 - Result tracking: RelistResult per-listing + RelistBatchResult with from_results() aggregation
 - RelistExecutor pattern: __init__(page, config), _random_delay(), handle_dialog(), relist_single() → RelistResult, relist_expired() → RelistBatchResult
 
-Last updated: 2026-03-23T01:10:59.493Z
+Last updated: 2026-03-23T01:26:00.288Z
 
 ## Last Commit
 Hash: e746cc2

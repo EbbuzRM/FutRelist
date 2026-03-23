@@ -60,6 +60,12 @@ Plans:
 ### Phase 4: Configuration System
 **Goal:** User-configurable settings for pricing and timing
 **Requirements:** CONFIG-01, CONFIG-02, CONFIG-03, CONFIG-04
+**Plans:** 3 plans
+
+Plans:
+- [ ] 04-00-PLAN.md — TDD: Config data model + validation tests (Wave 1)
+- [ ] 04-01-PLAN.md — ConfigManager class + CLI subcommands (Wave 2)
+- [ ] 04-02-PLAN.md — Integration: wire into main.py + human verify (Wave 3)
 
 **Success Criteria:**
 1. User can set listing duration
