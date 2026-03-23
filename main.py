@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 
 from browser.controller import BrowserController
 from browser.auth import AuthManager
+from browser.navigator import TransferMarketNavigator
+from browser.detector import ListingDetector
 
 
 def setup_logging() -> None:
@@ -100,7 +102,31 @@ def main() -> None:
             logger.info("Già loggato con sessione salvata")
 
         logger.info("=== Autenticazione completata ===")
-        logger.info("Browser pronto per operazioni (rilisting, ecc.)")
+
+        # Phase 2: Navigate to Transfer List and scan listings
+        navigator = TransferMarketNavigator(page, config)
+        detector = ListingDetector(page)
+
+        logger.info("Navigazione verso Transfer List...")
+        if navigator.go_to_transfer_list():
+            logger.info("Transfer List raggiunta, scansione listing...")
+            result = detector.scan_listings()
+
+            if result.is_empty:
+                logger.info("Nessun listing trovato sul Transfer List")
+            else:
+                logger.info(f"=== Scan completata: {result.total_count} listing trovati ===")
+                logger.info(f"  Attivi: {result.active_count}")
+                logger.info(f"  Scaduti: {result.expired_count}")
+                logger.info(f"  Venduti: {result.sold_count}")
+
+                if result.expired_count > 0:
+                    logger.info(f"-> {result.expired_count} listing scaduti da rilistare (Phase 3)")
+                    for listing in result.listings:
+                        if listing.needs_relist:
+                            logger.info(f"  [{listing.index}] {listing.player_name} OVR {listing.rating} - {listing.current_price or '?'} coins")
+        else:
+            logger.error("Impossibile raggiungere il Transfer List")
 
         input("\nPremi INVIO per chiudere il browser...")
         controller.stop()
