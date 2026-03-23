@@ -949,3 +949,35 @@ Call log:
 2026-03-23 19:16:58,429 [ERROR] __main__: Errore autenticazione: Login fallito
 2026-03-23 19:16:58,429 [INFO] browser.controller: Chiusura browser...
 2026-03-23 19:16:58,854 [INFO] browser.controller: Browser chiuso
+2026-03-23 19:23:44,875 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 19:23:44,875 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 19:23:44,876 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 19:23:44,876 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 19:23:45,777 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 19:23:46,088 [INFO] browser.controller: Creazione nuovo profilo browser...
+2026-03-23 19:23:46,408 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 19:23:46,409 [INFO] browser.controller: Navigazione a: https://www.ea.com/ea-sports-fc/ultimate-team/web-app/
+2026-03-23 19:23:49,986 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 19:23:49,991 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 19:23:50,023 [INFO] __main__: Login richiesto...
+2026-03-23 19:23:51,413 [INFO] browser.auth: Pagina di login rilevata
+2026-03-23 19:23:51,413 [INFO] browser.auth: Tentativo di login...
+2026-03-23 19:23:52,676 [INFO] browser.auth: Pulsante Login cliccato, attesa redirect a signin.ea.com...
+2026-03-23 19:23:55,475 [INFO] browser.auth: Email inserita
+2026-03-23 19:23:57,358 [INFO] browser.auth: NEXT cliccato
+2026-03-23 19:24:00,901 [INFO] browser.auth: Password inserita
+2026-03-23 19:24:01,864 [INFO] browser.auth: Sign in cliccato
+2026-03-23 19:24:01,864 [INFO] browser.auth: Attesa redirect a WebApp...
+2026-03-23 19:24:06,884 [INFO] browser.auth: 2FA richiesto — invio codice via email...
+2026-03-23 19:24:10,770 [INFO] browser.auth: ==================================================
+2026-03-23 19:24:10,771 [INFO] browser.auth: VERIFICA 2FA
+2026-03-23 19:24:10,771 [INFO] browser.auth: 1. Controlla la tua email per il codice a 6 cifre
+2026-03-23 19:24:10,771 [INFO] browser.auth: 2. Inseriscilo NEL BROWSER aperto
+2026-03-23 19:24:10,771 [INFO] browser.auth: 3. Clicca 'Sign in' nel browser
+2026-03-23 19:24:10,771 [INFO] browser.auth: 4. Premi INVIO qui quando sei dentro la WebApp
+2026-03-23 19:24:10,771 [INFO] browser.auth: ==================================================
+2026-03-23 19:24:10,772 [WARNING] browser.auth: Non sembri essere nella WebApp
+2026-03-23 19:24:10,772 [ERROR] browser.auth: Verifica 2FA fallita o interrotta
+2026-03-23 19:24:10,772 [ERROR] __main__: Errore autenticazione: Login fallito
+2026-03-23 19:24:10,772 [INFO] browser.controller: Chiusura browser...
+2026-03-23 19:24:11,171 [INFO] browser.controller: Browser chiuso

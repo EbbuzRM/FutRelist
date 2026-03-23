@@ -243,24 +243,24 @@ class AuthManager:
             return True
 
         logger.info("==================================================")
-        logger.info("VERIFICA 2FA")
-        logger.info("1. Controlla la tua email per il codice a 6 cifre")
-        logger.info("2. Inseriscilo NEL BROWSER aperto")
-        logger.info("3. Clicca 'Sign in' nel browser")
-        logger.info("4. Premi INVIO qui quando sei dentro la WebApp")
+        logger.info("VERIFICA 2FA - Inserisci il codice nel browser,")
+        logger.info("clicca Sign in, poi PREMI ENTER qui.")
         logger.info("==================================================")
 
         try:
-            input("")  # Attendi conferma utente (niente polling)
+            input("")
         except EOFError:
             pass
 
+        # Attendi che la pagina si aggiorni dopo la verifica
+        page.wait_for_timeout(5000)
+
         # Verifica che siamo sulla WebApp
         if self.is_logged_in(page):
-            logger.info("Verifica completata!")
+            logger.info("Verifica completata - sessione salvata!")
             return True
 
-        logger.warning("Non sembri essere nella WebApp")
-        return False
-
-        return True
+        logger.warning("Non sembri essere nella WebApp, riprovo...")
+        # Un ultimo tentativo dopo attendere
+        page.wait_for_timeout(5000)
+        return self.is_logged_in(page)
