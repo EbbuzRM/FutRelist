@@ -516,3 +516,287 @@ Traceback (most recent call last):
 playwright._impl._errors.Error: Page.query_selector: Execution context was destroyed, most likely because of a navigation.
 2026-03-23 18:29:58,844 [INFO] browser.controller: Chiusura browser...
 2026-03-23 18:29:59,292 [INFO] browser.controller: Browser chiuso
+2026-03-23 18:54:20,379 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 18:54:20,379 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 18:54:20,380 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 18:54:20,380 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 18:54:21,203 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 18:54:21,612 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 18:54:21,635 [INFO] browser.controller: Creazione pagina...
+2026-03-23 18:54:21,932 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 18:54:21,933 [INFO] browser.controller: Navigazione a: https://www.ea.com/ea-sports-fc/ultimate-team/web-app/
+2026-03-23 18:54:25,969 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 18:54:25,973 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 18:54:25,973 [INFO] __main__: Già loggato con sessione salvata
+2026-03-23 18:54:25,973 [INFO] __main__: === Autenticazione completata ===
+2026-03-23 18:54:25,973 [INFO] __main__: Avvio loop continuo (intervallo: 3600s). Premi Ctrl+C per fermare.
+2026-03-23 18:54:25,978 [INFO] __main__: === Ciclo 1 ===
+2026-03-23 18:54:26,014 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:54:26,022 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:54:26,022 [DEBUG] browser.rate_limiter: Rate limit: attesa 2338ms
+2026-03-23 18:54:28,361 [INFO] __main__: === Ciclo 2 ===
+2026-03-23 18:54:28,373 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:54:28,379 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:54:28,379 [DEBUG] browser.rate_limiter: Rate limit: attesa 2357ms
+2026-03-23 18:54:30,736 [INFO] __main__: === Ciclo 3 ===
+2026-03-23 18:54:30,745 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:54:30,749 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:54:30,749 [DEBUG] browser.rate_limiter: Rate limit: attesa 4975ms
+2026-03-23 18:54:35,725 [INFO] __main__: === Ciclo 4 ===
+2026-03-23 18:54:35,733 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:54:35,737 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:54:35,738 [DEBUG] browser.rate_limiter: Rate limit: attesa 2294ms
+2026-03-23 18:54:38,032 [INFO] __main__: === Ciclo 5 ===
+2026-03-23 18:54:38,042 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:54:38,047 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:54:38,047 [DEBUG] browser.rate_limiter: Rate limit: attesa 3842ms
+2026-03-23 18:54:41,890 [INFO] __main__: === Ciclo 6 ===
+2026-03-23 18:54:41,899 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:54:41,903 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:54:41,903 [DEBUG] browser.rate_limiter: Rate limit: attesa 2547ms
+2026-03-23 18:54:44,451 [INFO] __main__: === Ciclo 7 ===
+2026-03-23 18:54:44,459 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:54:44,463 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:54:44,463 [DEBUG] browser.rate_limiter: Rate limit: attesa 4960ms
+2026-03-23 18:54:49,424 [INFO] __main__: === Ciclo 8 ===
+2026-03-23 18:54:49,432 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:54:49,436 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:54:49,436 [DEBUG] browser.rate_limiter: Rate limit: attesa 2414ms
+2026-03-23 18:54:51,851 [INFO] __main__: === Ciclo 9 ===
+2026-03-23 18:54:51,858 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:54:51,863 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:54:51,864 [DEBUG] browser.rate_limiter: Rate limit: attesa 2383ms
+2026-03-23 18:54:54,247 [INFO] __main__: === Ciclo 10 ===
+2026-03-23 18:54:54,255 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:54:54,259 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:54:54,259 [DEBUG] browser.rate_limiter: Rate limit: attesa 3324ms
+2026-03-23 18:54:57,584 [INFO] __main__: === Ciclo 11 ===
+2026-03-23 18:54:57,591 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:54:57,596 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:54:57,596 [DEBUG] browser.rate_limiter: Rate limit: attesa 4451ms
+2026-03-23 18:55:02,048 [INFO] __main__: === Ciclo 12 ===
+2026-03-23 18:55:02,057 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:02,060 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:02,061 [DEBUG] browser.rate_limiter: Rate limit: attesa 3787ms
+2026-03-23 18:55:05,848 [INFO] __main__: === Ciclo 13 ===
+2026-03-23 18:55:05,856 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:05,860 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:05,860 [DEBUG] browser.rate_limiter: Rate limit: attesa 3918ms
+2026-03-23 18:55:09,778 [INFO] __main__: === Ciclo 14 ===
+2026-03-23 18:55:09,786 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:09,791 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:09,791 [DEBUG] browser.rate_limiter: Rate limit: attesa 2795ms
+2026-03-23 18:55:12,587 [INFO] __main__: === Ciclo 15 ===
+2026-03-23 18:55:12,595 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:12,599 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:12,599 [DEBUG] browser.rate_limiter: Rate limit: attesa 3963ms
+2026-03-23 18:55:16,562 [INFO] __main__: === Ciclo 16 ===
+2026-03-23 18:55:16,570 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:16,574 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:16,574 [DEBUG] browser.rate_limiter: Rate limit: attesa 2522ms
+2026-03-23 18:55:19,097 [INFO] __main__: === Ciclo 17 ===
+2026-03-23 18:55:19,105 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:19,109 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:19,109 [DEBUG] browser.rate_limiter: Rate limit: attesa 4953ms
+2026-03-23 18:55:24,063 [INFO] __main__: === Ciclo 18 ===
+2026-03-23 18:55:24,071 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:24,075 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:24,075 [DEBUG] browser.rate_limiter: Rate limit: attesa 3088ms
+2026-03-23 18:55:27,163 [INFO] __main__: === Ciclo 19 ===
+2026-03-23 18:55:27,171 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:27,176 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:27,176 [DEBUG] browser.rate_limiter: Rate limit: attesa 4401ms
+2026-03-23 18:55:31,577 [INFO] __main__: === Ciclo 20 ===
+2026-03-23 18:55:31,585 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:31,590 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:31,590 [DEBUG] browser.rate_limiter: Rate limit: attesa 4955ms
+2026-03-23 18:55:36,545 [INFO] __main__: === Ciclo 21 ===
+2026-03-23 18:55:36,554 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:36,558 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:36,558 [DEBUG] browser.rate_limiter: Rate limit: attesa 4422ms
+2026-03-23 18:55:40,981 [INFO] __main__: === Ciclo 22 ===
+2026-03-23 18:55:40,989 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:40,993 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:40,993 [DEBUG] browser.rate_limiter: Rate limit: attesa 2401ms
+2026-03-23 18:55:43,395 [INFO] __main__: === Ciclo 23 ===
+2026-03-23 18:55:43,403 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:43,407 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:43,408 [DEBUG] browser.rate_limiter: Rate limit: attesa 4525ms
+2026-03-23 18:55:47,933 [INFO] __main__: === Ciclo 24 ===
+2026-03-23 18:55:47,941 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:47,946 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:47,946 [DEBUG] browser.rate_limiter: Rate limit: attesa 3708ms
+2026-03-23 18:55:51,654 [INFO] __main__: === Ciclo 25 ===
+2026-03-23 18:55:51,662 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:51,665 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:51,666 [DEBUG] browser.rate_limiter: Rate limit: attesa 3735ms
+2026-03-23 18:55:55,401 [INFO] __main__: === Ciclo 26 ===
+2026-03-23 18:55:55,409 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:55,413 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:55,414 [DEBUG] browser.rate_limiter: Rate limit: attesa 2559ms
+2026-03-23 18:55:57,973 [INFO] __main__: === Ciclo 27 ===
+2026-03-23 18:55:57,980 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:55:57,984 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:55:57,985 [DEBUG] browser.rate_limiter: Rate limit: attesa 3697ms
+2026-03-23 18:56:01,682 [INFO] __main__: === Ciclo 28 ===
+2026-03-23 18:56:01,690 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:56:01,694 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:56:01,695 [DEBUG] browser.rate_limiter: Rate limit: attesa 2832ms
+2026-03-23 18:56:04,527 [INFO] __main__: === Ciclo 29 ===
+2026-03-23 18:56:04,536 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:56:04,540 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:56:04,541 [DEBUG] browser.rate_limiter: Rate limit: attesa 3322ms
+2026-03-23 18:56:07,863 [INFO] __main__: === Ciclo 30 ===
+2026-03-23 18:56:07,873 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:56:07,877 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:56:07,878 [DEBUG] browser.rate_limiter: Rate limit: attesa 3680ms
+2026-03-23 18:56:11,558 [INFO] __main__: === Ciclo 31 ===
+2026-03-23 18:56:11,566 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:56:11,569 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:56:11,570 [DEBUG] browser.rate_limiter: Rate limit: attesa 4565ms
+2026-03-23 18:56:16,135 [INFO] __main__: === Ciclo 32 ===
+2026-03-23 18:56:16,143 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 18:56:16,148 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 18:56:16,148 [DEBUG] browser.rate_limiter: Rate limit: attesa 4744ms
+2026-03-23 18:56:20,892 [INFO] __main__: === Ciclo 33 ===
+2026-03-23 18:56:20,905 [ERROR] __main__: Errore: Page.query_selector: Target crashed 
+Traceback (most recent call last):
+  File "C:\App\fifa-relist\main.py", line 199, in main
+    ensure_session(page, auth, controller, get_credentials)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\App\fifa-relist\browser\error_handler.py", line 123, in ensure_session
+    if not is_session_expired(page):
+           ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\App\fifa-relist\browser\error_handler.py", line 70, in is_session_expired
+    ut_app = page.query_selector(".ut-app")
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\sync_api\_generated.py", line 8126, in query_selector
+    self._sync(self._impl_obj.query_selector(selector=selector, strict=strict))
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ~~~~~~~~~~~^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_page.py", line 407, in query_selector
+    return await self._main_frame.query_selector(selector, strict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_frame.py", line 348, in query_selector
+    await self._channel.send("querySelector", None, locals_to_params(locals()))
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.Error: Page.query_selector: Target crashed 
+2026-03-23 18:56:20,908 [INFO] browser.controller: Chiusura browser...
+2026-03-23 19:06:59,813 [INFO] __main__: === FIFA 26 Auto-Relist Tool avviato ===
+2026-03-23 19:06:59,814 [INFO] __main__: Config caricata (intervallo: 3600s, modalità: all)
+2026-03-23 19:06:59,815 [INFO] browser.controller: Avvio Playwright...
+2026-03-23 19:06:59,815 [DEBUG] asyncio: Using proactor: IocpProactor
+2026-03-23 19:07:00,652 [INFO] browser.controller: Lancio browser (headless=False)...
+2026-03-23 19:07:00,975 [INFO] browser.controller: Creazione contesto browser...
+2026-03-23 19:07:00,998 [INFO] browser.controller: Creazione pagina...
+2026-03-23 19:07:01,294 [INFO] browser.controller: Browser avviato con successo
+2026-03-23 19:07:01,294 [INFO] browser.controller: Navigazione a: https://www.ea.com/ea-sports-fc/ultimate-team/web-app/
+2026-03-23 19:07:05,304 [INFO] browser.controller: Pagina caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 19:07:05,310 [INFO] __main__: WebApp caricata: FC Ultimate Team Web App - EA SPORTS Official Site
+2026-03-23 19:07:05,310 [INFO] __main__: Già loggato con sessione salvata
+2026-03-23 19:07:05,310 [INFO] __main__: === Autenticazione completata ===
+2026-03-23 19:07:05,311 [INFO] __main__: Avvio loop continuo (intervallo: 3600s). Premi Ctrl+C per fermare.
+2026-03-23 19:07:05,315 [INFO] __main__: === Ciclo 1 ===
+2026-03-23 19:07:05,355 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:05,362 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:05,362 [DEBUG] browser.rate_limiter: Rate limit: attesa 3494ms
+2026-03-23 19:07:08,857 [INFO] __main__: === Ciclo 2 ===
+2026-03-23 19:07:08,866 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:08,873 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:08,873 [DEBUG] browser.rate_limiter: Rate limit: attesa 3324ms
+2026-03-23 19:07:12,198 [INFO] __main__: === Ciclo 3 ===
+2026-03-23 19:07:12,207 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:12,214 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:12,214 [DEBUG] browser.rate_limiter: Rate limit: attesa 4412ms
+2026-03-23 19:07:16,627 [INFO] __main__: === Ciclo 4 ===
+2026-03-23 19:07:16,636 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:16,640 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:16,640 [DEBUG] browser.rate_limiter: Rate limit: attesa 2593ms
+2026-03-23 19:07:19,234 [INFO] __main__: === Ciclo 5 ===
+2026-03-23 19:07:19,243 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:19,249 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:19,249 [DEBUG] browser.rate_limiter: Rate limit: attesa 2948ms
+2026-03-23 19:07:22,198 [INFO] __main__: === Ciclo 6 ===
+2026-03-23 19:07:22,206 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:22,210 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:22,211 [DEBUG] browser.rate_limiter: Rate limit: attesa 3283ms
+2026-03-23 19:07:25,494 [INFO] __main__: === Ciclo 7 ===
+2026-03-23 19:07:25,503 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:25,508 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:25,508 [DEBUG] browser.rate_limiter: Rate limit: attesa 3110ms
+2026-03-23 19:07:28,618 [INFO] __main__: === Ciclo 8 ===
+2026-03-23 19:07:28,626 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:28,631 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:28,632 [DEBUG] browser.rate_limiter: Rate limit: attesa 3067ms
+2026-03-23 19:07:31,699 [INFO] __main__: === Ciclo 9 ===
+2026-03-23 19:07:31,707 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:31,711 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:31,712 [DEBUG] browser.rate_limiter: Rate limit: attesa 3056ms
+2026-03-23 19:07:34,768 [INFO] __main__: === Ciclo 10 ===
+2026-03-23 19:07:34,776 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:34,781 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:34,781 [DEBUG] browser.rate_limiter: Rate limit: attesa 3390ms
+2026-03-23 19:07:38,172 [INFO] __main__: === Ciclo 11 ===
+2026-03-23 19:07:38,180 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:38,184 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:38,184 [DEBUG] browser.rate_limiter: Rate limit: attesa 3271ms
+2026-03-23 19:07:41,455 [INFO] __main__: === Ciclo 12 ===
+2026-03-23 19:07:41,466 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:41,471 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:41,471 [DEBUG] browser.rate_limiter: Rate limit: attesa 4446ms
+2026-03-23 19:07:45,918 [INFO] __main__: === Ciclo 13 ===
+2026-03-23 19:07:45,926 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:45,930 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:45,930 [DEBUG] browser.rate_limiter: Rate limit: attesa 3711ms
+2026-03-23 19:07:49,642 [INFO] __main__: === Ciclo 14 ===
+2026-03-23 19:07:49,651 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:49,655 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:49,655 [DEBUG] browser.rate_limiter: Rate limit: attesa 4909ms
+2026-03-23 19:07:54,565 [INFO] __main__: === Ciclo 15 ===
+2026-03-23 19:07:54,573 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:54,576 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:54,577 [DEBUG] browser.rate_limiter: Rate limit: attesa 2266ms
+2026-03-23 19:07:56,843 [INFO] __main__: === Ciclo 16 ===
+2026-03-23 19:07:56,851 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-03-23 19:07:56,855 [ERROR] browser.navigator: Pulsante Transfers non trovato nella sidebar
+2026-03-23 19:07:56,855 [DEBUG] browser.rate_limiter: Rate limit: attesa 3173ms
+2026-03-23 19:08:00,029 [INFO] __main__: === Ciclo 17 ===
+2026-03-23 19:08:00,040 [ERROR] __main__: Errore: Page.query_selector: Target crashed 
+Traceback (most recent call last):
+  File "C:\App\fifa-relist\main.py", line 199, in main
+    ensure_session(page, auth, controller, get_credentials)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\App\fifa-relist\browser\error_handler.py", line 123, in ensure_session
+    if not is_session_expired(page):
+           ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\App\fifa-relist\browser\error_handler.py", line 70, in is_session_expired
+    ut_app = page.query_selector(".ut-app")
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\sync_api\_generated.py", line 8126, in query_selector
+    self._sync(self._impl_obj.query_selector(selector=selector, strict=strict))
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ~~~~~~~~~~~^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_page.py", line 407, in query_selector
+    return await self._main_frame.query_selector(selector, strict)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_frame.py", line 348, in query_selector
+    await self._channel.send("querySelector", None, locals_to_params(locals()))
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\Ebby\AppData\Roaming\Python\Python313\site-packages\playwright\_impl\_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.Error: Page.query_selector: Target crashed 
+2026-03-23 19:08:00,043 [INFO] browser.controller: Chiusura browser...

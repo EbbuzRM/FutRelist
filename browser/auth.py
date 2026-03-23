@@ -72,15 +72,16 @@ class AuthManager:
     
     def is_logged_in(self, page: Page) -> bool:
         try:
-            # Check URL — se non siamo più sulla pagina di login, siamo dentro
+            # Check URL — se siamo sulla WebApp senza login, siamo dentro
             url = page.url.lower()
-            if "web-app" in url and "login" not in url:
-                return True
-
-            # Check elementi DOM
-            home_element = page.query_selector(SELECTORS["webapp_home"])
-            if home_element:
-                return True
+            if "web-app" in url and "signin" not in url and "login" not in url:
+                # Doppio check: la navigation bar "Transfers" esiste solo se loggato
+                try:
+                    nav = page.get_by_role("button", name="Transfers")
+                    if nav.count() > 0:
+                        return True
+                except Exception:
+                    pass
 
             return False
 

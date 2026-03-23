@@ -8,13 +8,6 @@ from browser.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-SELECTORS = {
-    "transfers_nav": 'button:has-text("Transfers"), .icon-transfer',
-    "transfer_list_tab": 'button:has-text("Transfer List"), .ut-tile-transfer-list',
-    "my_listings_view": '.ut-transfer-list-view, .sectioned-item-list',
-    "loading_indicator": '.ut-loading-spinner, .loading',
-}
-
 
 class TransferMarketNavigator:
     """Naviga dalla Home alla vista Transfer List (My Listings) nel WebApp FIFA 26."""
@@ -36,38 +29,42 @@ class TransferMarketNavigator:
         try:
             logger.info("Inizio navigazione verso Transfer List...")
 
-            # Step 1: Clicca il pulsante Transfers nella sidebar
-            transfers_btn = self.page.query_selector(SELECTORS["transfers_nav"])
-            if transfers_btn is None:
+            # Step 1: Clicca il pulsante Transfers nella sidebar navigation
+            # Usa get_by_role che funziona con la WebApp React
+            transfers_btn = self.page.get_by_role("button", name="Transfers")
+            if not transfers_btn.count():
+                # Prova con spazio prima (la WebApp mette uno spazio icon)
+                transfers_btn = self.page.get_by_role("button", name=" Transfers")
+
+            if not transfers_btn.count():
                 logger.error("Pulsante Transfers non trovato nella sidebar")
                 return False
 
-            logger.info("Clic su Transfers...")
-            transfers_btn.click()
+            transfers_btn.first.click()
+            logger.info("Clic su Transfers")
             self.page.wait_for_timeout(3000)
             self.rate_limiter.wait()
 
-            # Step 2: Clicca il tab Transfer List
-            transfer_list_btn = self.page.query_selector(SELECTORS["transfer_list_tab"])
-            if transfer_list_btn is None:
-                logger.error("Tab Transfer List non trovato")
+            # Step 2: Clicca l'area Transfer List
+            transfer_list_area = self.page.get_by_role("heading", name="Transfer List")
+            if not transfer_list_area.count():
+                logger.error("Transfer List non trovato")
                 return False
 
-            logger.info("Clic su Transfer List...")
-            transfer_list_btn.click()
+            transfer_list_area.first.click()
+            logger.info("Clic su Transfer List")
             self.page.wait_for_timeout(3000)
             self.rate_limiter.wait()
 
-            # Step 3: Attendi che la vista sia pronta
-            logger.info("Attesa caricamento vista...")
-            self.page.wait_for_load_state("networkidle", timeout=15000)
-            self.page.wait_for_selector(
-                SELECTORS["my_listings_view"], state="visible", timeout=10000
-            )
+            # Step 3: Verifica che siamo nella vista Transfer List
+            heading = self.page.get_by_role("heading", name="Transfer List")
+            if heading.count():
+                logger.info("Transfer List caricata con successo")
+                return True
 
-            logger.info("Transfer List caricata con successo")
+            logger.warning("Transfer List potrebbe non essere caricata")
             return True
 
         except Exception as e:
-            logger.error(f"Errore durante navigazione verso Transfer List: {e}")
+            logger.error(f"Errore navigazione: {e}")
             return False
