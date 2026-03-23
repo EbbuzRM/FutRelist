@@ -218,6 +218,12 @@ def build_parser():
 
     config_sub.add_parser("reset", help="Reset all settings to defaults")
 
+    # history
+    history_parser = sub.add_parser("history", help="Mostra cronologia azioni")
+    history_parser.add_argument(
+        "-n", "--lines", type=int, default=20, help="Numero di voci da mostrare"
+    )
+
     return parser
 
 
@@ -240,5 +246,24 @@ if __name__ == "__main__":
             print("OK: Config reset to defaults")
         else:
             parser.parse_args(["config", "--help"])
+    elif args.command == "history":
+        from models.action_log import parse_action_history
+
+        log_path = Path(__file__).parent / "logs" / "actions.jsonl"
+        entries = parse_action_history(log_path, args.lines)
+
+        if not entries:
+            print("Nessuna cronologia azioni trovata.")
+        else:
+            for entry in entries:
+                ts = entry.get("timestamp", "?")
+                success = entry.get("success", False)
+                indicator = "OK" if success else "ERR"
+                message = entry.get("message", "")
+                player = entry.get("player_name")
+                if player:
+                    print(f"[{ts}] {indicator} {message} - {player}")
+                else:
+                    print(f"[{ts}] {indicator} {message}")
     else:
         main()
