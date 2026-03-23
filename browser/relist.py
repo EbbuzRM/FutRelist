@@ -30,6 +30,8 @@ class RelistExecutor:
         defaults = config.get("listing_defaults", {})
         self.adjustment_type = defaults.get("price_adjustment_type", "percentage")
         self.adjustment_value = defaults.get("price_adjustment_value", 0)
+        self.min_price = defaults.get("min_price", 200)
+        self.max_price = defaults.get("max_price", 15_000_000)
 
     def _random_delay(self, min_ms=None, max_ms=None):
         """Ritardo casuale per anti-detection (stesso pattern di navigator.py)."""
@@ -73,6 +75,8 @@ class RelistExecutor:
                     listing.current_price,
                     self.adjustment_type,
                     self.adjustment_value,
+                    min_price=self.min_price,
+                    max_price=self.max_price,
                 )
                 logger.info(f"  Prezzo: {listing.current_price} → {new_price}")
                 price_input.fill(str(new_price))
