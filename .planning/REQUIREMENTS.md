@@ -6,7 +6,7 @@
 - [ ] **BROWSER-01**: User can launch automated browser session to FIFA 26 WebApp
 - [ ] **BROWSER-02**: User can authenticate with FIFA 26 credentials (stored securely)
 - [ ] **BROWSER-03**: System maintains session cookies across restarts
-- [ ] **BROWSER-04**: System navigates to Transfer Market > My Listings automatically
+- [x] **BROWSER-04**: System navigates to Transfer Market > My Listings automatically
 
 ### DETECT - Listing Detection
 - [x] **DETECT-01**: System detects when player listings have expired
