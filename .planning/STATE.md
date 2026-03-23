@@ -1,6 +1,6 @@
 # Project State
 
-## Current Phase: FIFA 26 Auto-Relist Tool - Phase 2 In Progress
+## Current Phase: FIFA 26 Auto-Relist Tool - Phase 2 Complete
 
 ### Previous Milestones:
 - [x] Contact Management System v1.0 - Completed
@@ -14,7 +14,7 @@
 **Goal:** Browser automation tool for auto-relisting expired players on FIFA 26 WebApp
 
 ### Current Status:
-Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). Phase 2 Plan 03 (Detector) completato. 4/6 piani di Phase 2 completati.
+Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). Phase 2 completata (5/5 piani): models, navigator, detector, integration. Ready per Phase 3.
 
 ### Completed:
 - [x] Phase 1: Browser Setup & Authentication (BROWSER-01, BROWSER-02, BROWSER-03)
@@ -30,14 +30,15 @@ Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). 
 - [x] Phase 2 Plan 01: Listing Data Model (models/listing.py)
 - [x] Phase 2 Plan 02: Transfer Market Navigator (browser/navigator.py)
 - [x] Phase 2 Plan 03: DOM Detector (browser/detector.py) — 16 tests pass, DETECT-01/02/03/04 satisfied
+- [x] Phase 2 Plan 04: Integration — navigator/detector wired into main.py, Transfer List scanning active
 
 ### Next Steps:
-- [ ] Phase 2 Plan 04: Integration
 - [ ] Phase 3: Auto-Relist Core (RELIST-01, RELIST-02, RELIST-03, RELIST-04)
 - [ ] Phase 4: Configuration System (CONFIG-01, CONFIG-02, CONFIG-03, CONFIG-04)
 - [ ] Phase 5: Logging & Error Handling
 
 ### Current Activity
+[2026-03-23] Phase 2 Plan 04 (Integration) completato. 1 commit: main.py wired with TransferMarketNavigator e ListingDetector. Dopo login, naviga a Transfer List, scansiona listing, mostra summary con count active/expired/sold. Fixed total_items→total_count (model attribute).
 [2026-03-23] Phase 2 Plan 03 (DOM Detector) completato. 1 commit: ListingDetector class con scan_listings(), SELECTORS dict con 14 chiavi, parse_price/parse_rating/determine_state helpers. 16 tests pass, import smoke test OK. DETECT-01/02/03/04 satisfied.
 [2026-03-23T00:32:05Z] Phase 2 Plan 02 (Transfer Market Navigator) completato. 1 commit: TransferMarketNavigator class con go_to_transfer_list(), SELECTORS dict con 4 chiavi, _random_delay helper. Import test e selector completeness check passano.
 [2026-03-23T00:27:48Z] Phase 2 Plan 00 (test infrastructure) complete. 4 commits: pytest requirements, test fixtures, 5 model tests, 16 detector tests. 21 tests collectible.
@@ -53,9 +54,10 @@ Phase 1 (Browser Setup & Authentication) completata e verificata (4/4 criteri). 
 - AuthManager gestisce login e sessione persistente
 - Navigator pattern: page object + config dict, _random_delay helper, Italian logging, bool returns
 - Detector pattern: bulk DOM extraction via eval_on_selector_all, per-element fallback, Italian/English keyword mapping
+- Integration pattern: navigator→detector→summary in main.py after login, before cleanup
 
-Last updated: 2026-03-23T00:38:06.902Z
+Last updated: 2026-03-23T00:42:21.280Z
 
 ## Last Commit
-Hash: e46cc8a
-Message: "feat(02-03): create ListingDetector for DOM listing extraction"
+Hash: d037918
+Message: "feat(02-04): integrate navigator and detector into main.py"
