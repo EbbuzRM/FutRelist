@@ -1,7 +1,43 @@
 """Relist executor for FIFA 26 WebApp - price adjustment and relist actions."""
 import logging
+import random
+
+from playwright.sync_api import Page
+from models.relist_result import RelistResult, RelistBatchResult
 
 logger = logging.getLogger(__name__)
+
+SELECTORS = {
+    "relist_button": 'button:has-text("Relist"), .relist-btn',
+    "relist_all_button": 'button:has-text("Relist All"), .relist-all-btn',
+    "price_input": 'input[type="number"], .price-input, .ut-price-input input',
+    "confirm_button": 'button:has-text("Confirm"), button:has-text("Ok"), .btn-action',
+    "listing_items": '.listFUTItem.player',
+    "success_indicator": '.notification-success, .toast-success',
+}
+
+
+class RelistExecutor:
+    """Esegue rilist automatici sui listing scaduti."""
+
+    def __init__(self, page: Page, config: dict):
+        self.page = page
+        self.config = config
+        rate_limiting = config.get("rate_limiting", {})
+        self.min_delay_ms = rate_limiting.get("min_delay_ms", 2000)
+        self.max_delay_ms = rate_limiting.get("max_delay_ms", 5000)
+        # Price adjustment config
+        defaults = config.get("listing_defaults", {})
+        self.adjustment_type = defaults.get("price_adjustment_type", "percentage")
+        self.adjustment_value = defaults.get("price_adjustment_value", 0)
+
+    def _random_delay(self, min_ms=None, max_ms=None):
+        """Ritardo casuale per anti-detection (stesso pattern di navigator.py)."""
+        min_val = min_ms if min_ms is not None else self.min_delay_ms
+        max_val = max_ms if max_ms is not None else self.max_delay_ms
+        delay = random.randint(min_val, max_val)
+        logger.debug(f"Attesa casuale: {delay}ms")
+        self.page.wait_for_timeout(delay)
 
 
 def calculate_adjusted_price(
