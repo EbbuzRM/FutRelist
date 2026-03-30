@@ -9,11 +9,11 @@ import logging
 import os
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
 from rich.console import Console
-from rich.live import Live
 from rich.table import Table
 
 from browser.controller import BrowserController
@@ -22,9 +22,11 @@ from browser.navigator import TransferMarketNavigator
 from browser.detector import ListingDetector
 from browser.relist import RelistExecutor
 from browser.rate_limiter import RateLimiter
-from browser.error_handler import ensure_session, retry_on_timeout
-from config.config import ConfigManager, AppConfig
+from browser.error_handler import ensure_session
+from config.config import ConfigManager
 from models.action_log import JsonFormatter
+from models.listing import ListingState
+from v2_relist_logic import implementazione_nuova_logica
 
 action_logger = logging.getLogger("actions")
 
@@ -42,7 +44,7 @@ def setup_logging() -> None:
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(
-        logging.Formatter("[%(levelname)s] %(message)s")
+        logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
     )
 
     logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
@@ -59,7 +61,8 @@ def setup_logging() -> None:
 
 
 def make_status_table(phase: str, scanned: int, relisted: int, errors: int) -> Table:
-    table = Table(title="FIFA Auto-Relist")
+    current_time = datetime.now().strftime("%H:%M:%S")
+    table = Table(title=f"FIFA Auto-Relist [🕒 {current_time}]")
     table.add_column("Fase", style="cyan")
     table.add_column("Scansionati", justify="right")
     table.add_column("Rilistati", justify="right", style="green")
@@ -75,39 +78,93 @@ def get_credentials() -> tuple[str, str]:
     if email and password:
         return email, password
 
-    print("\n=== Credenziali FIFA 26 ===")
-    email = input("Email EA: ").strip()
-    password = input("Password EA: ").strip()
-
-    return email, password
+    raise RuntimeError("Credenziali FIFA_EMAIL o FIFA_PASSWORD non trovate nel file .env")
 
 
 def authenticate(controller, auth, page) -> None:
-    """Gestisce il flusso di login o ripristino sessione. Solleva AuthError su fallimento."""
+    """Gestisce il flusso di login o ripristino sessione. Solleva AuthError su fallimento.
+
+    Se la WebApp mostra 'Signed Into Another Device' (sessione PS5/console attiva),
+    aspetta pazientemente in loop invece di andare in crash.
+    """
     logger = logging.getLogger(__name__)
 
     if auth.has_saved_session():
-        logger.info("Sessione salvata trovata, tentativo di ripristino...")
-        auth.load_session(controller.context)
-        page.reload()
-        page.wait_for_timeout(3000)
+        logger.info("Sessione salvata trovata, verifica in corso...")
+        page.wait_for_timeout(2000)
 
-    if auth.is_logged_in(page):
-        logger.info("Già loggato con sessione salvata")
-        return
+    # --- Gestione sessione console e Login ---
+    # EA a volte droppa la sessione dopo ore di inattività mostrandoci solo la landing page
+    # (senza l'errore palese "Signed into another device"). Cliccando Login, se l'utente 
+    # sta ancora giocando, l'errore ricompare istantaneamente. Serviva un loop generale protettivo.
+    CONSOLE_WAIT_SECONDS = 1800   # controlla ogni 30 minuti
+    MAX_CONSOLE_WAIT_HOURS = 4  # aspetta al massimo 4 ore
+    max_console_checks = (MAX_CONSOLE_WAIT_HOURS * 3600) // CONSOLE_WAIT_SECONDS
+    console_checks = 0
 
-    logger.info("Login richiesto...")
+    while True:
+        # FASE 1: Pura attesa console attiva
+        while auth.is_console_session_active(page):
+            console_checks += 1
+            waited_min = (console_checks * CONSOLE_WAIT_SECONDS) // 60
+            logger.warning(
+                f"[Console attiva] Sessione PS5/Console in uso. "
+                f"Riprovo tra {CONSOLE_WAIT_SECONDS}s... "
+                f"(attesa totale: ~{waited_min} min)"
+            )
+            if console_checks >= max_console_checks:
+                raise AuthError(
+                    f"Sessione console ancora attiva dopo {MAX_CONSOLE_WAIT_HOURS}h. "
+                    "Esci da Ultimate Team sulla console e riavvia il bot."
+                )
+            time.sleep(CONSOLE_WAIT_SECONDS)
+            
+            logger.info("Ricarico la WebApp per ricontrollare lo stato della console...")
+            controller.navigate_to_webapp()
+            page.wait_for_timeout(5000)
 
-    if not auth.wait_for_login_page(page):
-        raise AuthError("Pagina di login non trovata")
+            # Contromisura al session drop: EA ci farà scendere sulla Landing page generica.
+            # Se ricaricando troviamo il tasto Login (invece dell'errore), lo premiamo per 
+            # generare l'esito reale: "Siamo loggati" o "La console è ancora occupata".
+            login_btn = page.get_by_role("button", name="Login")
+            if login_btn.count():
+                logger.info("Pulsante Login trovato (Landing Page). Click per verificare stato console...")
+                login_btn.first.click()
+                # Aspettiamo 5 secondi invece di 8, se è console occupata il pop-up appare subito
+                page.wait_for_timeout(5000)
 
-    email, password = get_credentials()
+        # FASE 2: La console non mostra allarmi attivi. Vediamo se siamo già attivamente loggati
+        if auth.is_logged_in(page, timeout_ms=5000):
+            logger.info("Già loggato con sessione salvata (o ripristino automatico riuscito).")
+            auth.save_session(controller.context)
+            return
 
-    if not auth.perform_login(page, email, password):
-        raise AuthError("Login fallito")
+        # FASE 3: Procedi con il login manuale formale
+        url = page.url.lower()
+        if "signin.ea.com" in url:
+            logger.info("Reindirizzamento automatico alla pagina di login EA rilevato")
+        else:
+            logger.info("Login richiesto dalla landing page...")
+            if not auth.wait_for_login_page(page, timeout=10000):
+                logger.warning("Pulsante Login non rilevato, provo comunque ad andare avanti...")
 
-    auth.save_session(controller.context)
-    logger.info("Login completato e sessione salvata")
+        email, password = get_credentials()
+        
+        # Facciamo finta che l'esito sia booleano. Se fallisce, verifichiamo il perché.
+        success = auth.perform_login(page, email, password)
+
+        if success:
+            auth.save_session(controller.context)
+            logger.info("Login completato e sessione salvata")
+            return
+        else:
+            # Se ha fallito potremmo aver appena riscoperto la sessione console annidata post-login
+            if auth.is_console_session_active(page):
+                logger.warning("Rilevata sessione console attiva ORA, in fase di login formale. Riprendo ad attendere...")
+                continue # Torna al "while True" e rientra nel "while auth.is_console_session_active"
+            
+            # Se ha fallito e non è colpa della console... è un errore puro (credenziali o caricamento)
+            raise AuthError("Login fallito (non a causa della console)")
 
 
 def navigate_with_retry(navigator, page) -> bool:
@@ -127,11 +184,12 @@ def navigate_with_retry(navigator, page) -> bool:
             return False
 
 
-def relist_expired_listings(executor, expired_listings, live, status_label, total_count) -> tuple[int, int]:
+def relist_expired_listings(executor, expired_listings) -> tuple[int, int]:
     """Esegue il rilist dei listing scaduti e logga ogni azione. Ritorna (succeeded, failed)."""
     logger = logging.getLogger(__name__)
     succeeded = 0
     failed = 0
+    total = len(expired_listings)
 
     for listing in expired_listings:
         result = executor.relist_single(listing)
@@ -147,7 +205,7 @@ def relist_expired_listings(executor, expired_listings, live, status_label, tota
                 "Rilist fallito",
                 extra={"action": "relist", "player_name": result.player_name, "success": False, "error": result.error},
             )
-        live.update(make_status_table(status_label, total_count, succeeded, failed))
+        logger.info(f"Progresso Rilist: {succeeded + failed}/{total}")
 
     return succeeded, failed
 
@@ -159,12 +217,16 @@ def main() -> None:
     logger.info("=== FIFA 26 Auto-Relist Tool avviato ===")
 
     controller = None
+    app_config = None
 
     try:
         cm = ConfigManager()
         app_config = cm.load()
         config = app_config.to_dict()
         logger.info(f"Config caricata (intervallo: {app_config.scan_interval_seconds}s, modalità: {app_config.listing_defaults.relist_mode})")
+
+        from notifier import send_telegram_alert
+        send_telegram_alert(app_config.notifications, "✅ FIFA 26 Auto-Relist Tool avviato con successo! Notifiche Telegram attivate.")
 
         controller = BrowserController(config)
         auth = AuthManager(config)
@@ -191,60 +253,55 @@ def main() -> None:
 
         logger.info(f"Avvio loop continuo (intervallo: {scan_interval}s). Premi Ctrl+C per fermare.")
 
-        live_console = Console(stderr=True)
-        with Live(make_status_table("In attesa...", 0, 0, 0), refresh_per_second=2, console=live_console) as live:
-            while True:
-                cycle += 1
-                logger.info(f"=== Ciclo {cycle} ===")
+        status_console = Console()
+        
+        while True:
+            cycle += 1
+            logger.info(f"=== Ciclo {cycle} ===")
 
-                ensure_session(page, auth, controller, get_credentials)
+            ensure_session(page, auth, controller, get_credentials)
 
-                live.update(make_status_table("Navigazione...", 0, 0, 0))
-                if not navigate_with_retry(navigator, page):
-                    live.update(make_status_table("Errore", 0, 0, 0))
-                    rate_limiter.wait()
-                    continue
+            # Gestione sessione PS5/Console attiva nel loop
+            if auth.is_console_session_active(page):
+                wait_console = 1800 # 30 minuti
+                logger.info(f"Sessione console rilevata. Sospendo per {wait_console}s...")
+                status_console.print(make_status_table("Console Attiva", 0, 0, 0))
+                time.sleep(wait_console)
+                page.reload() # Ricarica per vedere se la sessione è libera
+                continue
 
-                live.update(make_status_table("Scansione...", 0, 0, 0))
-                scan_result = detector.scan_listings()
-                label = f"Ciclo {cycle}"
-
-                if scan_result.is_empty:
-                    logger.info("Nessun listing trovato")
-                    live.update(make_status_table(label, 0, 0, 0))
-                else:
-                    logger.info(f"Scan: {scan_result.total_count} listing (attivi={scan_result.active_count}, scaduti={scan_result.expired_count}, venduti={scan_result.sold_count})")
-
-                    if scan_result.expired_count > 0:
-                        if executor.relist_mode == "all":
-                            live.update(make_status_table(f"{label} - Re-list All", scan_result.total_count, 0, 0))
-                            batch = executor.relist_all()
-                            succeeded = batch.succeeded
-                            failed = batch.total - succeeded
-                            action_logger.info("Re-list All completato", extra={"action": "relist_all", "success": succeeded > 0})
-                            logger.info(f"Re-list All: {'successo' if succeeded > 0 else 'fallito'}")
-                        else:
-                            expired = [l for l in scan_result.listings if l.needs_relist]
-                            succeeded, failed = relist_expired_listings(
-                                executor, expired, live, f"{label} - Rilist", scan_result.total_count,
-                            )
-                        action_logger.info("Batch completato", extra={"action": "batch", "success": True, "total": succeeded + failed, "succeeded": succeeded})
-                        logger.info(f"Rilist completato: {succeeded}/{succeeded + failed} successi")
-                        live.update(make_status_table(f"{label} - OK", scan_result.total_count, succeeded, failed))
-                    else:
-                        logger.info("Nessun listing scaduto")
-                        live.update(make_status_table(label, scan_result.total_count, 0, 0))
-
-                logger.info(f"Prossimo ciclo tra {scan_interval}s...")
+            if not navigate_with_retry(navigator, page):
+                status_console.print(make_status_table("Errore Navigazione", 0, 0, 0))
                 rate_limiter.wait()
-                time.sleep(scan_interval)
+                continue
 
-        cm.save()
-        input("\nPremi INVIO per chiudere il browser...")
-        controller.stop()
+            # --- Pre-navigazione: attesa di precisione fino al sync_minute ---
+            sync_minute_prenav = app_config.listing_defaults.sync_minute_offset
+            if sync_minute_prenav is not None:
+                now_pre = datetime.now()
+                early_minute = (sync_minute_prenav - 1) % 60
+                if now_pre.minute == early_minute:
+                    wait_precision = 60 - now_pre.second
+                    if wait_precision > 0:
+                        logger.info(f"Pre-nav completata! Attesa di precisione: {wait_precision}s fino al minuto {sync_minute_prenav}...")
+                        time.sleep(wait_precision)
+                    logger.info(f"Minuto {sync_minute_prenav} raggiunto! Scansione...")
+
+            next_wait = implementazione_nuova_logica(
+                page, detector, executor, app_config,
+                cycle, status_console, make_status_table,
+                relist_expired_listings,
+            )
+
+            logger.info(f"Prossimo ciclo tra {next_wait}s...")
+            rate_limiter.wait()
+            time.sleep(next_wait)
 
     except AuthError as e:
         logger.error(f"Errore autenticazione: {e}")
+        if app_config:
+            from notifier import send_telegram_alert
+            send_telegram_alert(app_config.notifications, f"🚨 ERRORE FIFA BOT:\n{e}")
         if controller and controller.is_running():
             controller.stop()
         sys.exit(1)
@@ -254,6 +311,9 @@ def main() -> None:
             controller.stop()
     except Exception as e:
         logger.error(f"Errore: {e}", exc_info=True)
+        if app_config:
+            from notifier import send_telegram_alert
+            send_telegram_alert(app_config.notifications, f"❌ ERRORE CRITICO INATTESO:\n{e}")
         if controller and controller.is_running():
             controller.stop()
         sys.exit(1)
