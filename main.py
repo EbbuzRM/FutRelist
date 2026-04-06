@@ -245,21 +245,30 @@ def get_next_golden_hour(now: datetime) -> datetime | None:
 
 
 def is_in_hold_window(now: datetime) -> bool:
-    """True se siamo nella fascia HOLD prima di una golden (dalle xx:55 alle xx:09).
+    """True se siamo nella fascia GOLDEN (15:10-18:10) ma NON in un golden moment.
     
-    Hold window: dai 15 minuti PRIMA del pre-nav (xx:09:30) fino al :10.
-    Esempio per le 17:10: hold dalle 16:55 alle 17:10.
-    In hold window: NON relistare gli scaduti, aspetta la golden.
+    Durante le golden hours (15:10 → 18:10), il relist è consentito SOLO alle:
+    - 16:10, 17:10, 18:10 (con finestra di tolleranza :10-:15)
+    Tutto il resto del tempo è HOLD: gli scaduti aspettano la prossima golden.
+    
+    Fuori dalla fascia 15:10-18:10: relist normale (sempre False).
     """
-    from datetime import timedelta
-    next_golden = get_next_golden_hour(now)
-    if next_golden is None:
-        return False  # Dopo le 18:10, nessuna hold
-    # Pre-nav è a :09:30. Hold inizia 15 min prima (= :54:30 dell'ora precedente)
-    pre_nav = next_golden.replace(minute=9, second=30, microsecond=0)
-    hold_start = pre_nav - timedelta(minutes=15)
+    hour = now.hour
+    minute = now.minute
     
-    return hold_start <= now < next_golden
+    # Fuori dalla fascia golden: nessun hold
+    if hour < 15 or (hour == 15 and minute < 10):
+        return False  # Prima delle 15:10 → normale
+    if hour > 18 or (hour == 18 and minute > 15):
+        return False  # Dopo le 18:15 → normale
+    
+    # Siamo nella fascia 15:10 → 18:15
+    # Golden moments: :10-:15 delle ore 16, 17, 18
+    if hour in (16, 17, 18) and 10 <= minute <= 15:
+        return False  # Finestra golden: relist consentito
+    
+    # Tutto il resto nella fascia è HOLD
+    return True
 
 
 def main() -> None:
