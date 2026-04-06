@@ -1,111 +1,105 @@
-"""Error handler with retry logic and session recovery.
+"""Error handler with session recovery, retry, and element fallback.
 
-Wraps Playwright actions with tenacity-based exponential backoff.
-Provides session expiry detection and element-not-found fallbacks.
+Provides session expiry detection, automatic re-authentication,
+retry on timeout decorator, and element-not-found handling.
 """
 from __future__ import annotations
 
+import functools
 import logging
-from functools import wraps
-from typing import TYPE_CHECKING, Callable, TypeVar
-
-from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
+    from playwright.sync_api import Error as PlaywrightError
     from browser.auth import AuthManager
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
 
+def retry_on_timeout(func: Callable | None = None, *, max_retries: int = 3) -> Callable:
+    """Decorator: retry a function up to max_retries times on Playwright timeout errors.
 
-def retry_on_timeout(func: Callable[..., T]) -> Callable[..., T]:
-    """Decora una funzione con retry esponenziale per errori Playwright.
-
-    Riprova fino a 3 volte con backoff esponenziale (2-30s).
-    Logga warning in italiano prima di ogni retry.
+    Uses exponential backoff (1s, 2s, 4s) between retries.
     """
-    def _before_sleep(retry_state):
-        attempt = retry_state.attempt_number
-        next_sleep = retry_state.next_action.sleep if retry_state.next_action else "?"
-        logger.warning(
-            f"Tentativo {attempt} fallito, riprovo tra {next_sleep:.1f}s..."
-        )
+    def decorator(fn: Callable) -> Callable:
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            from playwright.sync_api import Error as PlaywrightError
+            last_exc = None
+            for attempt in range(max_retries):
+                try:
+                    return fn(*args, **kwargs)
+                except PlaywrightError as e:
+                    last_exc = e
+                    if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+                        wait = 2 ** attempt  # 1s, 2s, 4s
+                        logger.warning(
+                            f"Timeout al tentativo {attempt + 1}/{max_retries}, "
+                            f"attesa {wait}s prima del retry: {e}"
+                        )
+                        import time
+                        time.sleep(wait)
+                    else:
+                        raise
+            raise last_exc  # type: ignore[misc]
+        return wrapper
 
-    @retry(
-        retry=retry_if_exception_type((PlaywrightError, PlaywrightTimeoutError)),
-        wait=wait_exponential(multiplier=1, min=2, max=30),
-        stop=stop_after_attempt(3),
-        reraise=True,
-        before_sleep=_before_sleep,
-    )
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
-def is_session_expired(page: "Page") -> bool:
-    """Verifica se la sessione è scaduta controllando lo stato della pagina.
-
-    Ritorna True se:
-    - L'URL contiene "login"
-    - L'elemento .ut-app non è presente
-    - L'elemento .ea-app non è presente
-    """
-    url = page.url.lower()
-    if "login" in url:
-        logger.info("Sessione scaduta: URL contiene 'login'")
-        return True
-
-    ut_app = page.query_selector(".ut-app")
-    ea_app = page.query_selector(".ea-app")
-    
-    if ut_app is not None or ea_app is not None:
-        return False
-
-    if "web-app" in url:
-        return False
-
-    logger.info("Sessione scaduta: elementi WebApp non trovati e URL diverso")
-    return True
+    if func is not None:
+        return decorator(func)
+    return decorator
 
 
 def handle_element_not_found(
     page: "Page",
     selector: str,
-    timeout: int = 5000,
+    *,
     fallback_reload: bool = True,
 ) -> bool:
-    """Tenta di trovare un elemento, ricaricando la pagina se necessario.
+    """Gestisce il caso in cui un elemento non viene trovato nel DOM.
 
-    Ritorna True se l'elemento viene trovato, False altrimenti.
+    Se fallback_reload è True, ricarica la pagina e riprova.
+    Ritorna True se l'elemento è stato trovato (eventualmente dopo reload).
     """
     element = page.query_selector(selector)
-    if element is not None:
+    if element:
         return True
 
-    if fallback_reload:
-        logger.warning(f"Elemento '{selector}' non trovato, ricarico la pagina...")
-        page.reload()
-        page.wait_for_timeout(3000)
+    if not fallback_reload:
+        logger.warning(f"Elemento non trovato: {selector} (nessun reload)")
+        return False
 
-        element = page.query_selector(selector)
-        if element is not None:
-            logger.info(f"Elemento '{selector}' trovato dopo ricaricamento")
-            return True
+    logger.warning(f"Elemento non trovato: {selector}, tentativo di reload...")
+    page.reload()
+    page.wait_for_timeout(3000)
 
-    logger.error(f"Elemento '{selector}' non trovato nemmeno dopo ricaricamento")
+    element = page.query_selector(selector)
+    if element:
+        logger.info(f"Elemento trovato dopo reload: {selector}")
+        return True
+
+    logger.error(f"Elemento ancora non trovato dopo reload: {selector}")
     return False
+
+
+def is_session_expired(page: "Page") -> bool:
+    """Verifica se la sessione è scaduta controllando lo stato della pagina.
+
+    Ritorna True se siamo chiaramente su una pagina di login/url sconosciuto.
+    Ritorna False se siamo sulla WebApp (anche se non ancora del tutto caricata).
+    """
+    url = page.url.lower()
+    if "signin.ea.com" in url or "login" in url:
+        logger.info(f"Sessione scaduta: rilevata URL di login ({url})")
+        return True
+
+    if "web-app" in url:
+        # Siamo sulla webapp: non è scaduta anche se gli elementi non sono
+        # ancora visibili (potrebbe essere in caricamento).
+        return False
+
+    logger.info("Sessione scaduta: URL non riconosciuto e nessun elemento WebApp")
+    return True
 
 
 def ensure_session(
@@ -116,32 +110,30 @@ def ensure_session(
 ) -> None:
     """Verifica la sessione e tenta il recupero se scaduta.
 
-    Solleva AuthError se la sessione non è recuperabile.
+    Flusso:
+      1. Se non è scaduta (siamo sulla webapp) e is_logged_in → return
+      2. Se non è scaduta ma is_logged_in fallisce → reload e riprova
+      3. Se dopo il reload ancora non loggato, o URL è login → re-authenticate
     """
     from browser.auth import AuthError
 
     if not is_session_expired(page):
-        return
-
-    logger.warning("Sessione non valida, tentativo di recupero...")
-    try:
-        auth.delete_saved_session()
+        if auth.is_logged_in(page, timeout_ms=5000):
+            return
+        # Sessione incerta: potrebbe essere solo caricamento lento
+        logger.warning("Sessione incerta, tentativo di ricaricamento...")
         page.reload()
         page.wait_for_timeout(3000)
+        if not is_session_expired(page) and auth.is_logged_in(page, timeout_ms=5000):
+            return
+        # Dopo reload ancora non loggato: cade nel blocco di re-auth sotto
 
-        if not auth.wait_for_login_page(page):
-            raise AuthError("Pagina di login non trovata durante recupero")
-
-        if get_credentials_fn is None:
-            raise AuthError("Nessuna funzione credenziali fornita per il recupero")
-
-        email, password = get_credentials_fn()
-        if not auth.perform_login(page, email, password):
-            raise AuthError("Login di recupero fallito")
-
-        auth.save_session(controller.context)
-        logger.info("Sessione recuperata con successo")
+    logger.warning("Sessione non valida, tento il ripristino (incluso eventuale controllo console)...")
+    try:
+        from main import authenticate
+        authenticate(controller, auth, page)
+        logger.info("Sessione ripristinata con successo")
     except AuthError:
         raise
     except Exception as e:
-        raise AuthError(f"Recupero sessione fallito: {e}") from e
+        raise AuthError(f"Recupero sessione fallito in modo inatteso: {e}") from e
