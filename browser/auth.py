@@ -3,6 +3,8 @@ Autenticazione FIFA 26 WebApp - Gestione login e sessione persistente
 """
 import json
 import logging
+import shutil
+import time
 from pathlib import Path
 from playwright.sync_api import Page
 
@@ -13,16 +15,10 @@ class AuthError(Exception):
     """Autenticazione fallita. Il chiamante decide se terminare o recuperare."""
 
 SELECTORS = {
-    "login_button": 'button:has-text("Login")',
-    "email_input": 'input[placeholder*="phone or email"], input[placeholder*="email"]',
-    "next_button": 'button:has-text("NEXT")',
-    "password_input": 'input[placeholder*="password"]',
-    "submit_button": 'button:has-text("Sign in")',
-    "verification_send_code": 'button:has-text("Send Code")',
-    "verification_code_input": 'input[placeholder*="digit code"], input[placeholder*="verification"]',
-    "verification_submit": 'button:has-text("Sign in")',
-    "webapp_home": '.ut-app, .ea-app',
+    # Selettore per il messaggio di sessione console attiva
+    "console_error": '.ut-messaging-view, .dialog-body, .dialog-title',
 }
+
 
 class AuthManager:
     """Gestisce autenticazione e sessione FIFA 26 WebApp."""
@@ -37,179 +33,253 @@ class AuthManager:
         """True se esiste un profilo browser salvato."""
         return self.PROFILE_DIR.exists() and any(self.PROFILE_DIR.iterdir())
 
-    def get_profile_dir(self) -> str:
-        """Ritorna il percorso del profilo browser."""
-        return str(self.PROFILE_DIR)
-
-    def save_session(self) -> None:
-        """Salva la sessione — il profilo browser è già persistente."""
-        pass  # Non serve nulla, il profilo Chrome persiste automaticamente
-
     def load_session(self) -> str | None:
         """Ritorna il percorso del profilo se esiste."""
         if self.has_saved_session():
-            return self.get_profile_dir()
+            return str(self.PROFILE_DIR)
         return None
 
     def delete_saved_session(self) -> None:
         """Cancella il profilo browser."""
-        import shutil
         if self.PROFILE_DIR.exists():
             shutil.rmtree(self.PROFILE_DIR)
             logger.info("Profilo browser cancellato")
 
-    def is_logged_in(self, page: Page) -> bool:
-        try:
-            url = page.url.lower()
-            if "signin.ea.com" in url:
-                return False
-            if "web-app" in url:
-                try:
-                    home_btn = page.get_by_role("button", name="Home")
-                    if home_btn.count() > 0:
-                        return True
-                except Exception:
-                    pass
-            return False
-        except Exception:
-            return False
-
-    def wait_for_login_page(self, page: Page, timeout: int = 30000) -> bool:
-        try:
-            login_btn = page.get_by_role("button", name="Login")
-            login_btn.first.wait_for(state="visible", timeout=timeout)
-            logger.info("Pagina di login rilevata")
-            return True
-        except Exception:
-            logger.warning("Pagina di login non rilevata nel timeout")
-            return False
-        
-        try:
-            with open(self.state_file) as f:
-                state = json.load(f)
-            
-            context.add_cookies(state.get("cookies", []))
-            logger.info("Sessione salvata caricata con successo")
-            return True
-            
-        except Exception as e:
-            logger.warning(f"Errore caricamento sessione: {e}")
-            return False
-    
     def save_session(self, context) -> None:
+        """Forza il flush della sessione su disco.
+
+        Con launch_persistent_context Playwright salva automaticamente tutti i dati
+        (cookie, localStorage, IndexedDB) nel PROFILE_DIR alla chiusura. Questo metodo
+        è un no-op esplicito che documenta l'intenzione: la persistenza è gestita dal
+        profilo, non da file JSON separati.
+        """
         try:
             state = context.storage_state()
-            
-            with open(self.state_file, "w") as f:
-                json.dump(state, f, indent=2)
-            
             cookies = state.get("cookies", [])
-            with open(self.cookies_file, "w") as f:
-                json.dump(cookies, f, indent=2)
-            
-            logger.info(f"Sessione salvata ({len(cookies)} cookies)")
-            
+            logger.info(f"Sessione attiva con {len(cookies)} cookies (persistita via profilo browser)")
         except Exception as e:
-            logger.error(f"Errore salvataggio sessione: {e}")
-    
-    def is_logged_in(self, page: Page) -> bool:
+            logger.debug(f"Impossibile leggere storage_state (non critico): {e}")
+
+    def is_logged_in(self, page: Page, timeout_ms: int = 15000) -> bool:
+        """Verifica se l'utente è correttamente loggato nella WebApp.
+        Controlla diversi elementi della UI con polling per dare tempo al caricamento.
+        """
         try:
             url = page.url.lower()
-            # Se siamo su signin.ea.com, non siamo loggati
             if "signin.ea.com" in url:
                 return False
-            # Se siamo sulla WebApp, check se c'è la navigation bar
-            # La nav bar con "Home" appare SOLO dopo login
-            if "web-app" in url:
-                try:
-                    home_btn = page.get_by_role("button", name="Home")
-                    if home_btn.count() > 0:
-                        return True
-                except Exception:
-                    pass
+
+            # Attendiamo che lo "shield" di caricamento scompaia
+            try:
+                page.wait_for_selector(".ut-click-shield", state="hidden", timeout=5000)
+            except Exception:
+                pass
+
+            # Indicatori di login (inglese e italiano)
+            logged_in_indicators = [
+                'button:has-text("Home")',
+                'button:has-text("Transfers")',
+                'button:has-text("Trasferimenti")',
+                'button:has-text("Club")',
+                '.ut-navigation-container',
+                '.ut-tab-bar'
+            ]
+
+            start_time = time.time()
+            while (time.time() - start_time) * 1000 < timeout_ms:
+                for selector in logged_in_indicators:
+                    try:
+                        el = page.query_selector(selector)
+                        if el and el.is_visible():
+                            logger.info(f"Sessione rilevata tramite: {selector}")
+                            return True
+                    except Exception:
+                        continue
+                page.wait_for_timeout(1000)
+
+            return False
+        except Exception as e:
+            logger.debug(f"Errore durante is_logged_in: {e}")
+            return False
+
+    def is_console_session_active(self, page: Page) -> bool:
+        """Controlla se appare il messaggio 'Signed Into Another Device' o simili.
+
+        La pagina EA può comparire come full-page view (non un dialog),
+        quindi usiamo più metodi in cascata per essere a prova di bomba.
+        """
+        try:
+            console_keywords = [
+                "signed into another device",
+                "logged in on another device",
+                "cannot use the fc companion",
+                "sessione già attiva",
+                "altro dispositivo",
+                "connessione a un altro dispositivo",
+                "connected to the servers",
+                "sign out from your football ultimate team",
+            ]
+
+            # 1) Segnale più affidabile: il bottone "Retry" appare SOLO su questa pagina.
+            #    Usiamo get_by_role che è robusto a cambi di classe CSS EA.
+            try:
+                retry_btn = page.get_by_role("button", name="Retry")
+                if retry_btn.count() and retry_btn.first.is_visible():
+                    logger.warning("Sessione console rilevata: bottone 'Retry' visibile")
+                    return True
+            except Exception:
+                pass
+
+            # 2) Selettore specifico EA su dialog/view (funziona quando è un overlay)
+            error_el = page.query_selector(SELECTORS["console_error"])
+            if error_el and error_el.is_visible():
+                text = error_el.text_content().lower()
+                if any(kw in text for kw in console_keywords):
+                    logger.warning(f"Sessione console rilevata (selettore): '{text.strip()[:80]}'")
+                    return True
+
+            # 3) Fallback sul testo dell'intera pagina: cattura la full-page view EA
+            #    che non usa classi dialog/modal ma è comunque visibile come pagina.
+            try:
+                body_text = page.locator("body").inner_text(timeout=3000).lower()
+                if any(kw in body_text for kw in console_keywords):
+                    logger.warning("Sessione console rilevata (body text match)")
+                    return True
+            except Exception:
+                pass
+
             return False
         except Exception:
             return False
-    
+
     def wait_for_login_page(self, page: Page, timeout: int = 30000) -> bool:
+        """Aspetta che appaia la landing page con il tasto Login o la pagina EA."""
         try:
+            if "signin.ea.com" in page.url:
+                logger.info("Già sulla pagina di login di EA")
+                return True
+
             login_btn = page.get_by_role("button", name="Login")
             login_btn.first.wait_for(state="visible", timeout=timeout)
             logger.info("Pagina di login rilevata")
             return True
         except Exception:
+            if "signin.ea.com" in page.url:
+                return True
+            try:
+                logger.debug(f"URL al timeout: {page.url}")
+            except Exception:
+                pass
             logger.warning("Pagina di login non rilevata nel timeout")
             return False
-    
-    def perform_login(self, page: Page, email: str, password: str) -> bool:
-        """Esegue il login EA in due step: email → NEXT → password → Sign in.
 
-        Il login avviene su signin.ea.com (redirect completo dalla WebApp).
-        Usa get_by_role per compatibilità con la WebApp React.
-        """
+    def perform_login(self, page: Page, email: str, password: str) -> bool:
+        """Esegue il login EA in due step: email → NEXT → password → Sign in."""
         try:
             logger.info("Tentativo di login...")
 
-            # Se siamo sulla WebApp, clicca "Login" per andare alla pagina signin
+            # 0) Verifica immediata: siamo già loggati?
+            if self.is_logged_in(page, timeout_ms=5000):
+                logger.info("Già loggato — skip login.")
+                return True
+
+            # 1) Attendi che lo shield di caricamento scompaia
+            try:
+                page.wait_for_selector(".ut-click-shield", state="hidden", timeout=10000)
+                logger.info("Shield di caricamento scomparso")
+            except Exception:
+                logger.debug("Shield ancora presente o non trovato, procedo comunque")
+
             login_btn = page.get_by_role("button", name="Login")
             if login_btn.count():
-                login_btn.first.click()
-                logger.info("Pulsante Login cliccato, attesa redirect a signin.ea.com...")
-                # Attendi navigazione alla pagina signin
-                try:
-                    page.wait_for_url("**/signin.ea.com/**", timeout=15000)
-                except Exception:
-                    page.wait_for_timeout(5000)
+                for attempt in range(1, 4):
+                    logger.info(f"Pulsante Login trovato (tentativo {attempt}). Click per procedere...")
+                    try:
+                        # Prova click normale
+                        login_btn.first.click(timeout=10000)
+                    except Exception as e:
+                        logger.warning(f"Click normale fallito (tentativo {attempt}): {e}")
+                        # Fallback: click via JavaScript
+                        try:
+                            page.evaluate("document.querySelector('.btn-standard.primary')?.click()")
+                            logger.info("Click via JavaScript eseguito")
+                        except Exception as e2:
+                            logger.warning(f"Anche click JS fallito: {e2}")
+                            if attempt < 3:
+                                page.wait_for_timeout(2000)
+                                continue
+                            else:
+                                logger.error("Impossibile cliccare Login dopo 3 tentativi")
+                                return False
+
+                    page.wait_for_timeout(4000)
+
+                    curr_url = page.url.lower()
+                    if "signin.ea.com" in curr_url:
+                        logger.info("Redirect a signin.ea.com avvenuto con successo.")
+                        break
+
+                    if self.is_logged_in(page, timeout_ms=3000):
+                        logger.info("Siamo già loggati dopo il click.")
+                        return True
+
+                    if attempt < 3:
+                        logger.warning(f"Click su Login ignorato o fallito (siamo ancora su {curr_url}), riprovo...")
+                    else:
+                        logger.error("Impossibile procedere oltre la landing page dopo 3 tentativi di click.")
+                        return False
+
                 page.wait_for_timeout(2000)
 
-            # Step 1: Inserisci email (campo su signin.ea.com)
+            if self.is_console_session_active(page):
+                logger.warning("Sessione console attiva rilevata dopo aver cliccato Login!")
+                return False
+
+            if self.is_logged_in(page, timeout_ms=3000):
+                logger.info("Login istantaneo (già autorizzato).")
+                return True
+
+            # Step 1: Email
             email_input = page.get_by_role("textbox", name="Phone or Email")
             if not email_input.count():
                 logger.error("Campo email non trovato")
                 return False
-
             email_input.first.fill(email)
             logger.info("Email inserita")
 
-            # Step 2: Clicca "NEXT"
+            # Step 2: NEXT
             page.wait_for_timeout(1000)
             next_btn = page.get_by_role("button", name="NEXT")
             if not next_btn.count():
                 logger.error("Bottone NEXT non trovato")
                 return False
-
             next_btn.first.click()
             logger.info("NEXT cliccato")
             page.wait_for_timeout(3000)
 
-            # Step 3: Inserisci password (appare dopo NEXT)
+            # Step 3: Password
             pwd_input = page.get_by_role("textbox", name="Password")
             if not pwd_input.count():
                 logger.error("Campo password non trovato dopo NEXT")
                 return False
-
             pwd_input.first.fill(password)
             logger.info("Password inserita")
 
-            # Step 4: Clicca "Sign in"
+            # Step 4: Sign in
             sign_in_btn = page.get_by_role("button", name="Sign in")
             if not sign_in_btn.count():
                 logger.error("Bottone Sign in non trovato")
                 return False
-
             sign_in_btn.first.click()
             logger.info("Sign in cliccato")
 
-            # Attendi redirect da signin.ea.com → WebApp
             logger.info("Attesa redirect a WebApp...")
             page.wait_for_timeout(5000)
 
-            # Gestione eventuale 2FA EA
             if not self.handle_verification_if_needed(page):
                 logger.error("Verifica 2FA fallita o interrotta")
                 return False
 
-            # Attendi caricamento WebApp fino a 30s
             logger.info("Attesa caricamento WebApp...")
             for i in range(30):
                 if self.is_logged_in(page):
@@ -228,14 +298,12 @@ class AuthManager:
 
     def handle_verification_if_needed(self, page: Page) -> bool:
         """Gestisce il 2FA/verifica identità EA se richiesto."""
-        # Check se appare il pulsante "Send Code"
         send_code_btn = page.get_by_role("button", name="Send Code")
         if send_code_btn.count():
             logger.info("2FA richiesto — invio codice via email...")
             send_code_btn.first.click()
             page.wait_for_timeout(3000)
 
-        # Check se appare il campo codice
         code_input = page.get_by_role("textbox", name="Code")
         if not code_input.count():
             code_input = page.get_by_placeholder("Enter 6 digit code")
@@ -243,24 +311,20 @@ class AuthManager:
             return True
 
         logger.info("==================================================")
-        logger.info("VERIFICA 2FA - Inserisci il codice nel browser,")
-        logger.info("clicca Sign in, poi PREMI ENTER qui.")
+        logger.info("VERIFICA 2FA RICHIESTA - Inserisci il codice nel browser")
+        logger.info("e clicca 'Sign in'. Il bot attenderà il completamento...")
         logger.info("==================================================")
 
-        try:
-            input("")
-        except EOFError:
-            pass
+        max_wait = 120
+        waited = 0
+        while waited < max_wait:
+            if self.is_logged_in(page):
+                logger.info("Verifica completata con successo!")
+                return True
+            page.wait_for_timeout(2000)
+            waited += 2
+            if waited % 10 == 0:
+                logger.info(f"In attesa del login... ({waited}/{max_wait}s)")
 
-        # Attendi che la pagina si aggiorni dopo la verifica
-        page.wait_for_timeout(5000)
-
-        # Verifica che siamo sulla WebApp
-        if self.is_logged_in(page):
-            logger.info("Verifica completata - sessione salvata!")
-            return True
-
-        logger.warning("Non sembri essere nella WebApp, riprovo...")
-        # Un ultimo tentativo dopo attendere
-        page.wait_for_timeout(5000)
-        return self.is_logged_in(page)
+        logger.error("Timeout: login non completato entro 2 minuti")
+        return False
