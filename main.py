@@ -349,31 +349,50 @@ def main() -> None:
             # --- HYBRID GOLDEN SYNC LOGIC ---
             now = datetime.now()
             next_golden = get_next_golden_hour(now)
-            
-            if next_golden:
+            fifa_logger = logging.getLogger("fifa")
+
+            # Se siamo nella fascia golden, calcola se è ora di navigare o aspettare
+            if next_golden and is_in_golden_period(now):
                 pre_nav_time = next_golden.replace(minute=9, second=30, microsecond=0)
                 seconds_until_golden = (next_golden - now).total_seconds()
                 seconds_until_pre_nav = (pre_nav_time - now).total_seconds()
-                
-                if seconds_until_pre_nav > 0 and is_in_golden_period(now):
-                    # Siamo in HOLD window: aspetta fino al pre-nav
-                    wait_seconds = seconds_until_pre_nav
-                    status_console.print(make_status_table("Pausa Sincro Golden", 0, 0, 0))
-                    logger.info(f"[Golden] HOLD: mancano {int(seconds_until_golden)}s alle {next_golden.strftime('%H:%M')}.")
-                    logger.info(f"[Golden] Attesa di {int(wait_seconds)}s fino a {pre_nav_time.strftime('%H:%M:%S')} (pre-nav)...")
-                    time.sleep(wait_seconds)
-                    logger.info("[Golden] PRE-NAV AVVIATA! Navigo ora per arrivare al :10 preciso.")
+
+                if seconds_until_pre_nav > 0:
+                    # HOLD: aspetta senza navigare fino al pre-nav
+                    # Ma fai check della sessione ogni 5 minuti
+                    while seconds_until_pre_nav > 0:
+                        wait_chunk = min(300, int(seconds_until_pre_nav))  # max 5 min per chunk
+                        status_console.print(make_status_table("Pausa Sincro Golden", 0, 0, 0))
+                        logger.info(f"[Golden] HOLD: mancano {int(seconds_until_golden)}s alle {next_golden.strftime('%H:%M')}. Check sessione tra {wait_chunk}s.")
+                        time.sleep(wait_chunk)
+
+                        # Aggiorna i calcoli dopo il wait
+                        now = datetime.now()
+                        next_golden = get_next_golden_hour(now)
+                        if next_golden is None:
+                            break  # Siamo usciti dalla fascia golden
+                        pre_nav_time = next_golden.replace(minute=9, second=30, microsecond=0)
+                        seconds_until_golden = (next_golden - now).total_seconds()
+                        seconds_until_pre_nav = (pre_nav_time - now).total_seconds()
+
+                        # Verifica sessione ad ogni chunk
+                        ensure_session(page, auth, controller, get_credentials)
+
+                    if next_golden is None:
+                        # Fuori fascia golden, procedi con navigazione normale
+                        pass
+                    else:
+                        # Siamo al pre-nav o oltre — naviga per la golden
+                        logger.info("[Golden] PRE-NAV AVVIATA! Navigo ora per arrivare al :10 preciso.")
                 elif 0 < seconds_until_golden <= 30:
-                    # Siamo nel timing perfetto (tra pre-nav e :10)
+                    # Timing perfetto: procedi con la navigazione
                     logger.info(f"[Golden] Timing perfetto! Mancano {int(seconds_until_golden)}s al :10, procedo.")
+                # else: siamo dopo il :10, naviga normalmente
 
             if not navigate_with_retry(navigator, page):
                 status_console.print(make_status_table("Errore Navigazione", 0, 0, 0))
                 rate_limiter.wait()
                 continue
-                
-            label = f"Ciclo {cycle}"
-            fifa_logger = logging.getLogger("fifa")
 
             fifa_logger.info(f"--- [SCANSIONE IBRIDA] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
             scan = detector.scan_listings()
