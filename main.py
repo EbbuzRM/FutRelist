@@ -363,12 +363,6 @@ def main() -> None:
                     logger.info(f"[Golden] Attesa di {int(wait_seconds)}s fino a {pre_nav_time.strftime('%H:%M:%S')} (pre-nav)...")
                     time.sleep(wait_seconds)
                     logger.info("[Golden] PRE-NAV AVVIATA! Navigo ora per arrivare al :10 preciso.")
-                elif 0 < seconds_until_pre_nav <= 60:
-                    # Siamo a meno di 1 min dal pre-nav, aspetta
-                    status_console.print(make_status_table("Pausa Sincro Golden", 0, 0, 0))
-                    logger.info(f"[Golden] Quasi orario! Attesa di {int(seconds_until_pre_nav)}s per il pre-nav...")
-                    time.sleep(seconds_until_pre_nav)
-                    logger.info("[Golden] PRE-NAV AVVIATA! Navigo ora per arrivare al :10 preciso.")
                 elif 0 < seconds_until_golden <= 30:
                     # Siamo nel timing perfetto (tra pre-nav e :10)
                     logger.info(f"[Golden] Timing perfetto! Mancano {int(seconds_until_golden)}s al :10, procedo.")
