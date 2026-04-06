@@ -244,30 +244,39 @@ def get_next_golden_hour(now: datetime) -> datetime | None:
     return None
 
 
-def is_in_hold_window(now: datetime) -> bool:
-    """True se siamo nella fascia GOLDEN (15:10-18:10) ma NON in un golden moment.
-    
-    Durante le golden hours (15:10 → 18:10), il relist è consentito SOLO alle:
-    - 16:10, 17:10, 18:10 (con finestra di tolleranza :10-:15)
-    Tutto il resto del tempo è HOLD: gli scaduti aspettano la prossima golden.
-    
-    Fuori dalla fascia 15:10-18:10: relist normale (sempre False).
+def is_in_golden_period(now: datetime) -> bool:
+    """True se siamo nella fascia 15:10 → 18:15.
+
+    In questa fascia il golden sync è attivo: il bot aspetta SEMPRE
+    la prossima golden hour (16:10, 17:10, 18:10) prima di navigare.
     """
     hour = now.hour
     minute = now.minute
-    
-    # Fuori dalla fascia golden: nessun hold
     if hour < 15 or (hour == 15 and minute < 10):
-        return False  # Prima delle 15:10 → normale
+        return False
     if hour > 18 or (hour == 18 and minute > 15):
-        return False  # Dopo le 18:15 → normale
-    
-    # Siamo nella fascia 15:10 → 18:15
-    # Golden moments: :10-:15 delle ore 16, 17, 18
-    if hour in (16, 17, 18) and 10 <= minute <= 15:
-        return False  # Finestra golden: relist consentito
-    
-    # Tutto il resto nella fascia è HOLD
+        return False
+    return True
+
+
+def is_in_hold_window(now: datetime) -> bool:
+    """True se siamo nella fascia golden ma NON nel momento del relist (:09-:11).
+
+    Durante la fascia 15:10→18:15, il relist è consentito SOLO nella finestra:
+    - :09 → :11 delle ore 16, 17, 18 (pre-nav + relist :10 + ritardatari :11)
+    Tutto il resto è HOLD: gli scaduti aspettano la prossima golden.
+
+    Fuori dalla fascia 15:10-18:15: relist normale (sempre False).
+    """
+    if not is_in_golden_period(now):
+        return False
+
+    hour = now.hour
+    minute = now.minute
+    # Finestra relist: :09-:11 delle ore 16, 17, 18
+    if hour in (16, 17, 18) and 9 <= minute <= 11:
+        return False  # Momento del relist golden
+
     return True
 
 
@@ -346,7 +355,7 @@ def main() -> None:
                 seconds_until_golden = (next_golden - now).total_seconds()
                 seconds_until_pre_nav = (pre_nav_time - now).total_seconds()
                 
-                if seconds_until_pre_nav > 0 and is_in_hold_window(now):
+                if seconds_until_pre_nav > 0 and is_in_golden_period(now):
                     # Siamo in HOLD window: aspetta fino al pre-nav
                     wait_seconds = seconds_until_pre_nav
                     status_console.print(make_status_table("Pausa Sincro Golden", 0, 0, 0))
