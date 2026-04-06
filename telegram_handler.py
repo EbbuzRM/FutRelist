@@ -61,6 +61,11 @@ class TelegramHandler:
         self._stop_event = threading.Event()
         self._offset = 0
         self._api_base = f"https://api.telegram.org/bot{self.token}"
+        self._sold_handler = None
+
+    def set_sold_handler(self, sold_handler) -> None:
+        """Imposta l'handler per il comando /del_sold."""
+        self._sold_handler = sold_handler
 
     # --- Public API ---
 
@@ -227,9 +232,17 @@ class TelegramHandler:
         """Cancella gli oggetti venduti e raccoglie i crediti (richiede page)."""
         if self.page is None:
             return "⚠️ Cleanup venduti non disponibile: browser non connesso"
-        # Implementazione effettiva richiede Playwright page — stub per ora
-        logger.info("Delete sold richiesto (non implementato senza page)")
-        return "🧹 Cleanup venduti richiesto (in arrivo...)"
+        if self._sold_handler is None:
+            return "⚠️ Sold handler non configurato"
+        try:
+            result = self._sold_handler.process_sold_items()
+            if result.success:
+                return f"🧹 Pulizia completata: {result.items_cleared} oggetti, {result.total_credits:,} crediti raccolti"
+            else:
+                return f"❌ Pulizia fallita: {result.error}"
+        except Exception as e:
+            logger.error(f"Errore durante del_sold: {e}")
+            return f"❌ Errore durante la pulizia: {e}"
 
     def _cmd_logs(self, args: list[str]) -> str:
         """Restituisce le ultime N righe del log (default: 20)."""

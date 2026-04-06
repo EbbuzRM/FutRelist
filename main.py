@@ -24,6 +24,9 @@ from browser.detector import ListingDetector
 from browser.relist import RelistExecutor
 from browser.rate_limiter import RateLimiter
 from browser.error_handler import ensure_session
+from bot_state import BotState
+from telegram_handler import TelegramHandler
+from browser.sold_handler import SoldHandler
 from config.config import ConfigManager
 from models.listing import ListingState, ListingScanResult
 from models.action_log import JsonFormatter
@@ -288,6 +291,7 @@ def main() -> None:
 
     controller = None
     app_config = None
+    telegram = None
 
     try:
         cm = ConfigManager()
@@ -320,6 +324,24 @@ def main() -> None:
         )
         cycle = 0
 
+        # --- BotState & Telegram integration ---
+        bot_state = BotState()
+
+        telegram = None
+        if app_config.notifications.telegram_token and app_config.notifications.telegram_chat_id:
+            telegram = TelegramHandler(
+                token=app_config.notifications.telegram_token,
+                chat_id=app_config.notifications.telegram_chat_id,
+                bot_state=bot_state,
+                page=page,
+                log_dir=Path(__file__).parent / "logs",
+            )
+            # Wire SoldHandler for /del_sold command
+            sold_handler = SoldHandler(page, config)
+            telegram.set_sold_handler(sold_handler)
+            telegram.start()
+            logger.info("Telegram handler avviato")
+
         # Notification batching
         last_notification_time = None
         last_relist_error = None
@@ -334,6 +356,13 @@ def main() -> None:
         while True:
             cycle += 1
             logger.info(f"=== Ciclo {cycle} ===")
+
+            # Check if bot is paused via Telegram
+            if bot_state.is_paused():
+                logger.info("[Telegram] Bot in pausa — skip scanning")
+                status_console.print(make_status_table("⏸️ In Pausa (Telegram)", 0, 0, 0))
+                time.sleep(10)  # check every 10s if resumed
+                continue
 
             ensure_session(page, auth, controller, get_credentials)
 
@@ -405,7 +434,8 @@ def main() -> None:
             if scan.expired_count > 0:
                 # Se siamo in hold window, NON relistare — aspetta la golden
                 in_hold = is_in_hold_window(datetime.now())
-                if in_hold:
+                force_relist = bot_state.consume_force_relist()
+                if in_hold and not force_relist:
                     next_g = get_next_golden_hour(datetime.now())
                     if next_g:
                         fifa_logger.info(f"[HOLD] {scan.expired_count} scaduti rilevati ma in HOLD WINDOW.")
@@ -413,9 +443,10 @@ def main() -> None:
                     succeeded = 0
                     failed = 0
                     next_wait = 60  # check ogni minuto fino alla golden
-                else:
-                    # Fuori hold: relista normalmente
-                    fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti. Rilisto...")
+                elif force_relist:
+                    logger.info("[Telegram] Force relist — bypass hold window")
+                    # proceed with relist (fall through to normal relist logic)
+                    fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti. Rilisto (force)...")
                     if executor.relist_mode == "all":
                         batch = executor.relist_all(count=scan.expired_count)
                         succeeded = batch.succeeded
@@ -441,6 +472,9 @@ def main() -> None:
                         succeeded, failed = relist_expired_listings(executor, expired)
 
                     fifa_logger.info(f"Relist completato: {succeeded} successi, {failed} falliti.")
+
+                    # Update BotState stats
+                    bot_state.update_stats(cycle=cycle, relisted=succeeded, failed=failed)
 
                     now_after = datetime.now()
                     next_g_after = get_next_golden_hour(now_after)
@@ -546,6 +580,9 @@ def main() -> None:
         sys.exit(1)
     except KeyboardInterrupt:
         logger.info("Interruzione utente")
+        if telegram:
+            logger.info("Arresto Telegram handler...")
+            telegram.stop()
         if controller and controller.is_running():
             controller.stop()
     except Exception as e:
