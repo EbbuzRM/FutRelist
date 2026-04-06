@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import sys
+import random
 import time
 from datetime import datetime
 from pathlib import Path
@@ -24,9 +25,8 @@ from browser.relist import RelistExecutor
 from browser.rate_limiter import RateLimiter
 from browser.error_handler import ensure_session
 from config.config import ConfigManager
+from models.listing import ListingState, ListingScanResult
 from models.action_log import JsonFormatter
-from models.listing import ListingState
-from v2_relist_logic import implementazione_nuova_logica
 
 action_logger = logging.getLogger("actions")
 
@@ -129,7 +129,10 @@ def authenticate(controller, auth, page) -> None:
             login_btn = page.get_by_role("button", name="Login")
             if login_btn.count():
                 logger.info("Pulsante Login trovato (Landing Page). Click per verificare stato console...")
-                login_btn.first.click()
+                try:
+                    login_btn.first.click(timeout=5000)
+                except Exception as e:
+                    logger.warning(f"Impossibile cliccare 'Login' (timeout o elemento instabile): {e}")
                 # Aspettiamo 5 secondi invece di 8, se è console occupata il pop-up appare subito
                 page.wait_for_timeout(5000)
 
@@ -210,6 +213,53 @@ def relist_expired_listings(executor, expired_listings) -> tuple[int, int]:
     return succeeded, failed
 
 
+def get_min_active_seconds(scan: ListingScanResult) -> int | None:
+    """Restituisce il tempo minimo rimanente tra i listing attivi."""
+    active_times = [
+        l.time_remaining_seconds
+        for l in scan.listings
+        if l.state == ListingState.ACTIVE
+        and l.time_remaining_seconds is not None
+        and l.time_remaining not in ("---", "Expired", "Scaduto")
+    ]
+    return min(active_times) if active_times else None
+
+
+def get_next_golden_hour(now: datetime) -> datetime | None:
+    """Restituisce il prossimo target :10 (16:10, 17:10, 18:10) come datetime.
+
+    Se siamo dopo le 18:10, restituisce None (nessuna golden oggi).
+    Se siamo prima delle 16:10, restituisce 16:10.
+    Se siamo tra 16:10-17:10, restituisce 17:10.
+    Se siamo tra 17:10-18:10, restituisce 18:10.
+    """
+    golden_targets = [
+        now.replace(hour=16, minute=10, second=0, microsecond=0),
+        now.replace(hour=17, minute=10, second=0, microsecond=0),
+        now.replace(hour=18, minute=10, second=0, microsecond=0),
+    ]
+    for target in golden_targets:
+        if now < target:
+            return target
+    return None
+
+
+def is_in_hold_window(now: datetime) -> bool:
+    """True se siamo nella fascia tra una golden e la prossima.
+
+    Hold window: dalle xx:11 alle xx:59 prima della prossima golden.
+    Esempio: alle 16:50 siamo in hold per le 17:10 → NON relistare, aspetta.
+    Alle 17:15 siamo in hold per le 18:10 → NON relistare, aspetta.
+    """
+    next_golden = get_next_golden_hour(now)
+    if next_golden is None:
+        return False  # Dopo le 18:10, nessuna hold
+    # Siamo in hold se mancano più di 12 minuti alla prossima golden
+    # (cioè NON siamo nei ~10 minuti prima del :10)
+    seconds_until = (next_golden - now).total_seconds()
+    return seconds_until > 720  # più di 12 minuti = siamo in hold
+
+
 def main() -> None:
     load_dotenv()
     setup_logging()
@@ -248,10 +298,16 @@ def main() -> None:
             min_delay_ms=app_config.rate_limiting.min_delay_ms,
             max_delay_ms=app_config.rate_limiting.max_delay_ms,
         )
-        scan_interval = app_config.scan_interval_seconds
         cycle = 0
 
-        logger.info(f"Avvio loop continuo (intervallo: {scan_interval}s). Premi Ctrl+C per fermare.")
+        # Notification batching
+        last_notification_time = None
+        last_relist_error = None
+        notification_accumulator = {"relisted": 0, "failed": 0, "cycles": 0}
+        NOTIFICATION_INTERVAL = 300  # invia ogni 5 minuti max
+        NOTIFICATION_THRESHOLD = 5  # oppure quando >= 5 item accumulati
+
+        logger.info(f"Avvio loop continuo (intervallo: {app_config.scan_interval_seconds}s). Premi Ctrl+C per fermare.")
 
         status_console = Console()
         
@@ -270,30 +326,162 @@ def main() -> None:
                 page.reload() # Ricarica per vedere se la sessione è libera
                 continue
 
+            # --- HYBRID GOLDEN SYNC LOGIC ---
+            now = datetime.now()
+            next_golden = get_next_golden_hour(now)
+            should_hold = False
+
+            if next_golden:
+                # Calcola il momento del pre-nav: 30 secondi prima del :10
+                pre_nav_time = next_golden.replace(minute=9, second=30, microsecond=0)
+                seconds_until_golden = (next_golden - now).total_seconds()
+                seconds_until_pre_nav = (pre_nav_time - now).total_seconds()
+
+                if seconds_until_pre_nav > 0:
+                    # Siamo PRIMA del pre-nav della prossima golden
+                    should_hold = True
+                    wait_seconds = seconds_until_pre_nav
+                    status_console.print(make_status_table("Pausa Sincro Golden", 0, 0, 0))
+                    logger.info(f"[Golden] HOLD: scaduti trovati, ma mancano {int(seconds_until_golden)}s alle {next_golden.strftime('%H:%M')}.")
+                    logger.info(f"[Golden] Attesa di {int(wait_seconds)}s fino a {pre_nav_time.strftime('%H:%M:%S')} (pre-nav)...")
+                    time.sleep(wait_seconds)
+                    logger.info("[Golden] PRE-NAV AVVIATA! Navigo ora per arrivare al :10 preciso.")
+                elif seconds_until_golden > 0:
+                    # Siamo tra pre-nav e :10 — naviga subito, siamo in timing
+                    logger.info(f"[Golden] Timing perfetto! Mancano {int(seconds_until_golden)}s al :10, procedo con la navigazione.")
+
             if not navigate_with_retry(navigator, page):
                 status_console.print(make_status_table("Errore Navigazione", 0, 0, 0))
                 rate_limiter.wait()
                 continue
+                
+            label = f"Ciclo {cycle}"
+            fifa_logger = logging.getLogger("fifa")
 
-            # --- Pre-navigazione: attesa di precisione fino al sync_minute ---
-            sync_minute_prenav = app_config.listing_defaults.sync_minute_offset
-            if sync_minute_prenav is not None:
-                now_pre = datetime.now()
-                early_minute = (sync_minute_prenav - 1) % 60
-                if now_pre.minute == early_minute:
-                    wait_precision = 60 - now_pre.second
-                    if wait_precision > 0:
-                        logger.info(f"Pre-nav completata! Attesa di precisione: {wait_precision}s fino al minuto {sync_minute_prenav}...")
-                        time.sleep(wait_precision)
-                    logger.info(f"Minuto {sync_minute_prenav} raggiunto! Scansione...")
+            fifa_logger.info(f"--- [SCANSIONE IBRIDA] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
+            scan = detector.scan_listings()
 
-            next_wait = implementazione_nuova_logica(
-                page, detector, executor, app_config,
-                cycle, status_console, make_status_table,
-                relist_expired_listings,
-            )
+            succeeded = 0
+            failed = 0
+            last_relist_error = None
+            next_wait = 600  # default fallback
 
-            logger.info(f"Prossimo ciclo tra {next_wait}s...")
+            if scan.expired_count > 0:
+                # Se siamo in hold window (tra una golden e l'altra), NON relistare
+                now_check = datetime.now()
+                in_hold = is_in_hold_window(now_check) and get_next_golden_hour(now_check) is not None
+                if in_hold:
+                    next_g = get_next_golden_hour(now_check)
+                    assert next_g is not None  # in_hold guarantees this
+                    wait_secs = (next_g.replace(minute=9, second=30, microsecond=0) - now_check).total_seconds()
+                    if wait_secs > 0:
+                        fifa_logger.info(f"[HOLD] {scan.expired_count} scaduti ma in hold window. Prossima golden: {next_g.strftime('%H:%M')} tra {int(wait_secs)}s.")
+                        succeeded = 0
+                        failed = 0
+                        next_wait = min(int(wait_secs), 300)  # max 5 min check
+                        fifa_logger.info(f"[HOLD] Relist rimandato alla prossima golden.")
+                    else:
+                        # La wait è negativa o zero, siamo vicini alla golden, procedi
+                        in_hold = False
+
+                if scan.expired_count > 0 and not in_hold:
+                    fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti. Rilisto...")
+                    if executor.relist_mode == "all":
+                        batch = executor.relist_all(count=scan.expired_count)
+                        succeeded = batch.succeeded
+                        failed = batch.total - batch.succeeded
+                        if batch.relist_error:
+                            last_relist_error = batch.relist_error
+                            fifa_logger.error(f"ERRORE RELIST: {last_relist_error}")
+                            if not executor.check_session_valid():
+                                fifa_logger.warning("Sessione non valida - tentativo refresh...")
+                                page.reload()
+                                page.wait_for_timeout(3000)
+                                if not executor.check_session_valid():
+                                    fifa_logger.warning("Refresh fallito - logout e riavvio")
+                                    auth_mgr = AuthManager(config)
+                                    auth_mgr.delete_saved_session()
+                                    page.goto("https://fcweb2://.ea.com/")
+                                    page.wait_for_timeout(3000)
+                                    continue
+                            screenshot_path = "relist_error.png"
+                            page.screenshot(path=screenshot_path)
+                    else:
+                        expired = [l for l in scan.listings if l.needs_relist]
+                        succeeded, failed = relist_expired_listings(executor, expired)
+
+                    fifa_logger.info(f"Relist completato: {succeeded} successi, {failed} falliti.")
+
+                    now_after = datetime.now()
+                    next_g_after = get_next_golden_hour(now_after)
+                    if next_g_after and now_after.minute >= 10 and now_after.minute < 15:
+                        # Appena dopo una golden, polling rapido per ritardatari
+                        next_wait = random.randint(15, 20)
+                        fifa_logger.info(f"Golden Hour: polling rapido per ritardatari in {next_wait}s.")
+                    else:
+                        min_active = get_min_active_seconds(scan)
+                        if min_active is not None:
+                            next_wait = max(min_active - 20, 10)
+                            fifa_logger.info(f"Prossimo expiry tra {min_active}s. Wait: {next_wait}s")
+                        else:
+                            next_wait = 3600 - 20
+                            fifa_logger.info(f"Tutti relistati. Wait: {next_wait}s")
+            else:
+                fifa_logger.info("Nessun oggetto scaduto trovato.")
+                min_active = get_min_active_seconds(scan)
+                if min_active is not None:
+                    next_wait = max(min_active - 20, 10)
+                    fifa_logger.info(f"Prossimo expiry tra {min_active}s. Wait: {next_wait}s")
+                else:
+                    next_wait = 600
+                    fifa_logger.info(f"Nessun oggetto in lista. Prossimo check tra {next_wait}s.")
+
+            # --- NOTIFICA FINALE UNIFICATA (BATCHING) ---
+            if succeeded > 0 or failed > 0:
+                logger.info(f"Ciclo completato. Totale: {succeeded} successi, {failed} fallimenti.")
+
+                # Accumula i risultati
+                notification_accumulator["relisted"] += succeeded
+                notification_accumulator["failed"] += failed
+                notification_accumulator["cycles"] += 1
+
+                # Verifica se inviare la notifica
+                now = datetime.now()
+                time_since_last = (now - last_notification_time).total_seconds() if last_notification_time else float('inf')
+
+                should_notify = (
+                    time_since_last >= NOTIFICATION_INTERVAL or
+                    notification_accumulator["relisted"] >= NOTIFICATION_THRESHOLD
+                )
+
+                if should_notify:
+                    if app_config.notifications.telegram_token:
+                        from notifier import send_telegram_photo
+                        screenshot_path = "relist_report.png"
+                        try:
+                            page.screenshot(path=screenshot_path)
+                            error_msg = f" ⚠️ Error: {last_relist_error}" if last_relist_error else ""
+                            msg = (
+                                f"🔔 Report Aggregato\n"
+                                f"-------------------\n"
+                                f"📦 Cicli: {notification_accumulator['cycles']}\n"
+                                f"🚀 Totale Rilistati: {notification_accumulator['relisted']}\n"
+                                f"❌ Falliti: {notification_accumulator['failed']}{error_msg}\n"
+                                f"🕒 Modalità: ⚽ Drift Ibrido"
+                            )
+                            send_telegram_photo(app_config.notifications, screenshot_path, msg)
+                            last_relist_error = None
+                            if os.path.exists(screenshot_path):
+                                os.remove(screenshot_path)
+                        except Exception as e:
+                            logger.error(f"Errore invio notifica: {e}")
+
+                    # Reset accumulator
+                    notification_accumulator = {"relisted": 0, "failed": 0, "cycles": 0}
+                    last_notification_time = now
+
+            # --- CALCOLO ATTESA PER IL PROSSIMO GIRO ---
+            logger.info(f"Fine ciclo. In attesa per {next_wait}s...")
             rate_limiter.wait()
             time.sleep(next_wait)
 
