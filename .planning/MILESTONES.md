@@ -19,4 +19,16 @@
 ---
 
 ## Future Milestones
-- v1.1 FIFA 26 Auto-Relist: Price monitoring, trading stats, GUI
+
+### v1.1 Telegram Commands & Sold Cleanup
+**Status:** Planning
+**Goal:** Interactive bot control via Telegram + automated sold items cleanup
+**Phases:** 1 (Phase 6: Telegram Bot Commands + Sold Items Cleanup)
+**Requirements:** 10 (TELEGRAM-01 through TELEGRAM-10)
+
+**Phase 6: Telegram Bot Commands + Sold Items Cleanup**
+- [ ] Plan 00: TDD — BotState + TelegramHandler + SoldHandler
+- [ ] Plan 01: Integration — wire into main.py + human verify
+
+---
+- v1.2 FIFA 26 Auto-Relist: Price monitoring, trading stats, GUI

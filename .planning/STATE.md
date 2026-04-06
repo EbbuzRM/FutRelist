@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: Auto-Relist MVP
 status: unknown
-last_updated: "2026-03-23T07:51:55.147Z"
+last_updated: "2026-03-27T17:25:00.000Z"
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 18
-  completed_plans: 17
+  completed_phases: 5
+  total_plans: 20
+  completed_plans: 20
 ---
 
 # Project State
 
-## Current Phase: FIFA 26 Auto-Relist Tool - Phase 5 In Progress (2/4 plans complete)
+## Current Phase: FIFA 26 Auto-Relist Tool - Phase 5 Complete (4/4 plans complete)
 
 ### Previous Milestones:
 - [x] Contact Management System v1.0 - Completed
@@ -25,6 +25,8 @@ progress:
 
 ### Current Milestone: v1.0 FIFA 26 Auto-Relist MVP
 **Goal:** Browser automation tool for auto-relisting expired players on FIFA 26 WebApp
+
+Phase 1-5 complete. Milestone v1.0 MVP ready for final live verification. All critical bugs (2FA, Relist Dialog, Polling, Fast-Scanning) resolved.
 
 ### Current Status:
 Phase 1, 2, 3, 4 complete. Phase 5: 2/4 plans done (Plan 00 TDD ✅, Plan 01 Logging ✅, Plan 02 Error Recovery ✅). Ready for Plan 03.
@@ -91,9 +93,17 @@ Phase 1, 2, 3, 4 complete. Phase 5: 2/4 plans done (Plan 00 TDD ✅, Plan 01 Log
   - [x] main.py: ensure_session before navigation, retry on timeout, rate_limiter.wait() after relist
   - [x] 2 commits: navigator+relist RateLimiter, main.py integration
   - [x] Full suite: 68/68 tests pass
+- [x] Phase 5 Plan 03: Polling Fix + Precision Timing (LOG-03, OPTIM-01, OPTIM-02)
+  - [x] main.py: polling fix (trigger condition), progressive polling loop every 10s
+  - [x] main.py: pre-navigazione (sveglia -60s per session check/navigate), precision wait fino al secondo 0
+  - [x] console logging: aggiunti i secondi (%H:%M:%S) per monitoraggio performance
 
 ### Next Steps:
-- [ ] Phase 5 Plan 03: Integration + console status (Wave 3)
+- [ ] Phase 6: Telegram Commands & Sold Cleanup (v1.1 milestone)
+  - [ ] Plan 00: TDD — BotState + TelegramHandler + SoldHandler
+  - [ ] Plan 01: Integration — wire into main.py + human verify
+- [ ] Monitoraggio live delle performance di pre-navigazione
+- [ ] Milestone v1.2: Price monitoring, trading stats, GUI
 
 ### Current Activity
 [2026-03-23T02:04:00Z] Phase 4 Plan 02 complete (Integration). 2 commits: main.py ConfigManager (a27ce69), RelistExecutor price bounds (4acd6ce). ConfigManager wired into main.py via to_dict() bridge. RelistExecutor reads min_price/max_price from config. CLI round-trip verified (show/set/reset). 50/50 tests pass. Phase 4 complete (3/3 plans). CONFIG-01/02/03/04 all satisfied. Ready for Phase 5.
@@ -134,18 +144,13 @@ Phase 1, 2, 3, 4 complete. Phase 5: 2/4 plans done (Plan 00 TDD ✅, Plan 01 Log
 - Session recovery: is_session_expired checks URL+.ut-app+.ea-app, ensure_session full recovery flow
 - Integration error handling: ensure_session before navigation, try/except with reload retry, rate_limiter.wait() at cycle boundaries
 
-Last updated: 2026-03-23T07:50:23.167Z
+Last updated: 2026-04-06T00:00:00Z
 
-## Last Commit
-Hash: c514c75b8e6b5ab5be7d2c55fbf3639eefb826e0
-Message: "docs(05-03): add plan 03 summary — rich Live status display complete
+[2026-04-06T00:00:00Z] Phase 6 planning complete: v1.1 milestone — Telegram Commands & Sold Cleanup. 2 plans across 2 waves. Plan 00 (TDD): BotState dataclass with thread safety, TelegramHandler with 8 command handlers, SoldHandler for sold items cleanup. Plan 01 (Integration): wire Telegram thread into main.py, BotState checks for pause/resume/force_relist, human verify of all commands. 10 requirements (TELEGRAM-01 through TELEGRAM-10) all mapped. REQUIREMENTS.md, RESEARCH.md, VALIDATION.md created.
 
-- Phase 5 complete: all 8 requirements (LOG-01..04, ERROR-01..04) satisfied
-- 68/68 tests pass
-- Rich Live with Console(stderr=True) for non-colliding status display
-- CHECKPOINT auto-approved (user away, all automated checks passed)"
-
-## Current Activity
+[2026-03-27T17:25:00Z] Phase 5 complete. Milestone v1.0 MVP ready. 4 piani eseguiti in Phase 5. Inserita pre-navigazione (sveglia 60s prima), polling progressivo ad alta precisione e secondi nei log. Risolto il bug critico della condizione di polling al minuto di sync. Il bot naviga e si mette in attesa di precisione prima del relist.
+[2026-03-26T18:25:00Z] Bug fix: Sold items non rilevati correttamente. Modificato detector.py per riconoscere se un listing è nella sezione "Sold Items" cercando heading nel DOM. Ora i giocatori venduti vengono correttamente conteggiati (7 venduti vs 0 prima).
+[2026-03-26T18:15:00Z] Polling implementation: Aggiunta logica polling in main.py per listing che stanno per scadere prima del minuto 10. Trigger: listing scade prima di sync_minute - 60 secondi. Loop: ogni 15 secondi, max 60 secondi. Navigazione: Transfers → Transfer List. Azione: relist immediato appena trova scaduti. 21 tests pass.
 [2026-03-23T07:39:00Z] Phase 5 Plan 02 complete (Error recovery & rate limiting). 2 commits: navigator+relist RateLimiter (f2541d3), main.py session check+retry+rate limiting (ab27995). _random_delay removed from navigator.py and relist.py. ensure_session called before navigation. rate_limiter.wait() after relist batch. 68/68 tests pass. ERROR-01/02/03/04 satisfied. Ready for Plan 03.
 [2026-03-23T02:48:59Z] Phase 5 Plan 01 complete (Logging integration). 2 commits: JsonFormatter wiring (b7db2c7), history subcommand (5a539b2). setup_logging with 3 handlers. action_logger calls in main(). 'fifa-relist history' CLI. LOG-01/02/04 satisfied. Ready for Plan 02.
 [2026-03-23T02:33:56Z] Phase 5 Plan 00 complete (TDD ActionLogEntry+RateLimiter+ErrorHandler). 7 commits: RED/GREEN for 3 tasks + deps. 18 new tests (7+5+6), full suite 68/68. Requirements LOG-01/02/04 and ERROR-01/02/03/04 satisfied. models/action_log.py, browser/rate_limiter.py, browser/error_handler.py created. requirements.txt updated with tenacity>=8.0, rich>=13.0. Ready for Plan 01 (logging integration).

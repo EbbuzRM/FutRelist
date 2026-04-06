@@ -102,6 +102,30 @@ Plans:
 
 ---
 
+---
+
+### Phase 6: Telegram Bot Commands + Sold Items Cleanup
+**Goal:** Interactive bot control via Telegram commands and automated sold items cleanup
+**Requirements:** TELEGRAM-01, TELEGRAM-02, TELEGRAM-03, TELEGRAM-04, TELEGRAM-05, TELEGRAM-06, TELEGRAM-07, TELEGRAM-08, TELEGRAM-09, TELEGRAM-10
+
+Plans:
+- [ ] 06-00-PLAN.md — TDD: BotState + TelegramHandler + SoldHandler (Wave 1)
+- [ ] 06-01-PLAN.md — Integration: wire into main.py + human verify (Wave 2)
+
+**Success Criteria:**
+1. All 8 Telegram commands work (/status, /pause, /resume, /force_relist, /screenshot, /del_sold, /logs, /help)
+2. /pause stops scanning loop, browser stays open
+3. /resume resumes scanning
+4. /force_relist bypasses hold window and relists immediately
+5. /screenshot sends current page screenshot
+6. /del_sold navigates to Sold Items, collects credits, clears sold listings
+7. /logs N sends last N lines of app.log
+8. /status shows current bot state
+9. /help shows available commands
+10. Thread-safe communication between Telegram thread and main loop
+
+---
+
 ## Completed Milestones
 - Contact Management System v1.0 - Basic contact CRUD with GUI
 
