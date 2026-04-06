@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Telegram Commands & Sold Cleanup
-status: in_progress
-last_updated: "2026-04-06T00:15:00.000Z"
+milestone: v1.0
+milestone_name: Auto-Relist MVP
+status: unknown
+last_updated: "2026-04-06T18:14:58.391Z"
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 22
-  completed_plans: 21
+  total_plans: 20
+  completed_plans: 19
 ---
 
 # Project State
@@ -110,7 +110,7 @@ Phase 1-5 complete. Phase 6: 1/2 plans done (Plan 00 TDD ✅). Ready for Plan 01
 ### Next Steps:
 - [ ] Phase 6: Telegram Commands & Sold Cleanup (v1.1 milestone)
   - [x] Plan 00: TDD — BotState + TelegramHandler + SoldHandler ✅
-  - [ ] Plan 01: Integration — wire into main.py + human verify
+  - [x] Plan 01: Integration — wire into main.py ✅ (Task 2: human verify pending)
 - [ ] Monitoraggio live delle performance di pre-navigazione
 - [ ] Milestone v1.2: Price monitoring, trading stats, GUI
 
@@ -153,9 +153,9 @@ Phase 1-5 complete. Phase 6: 1/2 plans done (Plan 00 TDD ✅). Ready for Plan 01
 - Session recovery: is_session_expired checks URL+.ut-app+.ea-app, ensure_session full recovery flow
 - Integration error handling: ensure_session before navigation, try/except with reload retry, rate_limiter.wait() at cycle boundaries
 
-Last updated: 2026-04-06T00:15:00Z
+Last updated: 2026-04-06T14:12:00Z
 
-[2026-04-06T00:15:00Z] Phase 6 Plan 00 complete (TDD BotState + TelegramHandler + SoldHandler). 3 commits: BotState (773c681), TelegramHandler (f6a3c2a), SoldHandler (82f6bd6). 53/53 new tests pass. TELEGRAM-01/02/03/04/05/06/07/08/09 satisfied. Auto-fixed error_handler.py (added missing retry_on_timeout, handle_element_not_found). Ready for Plan 01 (integration).
+[2026-04-06T14:12:00Z] Phase 6 Plan 01 complete (Integration). 1 commit: main.py Telegram integration (d2e3ab0). BotState initialized, TelegramHandler started after auth, pause check before ensure_session, force_relist bypass inside hold window, stats update after relist, graceful shutdown on Ctrl+C. SoldHandler wired for /del_sold. 112/112 tests pass. TELEGRAM-10 satisfied. Task 2 (human verify) requires live Telegram testing.
 
 [2026-04-06T00:00:00Z] Phase 6 planning complete: v1.1 milestone — Telegram Commands & Sold Cleanup. 2 plans across 2 waves. Plan 00 (TDD): BotState dataclass with thread safety, TelegramHandler with 8 command handlers, SoldHandler for sold items cleanup. Plan 01 (Integration): wire Telegram thread into main.py, BotState checks for pause/resume/force_relist, human verify of all commands. 10 requirements (TELEGRAM-01 through TELEGRAM-10) all mapped. REQUIREMENTS.md, RESEARCH.md, VALIDATION.md created.
 
