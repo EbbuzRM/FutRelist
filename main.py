@@ -245,19 +245,21 @@ def get_next_golden_hour(now: datetime) -> datetime | None:
 
 
 def is_in_hold_window(now: datetime) -> bool:
-    """True se siamo nella fascia tra una golden e la prossima.
-
-    Hold window: dalle xx:11 alle xx:59 prima della prossima golden.
-    Esempio: alle 16:50 siamo in hold per le 17:10 → NON relistare, aspetta.
-    Alle 17:15 siamo in hold per le 18:10 → NON relistare, aspetta.
+    """True se siamo nella fascia HOLD prima di una golden (dalle xx:55 alle xx:09).
+    
+    Hold window: dai 15 minuti PRIMA del pre-nav (xx:09:30) fino al :10.
+    Esempio per le 17:10: hold dalle 16:55 alle 17:10.
+    In hold window: NON relistare gli scaduti, aspetta la golden.
     """
+    from datetime import timedelta
     next_golden = get_next_golden_hour(now)
     if next_golden is None:
         return False  # Dopo le 18:10, nessuna hold
-    # Siamo in hold se mancano più di 12 minuti alla prossima golden
-    # (cioè NON siamo nei ~10 minuti prima del :10)
-    seconds_until = (next_golden - now).total_seconds()
-    return seconds_until > 720  # più di 12 minuti = siamo in hold
+    # Pre-nav è a :09:30. Hold inizia 15 min prima (= :54:30 dell'ora precedente)
+    pre_nav = next_golden.replace(minute=9, second=30, microsecond=0)
+    hold_start = pre_nav - timedelta(minutes=15)
+    
+    return hold_start <= now < next_golden
 
 
 def main() -> None:
@@ -329,26 +331,29 @@ def main() -> None:
             # --- HYBRID GOLDEN SYNC LOGIC ---
             now = datetime.now()
             next_golden = get_next_golden_hour(now)
-            should_hold = False
-
+            
             if next_golden:
-                # Calcola il momento del pre-nav: 30 secondi prima del :10
                 pre_nav_time = next_golden.replace(minute=9, second=30, microsecond=0)
                 seconds_until_golden = (next_golden - now).total_seconds()
                 seconds_until_pre_nav = (pre_nav_time - now).total_seconds()
-
-                if seconds_until_pre_nav > 0:
-                    # Siamo PRIMA del pre-nav della prossima golden
-                    should_hold = True
+                
+                if seconds_until_pre_nav > 0 and is_in_hold_window(now):
+                    # Siamo in HOLD window: aspetta fino al pre-nav
                     wait_seconds = seconds_until_pre_nav
                     status_console.print(make_status_table("Pausa Sincro Golden", 0, 0, 0))
-                    logger.info(f"[Golden] HOLD: scaduti trovati, ma mancano {int(seconds_until_golden)}s alle {next_golden.strftime('%H:%M')}.")
+                    logger.info(f"[Golden] HOLD: mancano {int(seconds_until_golden)}s alle {next_golden.strftime('%H:%M')}.")
                     logger.info(f"[Golden] Attesa di {int(wait_seconds)}s fino a {pre_nav_time.strftime('%H:%M:%S')} (pre-nav)...")
                     time.sleep(wait_seconds)
                     logger.info("[Golden] PRE-NAV AVVIATA! Navigo ora per arrivare al :10 preciso.")
-                elif seconds_until_golden > 0:
-                    # Siamo tra pre-nav e :10 — naviga subito, siamo in timing
-                    logger.info(f"[Golden] Timing perfetto! Mancano {int(seconds_until_golden)}s al :10, procedo con la navigazione.")
+                elif 0 < seconds_until_pre_nav <= 60:
+                    # Siamo a meno di 1 min dal pre-nav, aspetta
+                    status_console.print(make_status_table("Pausa Sincro Golden", 0, 0, 0))
+                    logger.info(f"[Golden] Quasi orario! Attesa di {int(seconds_until_pre_nav)}s per il pre-nav...")
+                    time.sleep(seconds_until_pre_nav)
+                    logger.info("[Golden] PRE-NAV AVVIATA! Navigo ora per arrivare al :10 preciso.")
+                elif 0 < seconds_until_golden <= 30:
+                    # Siamo nel timing perfetto (tra pre-nav e :10)
+                    logger.info(f"[Golden] Timing perfetto! Mancano {int(seconds_until_golden)}s al :10, procedo.")
 
             if not navigate_with_retry(navigator, page):
                 status_console.print(make_status_table("Errore Navigazione", 0, 0, 0))
@@ -367,24 +372,18 @@ def main() -> None:
             next_wait = 600  # default fallback
 
             if scan.expired_count > 0:
-                # Se siamo in hold window (tra una golden e l'altra), NON relistare
-                now_check = datetime.now()
-                in_hold = is_in_hold_window(now_check) and get_next_golden_hour(now_check) is not None
+                # Se siamo in hold window, NON relistare — aspetta la golden
+                in_hold = is_in_hold_window(datetime.now())
                 if in_hold:
-                    next_g = get_next_golden_hour(now_check)
-                    assert next_g is not None  # in_hold guarantees this
-                    wait_secs = (next_g.replace(minute=9, second=30, microsecond=0) - now_check).total_seconds()
-                    if wait_secs > 0:
-                        fifa_logger.info(f"[HOLD] {scan.expired_count} scaduti ma in hold window. Prossima golden: {next_g.strftime('%H:%M')} tra {int(wait_secs)}s.")
-                        succeeded = 0
-                        failed = 0
-                        next_wait = min(int(wait_secs), 300)  # max 5 min check
-                        fifa_logger.info(f"[HOLD] Relist rimandato alla prossima golden.")
-                    else:
-                        # La wait è negativa o zero, siamo vicini alla golden, procedi
-                        in_hold = False
-
-                if scan.expired_count > 0 and not in_hold:
+                    next_g = get_next_golden_hour(datetime.now())
+                    if next_g:
+                        fifa_logger.info(f"[HOLD] {scan.expired_count} scaduti rilevati ma in HOLD WINDOW.")
+                        fifa_logger.info(f"[HOLD] Prossima golden: {next_g.strftime('%H:%M')}. Relist rimandato.")
+                    succeeded = 0
+                    failed = 0
+                    next_wait = 60  # check ogni minuto fino alla golden
+                else:
+                    # Fuori hold: relista normalmente
                     fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti. Rilisto...")
                     if executor.relist_mode == "all":
                         batch = executor.relist_all(count=scan.expired_count)
@@ -424,17 +423,38 @@ def main() -> None:
                             next_wait = max(min_active - 20, 10)
                             fifa_logger.info(f"Prossimo expiry tra {min_active}s. Wait: {next_wait}s")
                         else:
-                            next_wait = 3600 - 20
-                            fifa_logger.info(f"Tutti relistati. Wait: {next_wait}s")
+                            # Se siamo in hold window, calcola quanto manca alla golden
+                            if is_in_hold_window(now_after):
+                                ng = get_next_golden_hour(now_after)
+                                if ng:
+                                    next_wait = min(60, int((ng.replace(minute=9, second=30) - now_after).total_seconds()))
+                                    fifa_logger.info(f"[HOLD] In hold, check tra {next_wait}s per golden delle {ng.strftime('%H:%M')}.")
+                                else:
+                                    next_wait = 3600 - 20
+                                    fifa_logger.info(f"Tutti relistati. Wait: {next_wait}s")
+                            else:
+                                next_wait = 3600 - 20
+                                fifa_logger.info(f"Tutti relistati. Wait: {next_wait}s")
             else:
                 fifa_logger.info("Nessun oggetto scaduto trovato.")
-                min_active = get_min_active_seconds(scan)
-                if min_active is not None:
-                    next_wait = max(min_active - 20, 10)
-                    fifa_logger.info(f"Prossimo expiry tra {min_active}s. Wait: {next_wait}s")
+                now_ne = datetime.now()
+                # Se in hold window, check frequente per la golden
+                if is_in_hold_window(now_ne):
+                    next_g = get_next_golden_hour(now_ne)
+                    if next_g:
+                        secs = (next_g.replace(minute=9, second=30) - now_ne).total_seconds()
+                        next_wait = min(max(int(secs), 30), 300)  # 30s-5min
+                        fifa_logger.info(f"[HOLD] Nessuno scaduto. Prossima golden: {next_g.strftime('%H:%M')}. Check tra {next_wait}s.")
+                    else:
+                        next_wait = 300
                 else:
-                    next_wait = 600
-                    fifa_logger.info(f"Nessun oggetto in lista. Prossimo check tra {next_wait}s.")
+                    min_active = get_min_active_seconds(scan)
+                    if min_active is not None:
+                        next_wait = max(min_active - 20, 10)
+                        fifa_logger.info(f"Prossimo expiry tra {min_active}s. Wait: {next_wait}s")
+                    else:
+                        next_wait = 600
+                        fifa_logger.info(f"Nessun oggetto in lista. Prossimo check tra {next_wait}s.")
 
             # --- NOTIFICA FINALE UNIFICATA (BATCHING) ---
             if succeeded > 0 or failed > 0:
