@@ -21,6 +21,35 @@ class TransferMarketNavigator:
             max_delay_ms=rate_limiting.get("max_delay_ms", 5000),
         )
 
+    def dismiss_popups(self) -> None:
+        """Chiude eventuali popup/modale EA (es. 'Message from the FC Team') cliccando Continue.
+
+        Cerca tutti i possibili pulsanti di dismissione in inglese e italiano.
+        Non lancia eccezioni: se non trova nulla, prosegue in silenzio.
+        """
+        # Lista di testi che identificano pulsanti di dismissione comune nei popup EA
+        dismiss_labels = ["Continue", "Continua", "Ok", "OK", "Close", "Chiudi", "Got It", "Ho capito"]
+        
+        for label in dismiss_labels:
+            try:
+                btn = self.page.get_by_role("button", name=label)
+                if btn.count() and btn.first.is_visible():
+                    logger.info(f"Popup rilevato. Click su '{label}' per chiuderlo...")
+                    btn.first.click()
+                    self.page.wait_for_timeout(1500)
+                    # Controlla se ci sono ulteriori popup in cascata (es. 1/2, 2/2)
+                    # Riesegue il check fino a 3 volte per smaltire messaggi multipli
+                    for _ in range(2):
+                        btn2 = self.page.get_by_role("button", name=label)
+                        if btn2.count() and btn2.first.is_visible():
+                            btn2.first.click()
+                            self.page.wait_for_timeout(1500)
+                        else:
+                            break
+                    break  # Uscito dal loop label se ha trovato e cliccato
+            except Exception:
+                continue  # Tenta il label successivo
+
     def go_to_transfer_list(self) -> bool:
         """Naviga dalla Home alla vista Transfer List.
 
@@ -29,12 +58,34 @@ class TransferMarketNavigator:
         try:
             logger.info("Inizio navigazione verso Transfer List...")
 
+            # Step 0: Chiudi eventuali popup/annunci EA prima di navigare
+            self.dismiss_popups()
+
+            # Step 0b: Dismiss any blocking modal overlay (e.g. form-modal, view-modal)
+            # These intercept clicks even when no button is visible
+            try:
+                modal = self.page.query_selector('.view-modal-container, .ea-dialog-view, .form-modal')
+                if modal and modal.is_visible():
+                    logger.info("Modale bloccante rilevata. Press Escape per chiuderla...")
+                    self.page.keyboard.press("Escape")
+                    self.page.wait_for_timeout(1000)
+                    # Verify modal is gone
+                    modal2 = self.page.query_selector('.view-modal-container, .ea-dialog-view, .form-modal')
+                    if modal2 and modal2.is_visible():
+                        logger.warning("Modale ancora presente dopo Escape, secondo tentativo...")
+                        self.page.keyboard.press("Escape")
+                        self.page.wait_for_timeout(1000)
+            except Exception as e:
+                logger.debug(f"Check modale fallito: {e}")
+
             # Step 1: Clicca il pulsante Transfers nella sidebar navigation
-            # Usa get_by_role che funziona con la WebApp React
             transfers_btn = self.page.get_by_role("button", name="Transfers")
             if not transfers_btn.count():
-                # Prova con spazio prima (la WebApp mette uno spazio icon)
                 transfers_btn = self.page.get_by_role("button", name=" Transfers")
+            if not transfers_btn.count():
+                transfers_btn = self.page.get_by_role("button", name="Trasferimenti")
+            if not transfers_btn.count():
+                transfers_btn = self.page.get_by_role("button", name=" Trasferimenti")
 
             if not transfers_btn.count():
                 logger.error("Pulsante Transfers non trovato nella sidebar")
@@ -42,7 +93,7 @@ class TransferMarketNavigator:
 
             transfers_btn.first.click()
             logger.info("Clic su Transfers")
-            self.page.wait_for_timeout(3000)
+            self.page.wait_for_timeout(1500)
             self.rate_limiter.wait()
 
             # Step 2: Clicca l'area Transfer List
@@ -53,18 +104,26 @@ class TransferMarketNavigator:
 
             transfer_list_area.first.click()
             logger.info("Clic su Transfer List")
-            self.page.wait_for_timeout(3000)
+            self.page.wait_for_timeout(1500)
             self.rate_limiter.wait()
 
-            # Step 3: Verifica che siamo nella vista Transfer List
-            heading = self.page.get_by_role("heading", name="Transfer List")
-            if heading.count():
+            # Step 3: Verifica che il contenuto della Transfer List sia effettivamente caricato.
+            # Controllare di nuovo l'heading non basta (era già lì dal passo precedente).
+            # Aspettiamo il container o i listing oppure lo stato vuoto.
+            try:
+                self.page.wait_for_selector(
+                    '.ut-transfer-list-view, .listFUTItem, .no-items, .empty-list',
+                    timeout=5000,
+                )
                 logger.info("Transfer List caricata con successo")
                 return True
-
-            logger.warning("Transfer List potrebbe non essere caricata")
-            return True
+            except Exception:
+                # Il selettore non è garantito su tutti i client/versioni EA:
+                # se timeout, tentiamo comunque (potrebbe essere già visibile)
+                logger.warning("Transfer List potrebbe non essere caricata (timeout attesa contenuto)")
+                return True
 
         except Exception as e:
             logger.error(f"Errore navigazione: {e}")
             return False
+

@@ -535,6 +535,13 @@ def main() -> None:
                             next_wait = max(min_active - 20, 10)
                             fifa_logger.info(f"Prossimo expiry tra {format_duration(min_active)}. Wait: {format_duration(next_wait)}")
                         else:
+                            # Nessun timer visibile: potrebbero esserci item in "Processing..."
+                            processing_count = sum(
+                                1 for l in scan.listings
+                                if l.state == ListingState.ACTIVE
+                                and l.time_remaining in ("Processing...", "Elaborazione...")
+                            )
+
                             if is_in_hold_window(now_after):
                                 ng = get_next_golden_hour(now_after)
                                 if ng:
@@ -543,6 +550,10 @@ def main() -> None:
                                 else:
                                     next_wait = 3600 - 20
                                     fifa_logger.info(f"Tutti relistati. Wait: {format_duration(next_wait)}")
+                            elif processing_count > 0:
+                                # Item in processing: polling frequente per catturare le scadenze
+                                next_wait = 30
+                                fifa_logger.info(f"{processing_count} oggetti in Processing... Polling ogni {format_duration(next_wait)}.")
                             else:
                                 next_wait = 3600 - 20
                                 fifa_logger.info(f"Tutti relistati. Wait: {format_duration(next_wait)}")
