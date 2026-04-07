@@ -447,7 +447,7 @@ def main() -> None:
             # --- WAIT FOR EXACT GOLDEN TIME ---
             now = datetime.now()
             next_golden = get_next_golden_hour(now)
-            if next_golden and now < next_golden:
+            if next_golden and is_in_golden_period(now) and now < next_golden:
                 wait_secs = (next_golden - now).total_seconds()
                 logger.info(f"[Golden] Attesa precisa: {format_duration(int(wait_secs))} per le {next_golden.strftime('%H:%M:%S')}.")
                 time.sleep(wait_secs)
@@ -519,15 +519,12 @@ def main() -> None:
                     bot_state.update_stats(cycle=cycle, relisted=succeeded, failed=failed)
 
                     now_after = datetime.now()
-                    next_g_after = get_next_golden_hour(now_after)
                     
-                    # Check if we are in the golden window (:09 to :12 approx)
-                    in_golden_window = False
-                    if next_g_after:
-                        secs = (next_g_after - now_after).total_seconds()
-                        # Window: from 60s before golden to 120s after
-                        if -60 < secs < 120: 
-                            in_golden_window = True
+                    # Check if we are in the golden window (:09 to :12 of hours 16, 17, 18)
+                    in_golden_window = (
+                        now_after.hour in (16, 17, 18)
+                        and 9 <= now_after.minute <= 12
+                    )
                     
                     if in_golden_window:
                         next_wait = random.randint(15, 20)
@@ -553,13 +550,11 @@ def main() -> None:
                 fifa_logger.info("Nessun oggetto scaduto trovato.")
                 now_ne = datetime.now()
                 min_active = get_min_active_seconds(scan)
-                # Check if we are close to a golden hour (:08 to :12)
-                next_g = get_next_golden_hour(now_ne)
-                close_to_golden = False
-                if next_g:
-                    secs = (next_g - now_ne).total_seconds()
-                    if -120 < secs < 300: # From 2 min after prev golden to 5 min before next
-                        close_to_golden = True
+                # Check if we are close to a golden hour (:08 to :12 of hours 16, 17, 18)
+                close_to_golden = (
+                    now_ne.hour in (16, 17, 18)
+                    and 8 <= now_ne.minute <= 12
+                )
                 
                 if close_to_golden:
                     next_wait = 15
