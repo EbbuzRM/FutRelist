@@ -454,10 +454,11 @@ def main() -> None:
                     succeeded = 0
                     failed = 0
                     next_wait = 60  # check ogni minuto fino alla golden
-                elif force_relist:
-                    logger.info("[Telegram] Force relist — bypass hold window")
-                    # proceed with relist (fall through to normal relist logic)
-                    fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti. Rilisto (force)...")
+                else:
+                    # Relist normale (fuori hold) O force relist
+                    if force_relist:
+                        logger.info("[Telegram] Force relist — bypass hold window")
+                    fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti. Rilisto...")
                     if executor.relist_mode == "all":
                         batch = executor.relist_all(count=scan.expired_count)
                         succeeded = batch.succeeded
