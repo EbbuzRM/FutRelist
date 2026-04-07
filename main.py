@@ -239,6 +239,16 @@ def get_min_active_seconds(scan: ListingScanResult) -> int | None:
     return min(active_times) if active_times else None
 
 
+def get_active_with_timer_count(scan: ListingScanResult) -> int:
+    """Conta gli attivi che hanno un timer reale (esclusi quelli con '--')."""
+    return sum(
+        1 for l in scan.listings
+        if l.state == ListingState.ACTIVE
+        and l.time_remaining_seconds is not None
+        and l.time_remaining not in ("---", "Expired", "Scaduto")
+    )
+
+
 def get_next_golden_hour(now: datetime) -> datetime | None:
     """Restituisce il prossimo target :10 (16:10, 17:10, 18:10) come datetime.
 
@@ -453,7 +463,19 @@ def main() -> None:
                         fifa_logger.info(f"[HOLD] Prossima golden: {next_g.strftime('%H:%M')}. Relist rimandato.")
                     succeeded = 0
                     failed = 0
-                    next_wait = 60  # check ogni minuto fino alla golden
+                    next_wait = 60
+                elif get_active_with_timer_count(scan) > 0 and not force_relist:
+                    fifa_logger.info(f"[WAIT ALL EXPIRED] Ci sono ancora {scan.active_count} oggetti attivi o in processing. Aspetto che tutti siano scaduti...")
+                    succeeded = 0
+                    failed = 0
+                    min_active = get_min_active_seconds(scan)
+                    if min_active is not None:
+                        next_wait = max(min_active - 10, 15)  # tempo minimo rimanente
+                        fifa_logger.info(f"Prossimo expiry stimato fra {format_duration(min_active)}. Wait: {format_duration(next_wait)}")
+                    else:
+                        # Se non c'è un ETA degli oggetti attivi, sono verosimilmente in "processing"
+                        next_wait = 30
+                        fifa_logger.info(f"Oggetti in processing/scadenza imminente. Wait: {format_duration(next_wait)}")
                 else:
                     # Relist normale (fuori hold) O force relist
                     if force_relist:
