@@ -411,7 +411,7 @@ def main() -> None:
                     # HOLD: aspetta senza navigare fino al pre-nav
                     # Ma fai check della sessione ogni 5 minuti
                     while seconds_until_pre_nav > 0:
-                        wait_chunk = min(300, int(seconds_until_pre_nav))  # max 5 min per chunk
+                        wait_chunk = max(1, min(300, int(seconds_until_pre_nav)))  # max 5 min, min 1s per chunk
                         status_console.print(make_status_table("Pausa Sincro Golden", 0, 0, 0))
                         logger.info(f"[Golden] HOLD: mancano {format_duration(int(seconds_until_golden))} alle {next_golden.strftime('%H:%M')}. Check sessione tra {format_duration(wait_chunk)}.")
                         time.sleep(wait_chunk)
