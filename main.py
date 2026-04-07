@@ -444,6 +444,14 @@ def main() -> None:
                 rate_limiter.wait()
                 continue
 
+            # --- WAIT FOR EXACT GOLDEN TIME ---
+            now = datetime.now()
+            next_golden = get_next_golden_hour(now)
+            if next_golden and now < next_golden:
+                wait_secs = (next_golden - now).total_seconds()
+                logger.info(f"[Golden] Attesa precisa: {format_duration(int(wait_secs))} per le {next_golden.strftime('%H:%M:%S')}.")
+                time.sleep(wait_secs)
+
             fifa_logger.info(f"--- [SCANSIONE IBRIDA] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
             scan = detector.scan_listings()
 
@@ -512,8 +520,16 @@ def main() -> None:
 
                     now_after = datetime.now()
                     next_g_after = get_next_golden_hour(now_after)
-                    if next_g_after and now_after.minute >= 10 and now_after.minute < 15:
-                        # Appena dopo una golden, polling rapido per ritardatari
+                    
+                    # Check if we are in the golden window (:09 to :12 approx)
+                    in_golden_window = False
+                    if next_g_after:
+                        secs = (next_g_after - now_after).total_seconds()
+                        # Window: from 60s before golden to 120s after
+                        if -60 < secs < 120: 
+                            in_golden_window = True
+                    
+                    if in_golden_window:
                         next_wait = random.randint(15, 20)
                         fifa_logger.info(f"Golden Hour: polling rapido per ritardatari in {format_duration(next_wait)}.")
                     else:
@@ -522,7 +538,6 @@ def main() -> None:
                             next_wait = max(min_active - 20, 10)
                             fifa_logger.info(f"Prossimo expiry tra {format_duration(min_active)}. Wait: {format_duration(next_wait)}")
                         else:
-                            # Se siamo in hold window, calcola quanto manca alla golden
                             if is_in_hold_window(now_after):
                                 ng = get_next_golden_hour(now_after)
                                 if ng:
@@ -537,23 +552,32 @@ def main() -> None:
             else:
                 fifa_logger.info("Nessun oggetto scaduto trovato.")
                 now_ne = datetime.now()
-                # Se in hold window, check frequente per la golden
-                if is_in_hold_window(now_ne):
+                min_active = get_min_active_seconds(scan)
+                # Check if we are close to a golden hour (:08 to :12)
+                next_g = get_next_golden_hour(now_ne)
+                close_to_golden = False
+                if next_g:
+                    secs = (next_g - now_ne).total_seconds()
+                    if -120 < secs < 300: # From 2 min after prev golden to 5 min before next
+                        close_to_golden = True
+                
+                if close_to_golden:
+                    next_wait = 15
+                    fifa_logger.info("Prossimità Golden: polling rapido.")
+                elif is_in_hold_window(now_ne):
                     next_g = get_next_golden_hour(now_ne)
                     if next_g:
                         secs = (next_g.replace(minute=9, second=30) - now_ne).total_seconds()
-                        next_wait = min(max(int(secs), 30), 300)  # 30s-5min
+                        next_wait = min(max(int(secs), 30), 300)
                         fifa_logger.info(f"[HOLD] Nessuno scaduto. Prossima golden: {next_g.strftime('%H:%M')}. Check tra {format_duration(next_wait)}.")
                     else:
                         next_wait = 300
+                elif min_active is not None:
+                    next_wait = max(min_active - 20, 10)
+                    fifa_logger.info(f"Prossimo expiry tra {format_duration(min_active)}. Wait: {format_duration(next_wait)}")
                 else:
-                    min_active = get_min_active_seconds(scan)
-                    if min_active is not None:
-                        next_wait = max(min_active - 20, 10)
-                        fifa_logger.info(f"Prossimo expiry tra {format_duration(min_active)}. Wait: {format_duration(next_wait)}")
-                    else:
-                        next_wait = 600
-                        fifa_logger.info(f"Nessun oggetto in lista. Prossimo check tra {format_duration(next_wait)}.")
+                    next_wait = 600
+                    fifa_logger.info(f"Nessun oggetto in lista. Prossimo check tra {format_duration(next_wait)}.")
 
             # --- NOTIFICA FINALE UNIFICATA (BATCHING) ---
             if succeeded > 0 or failed > 0:
