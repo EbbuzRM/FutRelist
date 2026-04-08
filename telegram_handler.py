@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from bot_state import BotState
+from models.sold_result import SoldCreditsResult
 
 logger = logging.getLogger(__name__)
 
@@ -229,20 +230,33 @@ class TelegramHandler:
         return "📸 Screenshot richiesto (in arrivo...)"
 
     def _cmd_del_sold(self, args: list[str]) -> str:
-        """Cancella gli oggetti venduti e raccoglie i crediti (richiede page)."""
+        """Cancella gli oggetti venduti e raccoglie i crediti (richiede page).
+
+        Instead of executing directly (which causes thread issues),
+        queue the command to be executed in the main thread.
+        """
         if self.page is None:
             return "⚠️ Cleanup venduti non disponibile: browser non connesso"
         if self._sold_handler is None:
             return "⚠️ Sold handler non configurato"
+
+        # Queue the command to be executed in main thread
+        self.bot_state.queue_command(
+            "del_sold",
+            callback=self._execute_del_sold,
+        )
+        return "⏳ Comando in coda: /del_sold sarà eseguito al prossimo ciclo del bot..."
+
+    def _execute_del_sold(self) -> SoldCreditsResult:
+        """Esegue il del_sold nel contesto del main thread."""
+        if self._sold_handler is None:
+            return SoldCreditsResult(success=False, error="Sold handler not configured")
         try:
             result = self._sold_handler.process_sold_items()
-            if result.success:
-                return f"🧹 Pulizia completata: {result.items_cleared} oggetti, {result.total_credits:,} crediti raccolti"
-            else:
-                return f"❌ Pulizia fallita: {result.error}"
+            return result
         except Exception as e:
             logger.error(f"Errore durante del_sold: {e}")
-            return f"❌ Errore durante la pulizia: {e}"
+            return SoldCreditsResult(success=False, error=str(e))
 
     def _cmd_logs(self, args: list[str]) -> str:
         """Restituisce le ultime N righe del log (default: 20)."""

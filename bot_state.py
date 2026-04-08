@@ -8,7 +8,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
 
 
 @dataclass
@@ -31,6 +31,9 @@ class BotState:
     last_failed: int = field(default=0)
     last_scan_time: datetime | None = field(default=None)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    # Command queue for thread-safe operations
+    _pending_commands: list[dict] = field(default_factory=list, repr=False)
 
     # --- Pause / Resume ---
 
@@ -60,6 +63,29 @@ class BotState:
             value = self._force_relist
             self._force_relist = False
             return value
+
+    # --- Command Queue (for thread-safe Playwright operations) ---
+
+    def queue_command(self, command_type: str, callback: Callable = None, **kwargs) -> None:
+        """Aggiunge un comando alla coda da eseguire nel main thread."""
+        with self._lock:
+            self._pending_commands.append({
+                "type": command_type,
+                "callback": callback,
+                "kwargs": kwargs,
+            })
+
+    def get_next_command(self) -> dict | None:
+        """Estrae il prossimo comando dalla coda (thread-safe)."""
+        with self._lock:
+            if self._pending_commands:
+                return self._pending_commands.pop(0)
+            return None
+
+    def has_commands(self) -> bool:
+        """Controlla se ci sono comandi in coda."""
+        with self._lock:
+            return len(self._pending_commands) > 0
 
     # --- Aggiornamento statistiche ---
 

@@ -385,6 +385,28 @@ def main() -> None:
                 time.sleep(10)  # check every 10s if resumed
                 continue
 
+            # Process queued Telegram commands (e.g., /del_sold)
+            while bot_state.has_commands():
+                cmd = bot_state.get_next_command()
+                if cmd:
+                    cmd_type = cmd.get("type")
+                    callback = cmd.get("callback")
+                    if cmd_type == "del_sold" and callback:
+                        logger.info("[Telegram] Eseguo comando /del_sold in coda...")
+                        result = callback()
+                        if result.success:
+                            from notifier import send_telegram_alert
+                            send_telegram_alert(
+                                app_config.notifications,
+                                f"🧹 Pulizia completata: {result.items_cleared} oggetti, {result.total_credits:,} crediti raccolti"
+                            )
+                        else:
+                            from notifier import send_telegram_alert
+                            send_telegram_alert(
+                                app_config.notifications,
+                                f"❌ Pulizia fallita: {result.error}"
+                            )
+
             ensure_session(page, auth, controller, get_credentials)
 
             # Gestione sessione PS5/Console attiva nel loop
