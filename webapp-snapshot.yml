@@ -1,9 +1,0 @@
-- generic [active] [ref=e1]:
-  - generic [ref=e3]:
-    - link "Back to FIFA" [ref=e4] [cursor=pointer]:
-      - /url: https://www.ea.com/fifa/ultimate-team/features
-    - link [ref=e5] [cursor=pointer]:
-      - /url: https://www.ea.com
-  - main [ref=e2]:
-    - paragraph [ref=e9]: The use of certain player names and likenesses is done so on a collective basis and is authorized as such by FIFPRO Commercial Enterprises BV.
-  - text: 
