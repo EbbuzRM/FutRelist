@@ -99,46 +99,62 @@ class SoldHandler:
             )
 
     def _navigate_to_sold_items(self) -> bool:
-        """Naviga: Home → Transfers → Sold Items.
+        """Naviga alla pagina Sold Items.
 
-        Segue il pattern di TransferMarketNavigator.go_to_transfer_list().
+        Se siamo già nella pagina Transfers, clicca direttamente sul tab Sold Items.
+        Altrimenti naviga dalla home.
+
         Returns True se la navigazione ha successo.
         """
         try:
             logger.info("Navigazione verso Sold Items...")
 
-            # Step 1: Clicca Transfers nella sidebar
-            transfers_btn = self._find_button("Transfers", "Trasferimenti")
-            if not transfers_btn:
-                logger.error("Pulsante Transfers non trovato")
-                return False
+            # Step 1: Verifica se siamo già nella pagina Transfers (sidebar)
+            transfers_btn = self.page.get_by_role("button", name="Transfers")
+            if not transfers_btn.count():
+                transfers_btn = self.page.get_by_role("button", name=" Transfers")
+            if not transfers_btn.count():
+                transfers_btn = self.page.get_by_role("button", name="Trasferimenti")
+            if not transfers_btn.count():
+                transfers_btn = self.page.get_by_role("button", name=" Trasferimenti")
 
-            transfers_btn.click()
-            logger.info("Clic su Transfers")
-            self.page.wait_for_timeout(1500)
-            self.rate_limiter.wait()
+            if transfers_btn.count() and transfers_btn.first.is_visible():
+                transfers_btn.first.click()
+                logger.info("Clic su Transfers (sidebar)")
+                self.page.wait_for_timeout(1500)
+                self.rate_limiter.wait()
 
-            # Step 2: Clicca Sold Items tab
-            sold_tab = self._find_button(
-                SELECTORS["sold_items_tab"],
-                SELECTORS["sold_items_tab_it"],
-            )
-            if not sold_tab:
-                # Prova come heading (alcune versioni EA usano heading clickable)
-                sold_tab = self._find_heading(SELECTORS["sold_items_tab"])
-                if not sold_tab:
-                    sold_tab = self._find_heading(SELECTORS["sold_items_tab_it"])
+            # Step 2: Cerca e clicca il tab/heading Sold Items
+            # Nella UI EA, Sold Items può essere un heading o un tab nella stessa pagina Transfers
+            sold_tab = self.page.get_by_role("heading", name="Sold Items")
+            if not sold_tab.count():
+                sold_tab = self.page.get_by_role("heading", name="Oggetti venduti")
+            if not sold_tab.count():
+                # Prova come link/button nella sidebar o tabs
+                sold_tab = self.page.get_by_role("button", name="Sold Items")
+            if not sold_tab.count():
+                sold_tab = self.page.get_by_role("button", name="Oggetti venduti")
 
-            if not sold_tab:
+            if not sold_tab.count():
                 logger.error("Tab Sold Items non trovato")
                 return False
 
-            sold_tab.click()
+            sold_tab.first.click()
             logger.info("Clic su Sold Items")
             self.page.wait_for_timeout(1500)
             self.rate_limiter.wait()
 
-            return True
+            # Step 3: Verifica che siamo nella pagina Sold Items
+            try:
+                self.page.wait_for_selector(
+                    '.ut-transfer-list-view, .listFUTItem, .no-items, .empty-list, [class*="sold"]',
+                    timeout=5000,
+                )
+                logger.info("Sold Items caricata con successo")
+                return True
+            except Exception:
+                logger.warning("Sold Items potrebbe non essere caricata correttamente")
+                return True
 
         except Exception as e:
             logger.error(f"Errore navigazione Sold Items: {e}")
@@ -183,15 +199,19 @@ class SoldHandler:
         Returns True se il click è avvenuto con successo.
         """
         try:
-            clear_btn = self._find_button(
-                SELECTORS["clear_sold_items"],
-                SELECTORS["clear_sold_items_it"],
-            )
-            if not clear_btn:
+            # Prova prima con get_by_role (più robusto)
+            clear_btn = self.page.get_by_role("button", name="Clear Sold Items")
+            if not clear_btn.count():
+                clear_btn = self.page.get_by_role("button", name="Cancella oggetti venduti")
+            if not clear_btn.count():
+                # Prova con selector CSS generico
+                clear_btn = self.page.locator('button:has-text("Clear Sold"), button:has-text("Cancella")')
+            
+            if not clear_btn.count():
                 logger.warning("Pulsante Clear Sold Items non trovato")
                 return False
 
-            clear_btn.click()
+            clear_btn.first.click()
             logger.info("Clic su Clear Sold Items")
             self.rate_limiter.wait()
 
@@ -224,29 +244,6 @@ class SoldHandler:
             pass
 
     # --- Helper methods ---
-
-    def _find_button(self, name_en: str, name_it: str = "") -> Any | None:
-        """Cerca un pulsante per nome (inglese e italiano)."""
-        for name in [name_en, name_it]:
-            if not name:
-                continue
-            try:
-                btn = self.page.get_by_role("button", name=name)
-                if btn.count() and btn.first.is_visible():
-                    return btn.first
-            except Exception:
-                continue
-        return None
-
-    def _find_heading(self, name: str) -> Any | None:
-        """Cerca un heading per nome."""
-        try:
-            heading = self.page.get_by_role("heading", name=name)
-            if heading.count() and heading.first.is_visible():
-                return heading.first
-        except Exception:
-            pass
-        return None
 
     @staticmethod
     def _parse_coin_value(text: str) -> int | None:
