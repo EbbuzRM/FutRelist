@@ -99,17 +99,16 @@ class SoldHandler:
             )
 
     def _navigate_to_sold_items(self) -> bool:
-        """Naviga alla pagina Sold Items.
+        """Naviga alla sezione Sold Items nella Transfer List.
 
-        Se siamo già nella pagina Transfers, clicca direttamente sul tab Sold Items.
-        Altrimenti naviga dalla home.
+        Percorso: Transfers → Transfer List → (ella pagina stessa) Sold section
 
         Returns True se la navigazione ha successo.
         """
         try:
             logger.info("Navigazione verso Sold Items...")
 
-            # Step 1: Verifica se siamo già nella pagina Transfers (sidebar)
+            # Step 1: Clicca Transfers nella sidebar
             transfers_btn = self.page.get_by_role("button", name="Transfers")
             if not transfers_btn.count():
                 transfers_btn = self.page.get_by_role("button", name=" Transfers")
@@ -118,43 +117,54 @@ class SoldHandler:
             if not transfers_btn.count():
                 transfers_btn = self.page.get_by_role("button", name=" Trasferimenti")
 
-            if transfers_btn.count() and transfers_btn.first.is_visible():
-                transfers_btn.first.click()
-                logger.info("Clic su Transfers (sidebar)")
-                self.page.wait_for_timeout(1500)
-                self.rate_limiter.wait()
-
-            # Step 2: Cerca e clicca il tab/heading Sold Items
-            # Nella UI EA, Sold Items può essere un heading o un tab nella stessa pagina Transfers
-            sold_tab = self.page.get_by_role("heading", name="Sold Items")
-            if not sold_tab.count():
-                sold_tab = self.page.get_by_role("heading", name="Oggetti venduti")
-            if not sold_tab.count():
-                # Prova come link/button nella sidebar o tabs
-                sold_tab = self.page.get_by_role("button", name="Sold Items")
-            if not sold_tab.count():
-                sold_tab = self.page.get_by_role("button", name="Oggetti venduti")
-
-            if not sold_tab.count():
-                logger.error("Tab Sold Items non trovato")
+            if not transfers_btn.count():
+                logger.error("Pulsante Transfers non trovato")
                 return False
 
-            sold_tab.first.click()
-            logger.info("Clic su Sold Items")
+            transfers_btn.first.click()
+            logger.info("Clic su Transfers (sidebar)")
             self.page.wait_for_timeout(1500)
             self.rate_limiter.wait()
 
-            # Step 3: Verifica che siamo nella pagina Sold Items
-            try:
-                self.page.wait_for_selector(
-                    '.ut-transfer-list-view, .listFUTItem, .no-items, .empty-list, [class*="sold"]',
-                    timeout=5000,
-                )
-                logger.info("Sold Items caricata con successo")
-                return True
-            except Exception:
-                logger.warning("Sold Items potrebbe non essere caricata correttamente")
-                return True
+            # Step 2: Clicca Transfer List heading
+            transfer_list = self.page.get_by_role("heading", name="Transfer List")
+            if not transfer_list.count():
+                transfer_list = self.page.get_by_role("heading", name="Lista trasferimenti")
+
+            if not transfer_list.count():
+                logger.error("Transfer List non trovato")
+                return False
+
+            transfer_list.first.click()
+            logger.info("Clic su Transfer List")
+            self.page.wait_for_timeout(1500)
+            self.rate_limiter.wait()
+
+            # Step 3: Nella Transfer List, cerca e clicca "Sold" tab/heading
+            sold_tab = self.page.get_by_role("heading", name="Sold")
+            if not sold_tab.count():
+                sold_tab = self.page.get_by_role("heading", name="Venduti")
+            if not sold_tab.count():
+                sold_tab = self.page.get_by_role("heading", name="Sold Items")
+            if not sold_tab.count():
+                sold_tab = self.page.get_by_role("heading", name="Oggetti venduti")
+            if not sold_tab.count():
+                # Prova come button/tab
+                sold_tab = self.page.get_by_role("button", name="Sold")
+            if not sold_tab.count():
+                sold_tab = self.page.get_by_role("button", name="Venduti")
+
+            if not sold_tab.count():
+                logger.error("Tab Sold non trovato nella Transfer List")
+                return False
+
+            sold_tab.first.click()
+            logger.info("Clic su Sold")
+            self.page.wait_for_timeout(1500)
+            self.rate_limiter.wait()
+
+            logger.info("Navigazione a Sold completata")
+            return True
 
         except Exception as e:
             logger.error(f"Errore navigazione Sold Items: {e}")
