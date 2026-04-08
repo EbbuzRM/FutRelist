@@ -8,14 +8,15 @@ from browser.rate_limiter import RateLimiter
 logger = logging.getLogger(__name__)
 
 SELECTORS = {
-    "relist_button": 'button:has-text("Relist"), .relist-btn',
-    "relist_all_button": 'button:has-text("Re-list All"), button:has-text("Relist All"), .relist-all-btn',
-    "confirm_yes": 'button:has-text("Yes"), button:has-text("Sì"), .btn-standard.call-to-action',
+    "relist_button": 'button:has-text("Relist"), button:has-text("Rilista"), .relist-btn',
+    "relist_all_button": 'button:has-text("Re-list All"), button:has-text("Relist All"), button:has-text("Rilista tutto"), button:has-text("Rilista Tutto"), .relist-all-btn',
+    "confirm_yes": 'button:has-text("Yes"), button:has-text("Sì"), button:has-text("Si"), .btn-standard.call-to-action',
     "duration_button": 'button:has-text("{duration}"), .duration-option:has-text("{duration}")',
     "price_input": 'input[type="number"], .price-input, .ut-price-input input',
     "confirm_button": 'button:has-text("Confirm"), button:has-text("Ok"), .btn-action',
-    "listing_items": '.listFUTItem.player',
-    "success_indicator": '.notification-success, .toast-success',
+    "listing_items": '.listFUTItem',
+    "error_banner": '[class*="error"], [class*="Error"], .ut-messaging-viewError, .error-message, .message--error',
+    "error_text": 'could not be re-listed,could not be listed,error,failed',
 }
 
 
@@ -38,9 +39,6 @@ class RelistExecutor:
         self.min_price = defaults.get("min_price", 200)
         self.max_price = defaults.get("max_price", 15_000_000)
 
-    def handle_dialog(self, dialog):
-        dialog.accept()
-
     def _click_relist_button(self, listing_index: int) -> None:
         listing_el = self.page.locator(SELECTORS["listing_items"]).nth(listing_index)
         listing_el.locator(SELECTORS["relist_button"]).click()
@@ -48,14 +46,14 @@ class RelistExecutor:
 
     def _select_duration_if_prompted(self) -> None:
         selector = SELECTORS["duration_button"].format(duration=self.duration)
-        duration_btn = self.page.query_selector(selector)
-        if duration_btn:
+        duration_btn = self.page.locator(selector).first
+        if duration_btn.is_visible():
             duration_btn.click()
             self.page.wait_for_timeout(1000)
 
     def _fill_price_if_present(self, current_price: int) -> int | None:
-        price_input = self.page.query_selector(SELECTORS["price_input"])
-        if not price_input or not current_price:
+        price_input = self.page.locator(SELECTORS["price_input"]).first
+        if not price_input.is_visible() or not current_price:
             return None
 
         new_price = calculate_adjusted_price(
@@ -64,8 +62,8 @@ class RelistExecutor:
         )
         price_input.fill(str(new_price))
 
-        confirm_btn = self.page.query_selector(SELECTORS["confirm_button"])
-        if confirm_btn:
+        confirm_btn = self.page.locator(SELECTORS["confirm_button"]).first
+        if confirm_btn.is_visible():
             confirm_btn.click()
             self.page.wait_for_timeout(1500)
 
@@ -74,7 +72,8 @@ class RelistExecutor:
     def relist_single(self, listing) -> RelistResult:
         """Rilista un singolo listing scaduto. Ritorna RelistResult con esito."""
         try:
-            self.page.once("dialog", self.handle_dialog)
+            # Nota: EA usa modal HTML, non browser dialog nativi.
+            # page.once("dialog") non viene mai consumato e accumulerebbe handler stale.
             self._click_relist_button(listing.index)
             self._select_duration_if_prompted()
             new_price = self._fill_price_if_present(listing.current_price)
@@ -92,52 +91,112 @@ class RelistExecutor:
                 success=False, error=str(e),
             )
 
-    def relist_expired(self, expired_listings) -> RelistBatchResult:
-        """Rilista tutti i listing scaduti. Ritorna RelistBatchResult aggregato."""
-        if not expired_listings:
-            return RelistBatchResult.from_results([])
-
-        results = [self.relist_single(l) for l in expired_listings]
-        batch = RelistBatchResult.from_results(results)
-        logger.info(f"Rilist: {batch.succeeded}/{batch.total} successi ({batch.success_rate:.1f}%)")
-        return batch
-
-    def relist_all(self) -> RelistBatchResult:
-        """Clicca 'Re-list All' e auto-accetta il dialog di conferma.
-
-        Ritorna RelistBatchResult con 1 risultato (success/fail).
-        """
+    def relist_all(self, count: int = 1) -> RelistBatchResult:
+        """Clicca 'Re-list All' e auto-accetta la modale di conferma HTML."""
         try:
-            self.page.once("dialog", self.handle_dialog)
-
-            relist_all_btn = self.page.query_selector(SELECTORS["relist_all_button"])
-            if not relist_all_btn:
-                logger.info("Bottone 'Re-list All' non trovato (nessun listing?)")
+            # Usiamo locator per resilienza al DOM
+            relist_all_btn = self.page.locator(SELECTORS["relist_all_button"]).first
+            
+            if not relist_all_btn.is_visible():
+                logger.info("Bottone 'Re-list All' non visibile (nessun listing scaduto?)")
                 return RelistBatchResult.from_results([])
 
+            # Il click su locator ha auto-retry se l'elemento si distacca o è coperto momentaneamente
             relist_all_btn.click()
-            self.page.wait_for_timeout(3000)
+            logger.info(f"Cliccato 'Re-list All' per {count} oggetti, attesa modale di conferma...")
 
-            # Il dialog di conferma viene gestito da handle_dialog (page.once)
-            # Aspetta che la pagina si aggiorni
-            self.page.wait_for_timeout(2000)
+            # Attende e clicca il 'Yes' della modale
+            try:
+                confirm_btn = self.page.locator(SELECTORS["confirm_yes"]).first
+                # Aspettiamo esplicitamente che sia visibile per evitare race conditions
+                confirm_btn.wait_for(state="visible", timeout=5000)
+                confirm_btn.click()
+                logger.info("Modale di conferma accettata (Yes cliccato)")
+            except Exception as e:
+                logger.debug(f"Nessuna modale di conferma cliccata o errore: {e}")
+
+            # Attesa breve per stabilizzazione UI dopo chiusura modale,
+            # poi rate_limiter aggiunge il delay anti-bot configurato
+            self.page.wait_for_timeout(1500)
             self.rate_limiter.wait()
 
-            logger.info("Re-list All completato")
-            return RelistBatchResult.from_results([
+            # Crea una lista di risultati fittizia per indicare il successo dell'operazione di massa
+            results = [
                 RelistResult(
-                    listing_index=-1, player_name="ALL",
+                    listing_index=-1, player_name=f"ITEM {i+1}",
                     old_price=None, new_price=None, success=True,
-                )
-            ])
+                ) for i in range(count)
+            ]
+            
+            # Attesa per stabilizzazione UI
+            self.page.wait_for_timeout(2000)
+
+            # Verifica errori post-relist
+            relist_error = self._check_relist_errors()
+            if relist_error:
+                logger.error(f"Errore post-relist rilevato: {relist_error}")
+                batch_result = RelistBatchResult.from_results([
+                    RelistResult(
+                        listing_index=-1, player_name="ALL",
+                        old_price=None, new_price=None, success=False, error=relist_error,
+                    )
+                ])
+                batch_result.relist_error = relist_error
+                return batch_result
+
+            logger.info(f"Re-list All completato per {count} oggetti")
+            batch_result = RelistBatchResult.from_results(results)
+            batch_result.relist_error = None
+            return batch_result
         except Exception as e:
             logger.error(f"Errore Re-list All: {e}")
-            return RelistBatchResult.from_results([
+            error_msg = str(e)
+            batch_result = RelistBatchResult.from_results([
                 RelistResult(
                     listing_index=-1, player_name="ALL",
-                    old_price=None, new_price=None, success=False, error=str(e),
+                    old_price=None, new_price=None, success=False, error=error_msg,
                 )
             ])
+            batch_result.relist_error = error_msg
+            return batch_result
+
+    def _check_relist_errors(self) -> str | None:
+        """Controlla errori banner post-relist nel DOM. Ritorna messaggio errore se presente."""
+        try:
+            error_selectors = [
+                SELECTORS["error_banner"],
+                '.ut-messaging-view[class*="error"]',
+                '.message-container',
+                '[data-ea-error="true"]',
+            ]
+            for sel in error_selectors:
+                try:
+                    el = self.page.locator(sel).first
+                    if el.is_visible(timeout=2000):
+                        text = el.inner_text().lower()
+                        if any(err in text for err in SELECTORS["error_text"].split(',')):
+                            return text.strip()[:100]
+                except Exception:
+                    continue
+            return None
+        except Exception:
+            return None
+
+    def check_session_valid(self) -> bool:
+        """Verifica se la sessione è ancora valida dopo relist."""
+        try:
+            from browser.auth import AuthManager
+            auth = AuthManager(self.config)
+            if not auth.is_logged_in(self.page, timeout_ms=5000):
+                logger.warning("Sessione non più valida rilevata post-relist")
+                return False
+            if auth.is_console_session_active(self.page):
+                logger.warning("Sessione console attiva rilevata post-relist")
+                return False
+            return True
+        except Exception as e:
+            logger.debug(f"Errore check session: {e}")
+            return True
 
 
 def calculate_adjusted_price(
