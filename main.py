@@ -424,7 +424,7 @@ def _compute_next_wait(
 ) -> int:
     """Calcola il wait ottimale dopo un relist riuscito."""
     if is_in_golden_window(now):
-        wait = random.randint(15, 20)
+        wait = 10
         fifa_logger.info(f"Golden Hour: polling rapido per ritardatari in {format_duration(wait)}.")
         return wait
 
