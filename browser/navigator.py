@@ -96,14 +96,50 @@ class TransferMarketNavigator:
             self.page.wait_for_timeout(1500)
             self.rate_limiter.wait()
 
+            # Step 1b: Dismiss any popup that appeared after clicking Transfers
+            # EA often shows popups (announcements, notifications) after navigation
+            self.dismiss_popups()
+            # Also try Escape to dismiss any blocking modal overlay
+            try:
+                modal = self.page.query_selector('.view-modal-container, .ea-dialog-view, .form-modal')
+                if modal and modal.is_visible():
+                    logger.info("Modale EA apparso dopo click Transfers. Chiudo con Escape...")
+                    self.page.keyboard.press("Escape")
+                    self.page.wait_for_timeout(1000)
+                    # Retry dismiss in case Escape revealed a button
+                    self.dismiss_popups()
+            except Exception:
+                pass
+
             # Step 2: Clicca l'area Transfer List
-            transfer_list_area = self.page.get_by_role("heading", name="Transfer List")
-            if not transfer_list_area.count():
-                logger.error("Transfer List non trovato")
+            # Retry up to 3 times if popup intercepts the click
+            transfer_list_clicked = False
+            for attempt in range(3):
+                transfer_list_area = self.page.get_by_role("heading", name="Transfer List")
+                if not transfer_list_area.count():
+                    logger.error("Transfer List non trovato")
+                    return False
+
+                try:
+                    transfer_list_area.first.click(timeout=10000)
+                    transfer_list_clicked = True
+                    logger.info("Clic su Transfer List")
+                    break
+                except Exception as click_err:
+                    if "intercepts pointer events" in str(click_err) or "timeout" in str(click_err).lower():
+                        logger.warning(f"Click Transfer List bloccato (tentativo {attempt+1}/3), dismiss popup...")
+                        self.dismiss_popups()
+                        # Try Escape for stubborn modals
+                        self.page.keyboard.press("Escape")
+                        self.page.wait_for_timeout(1000)
+                        self.dismiss_popups()
+                    else:
+                        raise
+
+            if not transfer_list_clicked:
+                logger.error("Impossibile cliccare Transfer List dopo 3 tentativi")
                 return False
 
-            transfer_list_area.first.click()
-            logger.info("Clic su Transfer List")
             self.page.wait_for_timeout(1500)
             self.rate_limiter.wait()
 
