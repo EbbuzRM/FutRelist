@@ -39,15 +39,15 @@
 
 ---
 
-### Phase 3: Auto-Relist Core
+### Phase 3: Auto-Relist Core ✅ COMPLETED (3/3 plans)
 **Goal:** Execute relisting actions on expired players
 **Requirements:** RELIST-01, RELIST-02, RELIST-03, RELIST-04
-**Plans:** 3 plans
+**Completed:** 2026-04-08
 
 Plans:
 - [x] 03-00-PLAN.md — TDD: Price adjustment logic + RelistResult model (Wave 1) ✅ 2026-03-23
 - [x] 03-01-PLAN.md — RelistExecutor class with dialog handling (Wave 2) ✅ 2026-03-23
-- [ ] 03-02-PLAN.md — Integration: wire relist into main.py (Wave 3)
+- [x] 03-02-PLAN.md — Integration: wire relist into main.py (Wave 3) ✅ 2026-04-08
 
 **Success Criteria:**
 1. System clicks relist on expired players
@@ -75,23 +75,16 @@ Plans:
 
 ---
 
-### Phase 5: Logging & Error Handling (1/4 plans complete)
+### Phase 5: Logging & Error Handling ✅ COMPLETED (4/4 plans)
 **Goal:** Robust operation with logging and error recovery
 **Requirements:** LOG-01, LOG-02, LOG-03, LOG-04, ERROR-01, ERROR-02, ERROR-03, ERROR-04
-
-**Progress:**
-| Plan | Name | Status | Commit |
-|------|------|--------|--------|
-| 00 | TDD: ActionLogEntry + RateLimiter + ErrorHandler | ✅ Complete | cd02400 |
-| 01 | Logging integration: JsonFormatter + history CLI | ⬜ Pending | — |
-| 02 | Error recovery: rate limiter + session check + retry | ⬜ Pending | — |
-| 03 | Console status with rich Live + final integration | ⬜ Pending | — |
+**Completed:** 2026-03-23
 
 Plans:
 - [x] 05-00-PLAN.md — TDD: ActionLogEntry + RateLimiter + ErrorHandler (Wave 1) ✅ 2026-03-23
-- [ ] 05-01-PLAN.md — Logging integration: JsonFormatter + history CLI (Wave 2)
-- [ ] 05-02-PLAN.md — Error recovery: wire rate limiter + session check + retry (Wave 2)
-- [ ] 05-03-PLAN.md — Console status with rich Live + final integration (Wave 3)
+- [x] 05-01-PLAN.md — Logging integration: JsonFormatter + history CLI (Wave 2) ✅ 2026-03-23
+- [x] 05-02-PLAN.md — Error recovery: wire rate limiter + session check + retry (Wave 2) ✅ 2026-03-23
+- [x] 05-03-PLAN.md — Console status with rich Live + final integration (Wave 3) ✅ 2026-03-23
 
 **Success Criteria:**
 1. All relisting actions logged with timestamps
@@ -102,15 +95,14 @@ Plans:
 
 ---
 
----
-
-### Phase 6: Telegram Bot Commands + Sold Items Cleanup
+### Phase 6: Telegram Bot Commands + Sold Items Cleanup ✅ COMPLETED (2/2 plans)
 **Goal:** Interactive bot control via Telegram commands and automated sold items cleanup
 **Requirements:** TELEGRAM-01, TELEGRAM-02, TELEGRAM-03, TELEGRAM-04, TELEGRAM-05, TELEGRAM-06, TELEGRAM-07, TELEGRAM-08, TELEGRAM-09, TELEGRAM-10
+**Completed:** 2026-04-06
 
 Plans:
-- [ ] 06-00-PLAN.md — TDD: BotState + TelegramHandler + SoldHandler (Wave 1)
-- [ ] 06-01-PLAN.md — Integration: wire into main.py + human verify (Wave 2)
+- [x] 06-00-PLAN.md — TDD: BotState + TelegramHandler + SoldHandler (Wave 1) ✅ 2026-04-06
+- [x] 06-01-PLAN.md — Integration: wire into main.py + human verify (Wave 2) ✅ 2026-04-06
 
 **Success Criteria:**
 1. All 8 Telegram commands work (/status, /pause, /resume, /force_relist, /screenshot, /del_sold, /logs, /help)

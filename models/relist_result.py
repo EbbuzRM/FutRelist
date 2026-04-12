@@ -27,6 +27,7 @@ class RelistBatchResult:
     succeeded: int = 0
     failed: int = 0
     results: list[RelistResult] = field(default_factory=list)
+    relist_error: str | None = None
 
     @property
     def success_rate(self) -> float:

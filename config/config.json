@@ -13,11 +13,16 @@
     "price_adjustment_type": "percentage",
     "price_adjustment_value": 0.0,
     "min_price": 200,
-    "max_price": 15000000
+    "max_price": 15000000,
+    "sync_minute_offset": 10
   },
   "scan_interval_seconds": 3600,
   "rate_limiting": {
     "min_delay_ms": 2000,
     "max_delay_ms": 5000
+  },
+  "notifications": {
+    "telegram_token": "8380607120:AAGKmC9MxlNx-INDO59LEt6qhuPPFYNgGRE",
+    "telegram_chat_id": "6063435731"
   }
 }

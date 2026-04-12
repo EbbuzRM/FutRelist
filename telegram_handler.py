@@ -37,10 +37,13 @@ class TelegramHandler:
         "status": "Mostra lo stato corrente del bot",
         "pause": "Mette in pausa il bot",
         "resume": "Riavvia il bot dalla pausa",
+        "console": "Modalità console: deep sleep (es. /console 2 per 2 ore)",
+        "online": "Disattiva modalità console e riprendi",
         "force_relist": "Forza un relist al prossimo ciclo",
         "screenshot": "Invia uno screenshot della WebApp",
         "del_sold": "Cancella gli oggetti venduti e raccoglie i crediti",
         "logs": "Mostra le ultime righe del log (default: 20)",
+        "reboot": "Riavvia il bot (per applicare modifiche)",
         "help": "Mostra questa lista di comandi",
     }
 
@@ -84,6 +87,15 @@ class TelegramHandler:
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5)
+            
+        # Conferma l'ultimo offset elaborato prima di chiudere
+        # per evitare che Telegram reinvii gli stessi comandi (es. /reboot doppio)
+        if self._offset > 0:
+            try:
+                self._get_updates(offset=self._offset, timeout=1)
+            except Exception as e:
+                logger.debug(f"Errore conferma offset finale: {e}")
+                
         logger.info("TelegramHandler fermato")
 
     def send_message(self, text: str) -> None:
@@ -99,19 +111,23 @@ class TelegramHandler:
             try:
                 updates = self._get_updates(offset=self._offset)
                 for update in updates:
-                    self._offset = update.get("update_id", 0) + 1
-                    self._handle_update(update)
+                    try:
+                        self._handle_update(update)
+                        self._offset = update.get("update_id", 0) + 1
+                    except Exception as e:
+                        logger.error(f"Errore elaborazione update: {e}")
+                        # Non aggiornare offset, così il messaggio verrà ritentato al prossimo polling
             except Exception as e:
                 logger.error(f"Errore polling Telegram: {e}")
                 self._stop_event.wait(timeout=5)  # Pausa prima di riprovare
 
-    def _get_updates(self, offset: int = 0) -> list[dict]:
-        """Chiama getUpdates API Telegram con long polling (timeout 30s)."""
-        url = f"{self._api_base}/getUpdates?offset={offset}&timeout=30"
+    def _get_updates(self, offset: int = 0, timeout: int = 30) -> list[dict]:
+        """Chiama getUpdates API Telegram con long polling."""
+        url = f"{self._api_base}/getUpdates?offset={offset}&timeout={timeout}"
         req = urllib.request.Request(url)
 
         try:
-            with urllib.request.urlopen(req, timeout=35) as response:
+            with urllib.request.urlopen(req, timeout=timeout + 5) as response:
                 data = json.loads(response.read().decode("utf-8"))
                 if data.get("ok"):
                     return data.get("result", [])
@@ -178,10 +194,13 @@ class TelegramHandler:
             "status": self._cmd_status,
             "pause": self._cmd_pause,
             "resume": self._cmd_resume,
+            "console": self._cmd_console,
+            "online": self._cmd_online,
             "force_relist": self._cmd_force_relist,
             "screenshot": self._cmd_screenshot,
             "del_sold": self._cmd_del_sold,
             "logs": self._cmd_logs,
+            "reboot": self._cmd_reboot,
             "help": self._cmd_help,
         }
 
@@ -196,9 +215,17 @@ class TelegramHandler:
         """Restituisce lo stato corrente del bot."""
         status = self.bot_state.get_status()
         scan_time = status["last_scan_time"] or "Mai"
+
+        mode = "▶️ Attivo"
+        if status.get("console_mode"):
+            until = status.get("console_until")
+            mode = f"🎮 Console (fino {until})" if until else "🎮 Console"
+        elif status["paused"]:
+            mode = "⏸️ In Pausa"
+
         return (
-            f"📊 *Stato Bot*\n\n"
-            f"Pausa: {'Sì ⏸️' if status['paused'] else 'No ▶️'}\n"
+            f"📊 Stato Bot\n\n"
+            f"Modalità: {mode}\n"
             f"Force Relist: {'Sì ⚡' if status['force_relist'] else 'No'}\n"
             f"Cicli: {status['cycle_count']}\n"
             f"Ultimo relist: {status['last_relisted']} listing\n"
@@ -218,8 +245,54 @@ class TelegramHandler:
 
     def _cmd_force_relist(self, args: list[str]) -> str:
         """Attiva il force relist per il prossimo ciclo."""
+        # Se siamo in console mode, avvisa l'utente
+        if self.bot_state.is_console_mode():
+            return "⚠️ Bot in modalità console. Usa /online prima di forzare il relist."
         self.bot_state.set_force_relist(True)
         return "⚡ Force relist attivato"
+
+    def _cmd_console(self, args: list[str]) -> str:
+        """Attiva la modalità console: il bot va in deep sleep.
+
+        Uso:
+            /console     — deep sleep indefinito (fino a /online)
+            /console 2   — deep sleep per 2 ore, poi auto-resume
+            /console 0.5 — deep sleep per 30 minuti
+        """
+        hours = None
+        if args:
+            try:
+                hours = float(args[0])
+            except ValueError:
+                return "❌ Usa: /console [ore] (es. /console 2)"
+
+        self.bot_state.set_console_mode(True, hours=hours)
+
+        if hours:
+            from datetime import datetime, timedelta
+            resume_at = (datetime.now() + timedelta(hours=hours)).strftime("%H:%M")
+            return (
+                f"🎮 Modalità Console ATTIVA\n"
+                f"💤 Deep sleep per {hours}h (auto-resume alle {resume_at})\n"
+                f"🚫 Zero interazione WebApp\n"
+                f"Usa /online per riprendere prima"
+            )
+        return (
+            "🎮 Modalità Console ATTIVA\n"
+            "💤 Deep sleep indefinito\n"
+            "🚫 Zero interazione WebApp\n"
+            "Usa /online quando hai finito di giocare"
+        )
+
+    def _cmd_online(self, args: list[str]) -> str:
+        """Disattiva la modalità console e riprende il bot."""
+        if not self.bot_state.is_console_mode():
+            return "ℹ️ Il bot non è in modalità console."
+        self.bot_state.set_console_mode(False)
+        return (
+            "✅ Modalità Console DISATTIVATA\n"
+            "▶️ Bot riprende le operazioni normali"
+        )
 
     def _cmd_screenshot(self, args: list[str]) -> str:
         """Invia uno screenshot della WebApp (richiede page)."""
@@ -277,6 +350,16 @@ class TelegramHandler:
         except Exception as e:
             return f"❌ Errore lettura log: {e}"
 
+    def _cmd_reboot(self, args: list[str]) -> str:
+        """Riavvia il bot segnalando il main loop.
+
+        Il reboot viene gestito dal main thread che chiude il browser
+        in modo pulito e poi rilancia il processo. sys.exit() da un thread
+        secondario non termina il processo — uccide solo quel thread.
+        """
+        self.bot_state.request_reboot()
+        return "🔄 Reboot in corso..."
+
     def _cmd_help(self, args: list[str]) -> str:
         """Restituisce la lista di tutti i comandi disponibili."""
         lines = ["🤖 *Comandi disponibili:*\n"]
@@ -287,13 +370,23 @@ class TelegramHandler:
     # --- Telegram API ---
 
     def _send_message(self, text: str) -> None:
-        """Invia un messaggio tramite Telegram API sendMessage."""
+        """Invia un messaggio tramite Telegram API sendMessage.
+
+        Usa parse_mode=Markdown solo se il testo contiene formattazione intenzionale
+        (bold *...* o code blocks ```...```). Altrimenti invia senza parse_mode
+        per evitare errori 400 da caratteri speciali non escapati (es. _ in /del_sold).
+        """
         url = f"{self._api_base}/sendMessage"
+
+        # Rileva se il testo contiene formattazione Markdown intenzionale
+        has_markdown = "*" in text or "```" in text
         payload = {
             "chat_id": self.chat_id,
             "text": text,
-            "parse_mode": "Markdown",
         }
+        if has_markdown:
+            payload["parse_mode"] = "Markdown"
+
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             url,

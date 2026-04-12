@@ -31,7 +31,8 @@ class PlayerListing:
     state: ListingState = ListingState.UNKNOWN
     current_price: Optional[int] = None # prezzo Buy Now in coins
     start_price: Optional[int] = None   # prezzo partenza asta in coins
-    time_remaining: Optional[str] = None  # tempo rimanente (solo active)
+    time_remaining: Optional[str] = None  # tempo rimanente (es. "1h 5m")
+    time_remaining_seconds: Optional[int] = None  # tempo rimanente in secondi
 
     @property
     def needs_relist(self) -> bool:

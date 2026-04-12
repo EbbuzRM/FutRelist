@@ -14,7 +14,7 @@ class TestRetryOnTimeout:
     """Test retry_on_timeout decorator."""
 
     def test_retries_on_playwright_error_and_raises_after_max(self):
-        """retry_on_timeout retries on PlaywrightError and raises after max attempts."""
+        """retry_on_timeout retries on timeout errors and raises after max attempts."""
         from playwright.sync_api import Error as PlaywrightError
 
         call_count = 0
@@ -23,7 +23,7 @@ class TestRetryOnTimeout:
         def failing_func():
             nonlocal call_count
             call_count += 1
-            raise PlaywrightError("element not found")
+            raise PlaywrightError("Timeout exceeded: waiting for selector")
 
         with pytest.raises(PlaywrightError):
             failing_func()
@@ -31,7 +31,7 @@ class TestRetryOnTimeout:
         assert call_count == 3  # max 3 attempts
 
     def test_succeeds_on_second_attempt(self):
-        """retry_on_timeout succeeds on second attempt after one failure."""
+        """retry_on_timeout succeeds on second attempt after one timeout failure."""
         from playwright.sync_api import Error as PlaywrightError
 
         call_count = 0
@@ -41,7 +41,7 @@ class TestRetryOnTimeout:
             nonlocal call_count
             call_count += 1
             if call_count < 2:
-                raise PlaywrightError("transient error")
+                raise PlaywrightError("Timeout exceeded: transient network error")
             return "success"
 
         result = flaky_func()
@@ -62,7 +62,7 @@ class TestIsSessionExpired:
     def test_returns_false_when_ut_app_present(self):
         """is_session_expired returns False when .ut-app element is present."""
         mock_page = MagicMock()
-        mock_page.url = "https://www.ea.com/fifa/app"
+        mock_page.url = "https://www.ea.com/fifa/web-app"
         mock_page.query_selector.return_value = MagicMock()  # element found
 
         assert is_session_expired(mock_page) is False

@@ -108,13 +108,34 @@ Phase 1-5 complete. Phase 6: 1/2 plans done (Plan 00 TDD ✅). Ready for Plan 01
   - [x] console logging: aggiunti i secondi (%H:%M:%S) per monitoraggio performance
 
 ### Next Steps:
-- [ ] Phase 6: Telegram Commands & Sold Cleanup (v1.1 milestone)
+- [x] Phase 6: Telegram Commands & Sold Cleanup (v1.1 milestone)
   - [x] Plan 00: TDD — BotState + TelegramHandler + SoldHandler ✅
   - [x] Plan 01: Integration — wire into main.py ✅ (Task 2: human verify pending)
-- [ ] Monitoraggio live delle performance di pre-navigazione
-- [ ] Milestone v1.2: Price monitoring, trading stats, GUI
+- [x] Monitoraggio live delle performance di pre-navigazione
+- [x] Milestone v1.2: Price monitoring, trading stats, GUI
 
 ### Current Activity
+[2026-04-12T10:42:00Z] Notifiche Telegram unificate: il bot ora accumula i relist di oggetti che scadono a pochi minuti di distanza e invia UNA SOLA notifica con il totale, invece di mandarne 2-3 separate. Logica: se next_wait <= 120s, accumula; altrimenti invia. Safety net: max 5 cicli rapidi.
+[2026-04-11T17:01:00Z] Milestone v1.2 (Protection & Stealth) completata:
+- Console Mode (Deep Sleep via Telegram /console e /online)
+- Heartbeat dinamico con click 'Clear Sold' ogni 2.5-5 min random
+- Rilevamento automatico relist manuale alle Golden Hour
+- Gestione automatica modale 'Cannot Authenticate' di EA
+- Golden Hold Loop aggiornata con heartbeat reattivo
+[2026-04-09T18:55:00Z] Reboot command fix: /reboot now works correctly
+- Problema: sys.exit(0) da thread Telegram non terminava il processo (uccideva solo il thread)
+- Soluzione: threading.Event in BotState + main loop check + shutdown pulito + subprocess
+- 3 file modificati: bot_state.py (added _reboot_event), telegram_handler.py (/reboot sets flag), main.py (checks flag, shutdown, respawn)
+- Flusso: /reboot → _reboot_event.set() → main loop wait_interruptible sblocca → break → cleanup → subprocess → sys.exit(0)
+- Nota: shutdown pulito include chiusura browser e stop Telegram handler
+[2026-04-06T14:12:00Z] Phase 6 Plan 01 complete (Integration). 1 commit: main.py Telegram integration (d2e3ab0). BotState initialized, TelegramHandler started after auth, pause check before ensure_session, force_relist bypass inside hold window, stats update after relist, graceful shutdown on Ctrl+C. SoldHandler wired for /del_sold. 112/112 tests pass. TELEGRAM-10 satisfied. Task 2 (human verify) requires live Telegram testing.
+[2026-04-06T00:00:00Z] Phase 6 planning complete: v1.1 milestone — Telegram Commands & Sold Cleanup. 2 plans across 2 waves. Plan 00 (TDD): BotState dataclass with thread safety, TelegramHandler with 8 command handlers, SoldHandler for sold items cleanup. Plan 01 (Integration): wire Telegram thread into main.py, BotState checks for pause/resume/force_relist, human verify of all commands. 10 requirements (TELEGRAM-01 through TELEGRAM-10) all mapped. REQUIREMENTS.md, RESEARCH.md, VALIDATION.md created.
+[2026-03-27T17:25:00Z] Phase 5 complete. Milestone v1.0 MVP ready. 4 piani eseguiti in Phase 5. Inserita pre-navigazione (sveglia 60s prima), polling progressivo ad alta precisione e secondi nei log. Risolto il bug critico della condizione di polling al minuto di sync. Il bot naviga e si mette in attesa di precisione prima del relist.
+[2026-03-26T18:25:00Z] Bug fix: Sold items non rilevati correttamente. Modificato detector.py per riconoscere se un listing è nella sezione "Sold Items" cercando heading nel DOM. Ora i giocatori venduti vengono correttamente conteggiati (7 venduti vs 0 prima).
+[2026-03-26T18:15:00Z] Polling implementation: Aggiunta logica polling in main.py per listing che stanno per scadere prima del minuto 10. Trigger: listing scade prima di sync_minute - 60 secondi. Loop: ogni 15 secondi, max 60 secondi. Navigazione: Transfers → Transfer List. Azione: relist immediato appena trova scaduti. 21 tests pass.
+[2026-03-23T07:39:00Z] Phase 5 Plan 02 complete (Error recovery & rate limiting). 2 commits: navigator+relist RateLimiter (f2541d3), main.py session check+retry+rate limiting (ab27995). _random_delay removed from navigator.py and relist.py. ensure_session called before navigation. rate_limiter.wait() after relist batch. 68/68 tests pass. ERROR-01/02/03/04 satisfied. Ready for Plan 03.
+[2026-03-23T02:48:59Z] Phase 5 Plan 01 complete (Logging integration). 2 commits: JsonFormatter wiring (b7db2c7), history subcommand (5a539b2). setup_logging with 3 handlers. action_logger calls in main(). 'fifa-relist history' CLI. LOG-01/02/04 satisfied. Ready for Plan 02.
+[2026-03-23T02:33:56Z] Phase 5 Plan 00 complete (TDD ActionLogEntry+RateLimiter+ErrorHandler). 7 commits: RED/GREEN for 3 tasks + deps. 18 new tests (7+5+6), full suite 68/68. Requirements LOG-01/02/04 and ERROR-01/02/03/04 satisfied. models/action_log.py, browser/rate_limiter.py, browser/error_handler.py created. requirements.txt updated with tenacity>=8.0, rich>=13.0. Ready for Plan 01 (logging integration).
 [2026-03-23T02:04:00Z] Phase 4 Plan 02 complete (Integration). 2 commits: main.py ConfigManager (a27ce69), RelistExecutor price bounds (4acd6ce). ConfigManager wired into main.py via to_dict() bridge. RelistExecutor reads min_price/max_price from config. CLI round-trip verified (show/set/reset). 50/50 tests pass. Phase 4 complete (3/3 plans). CONFIG-01/02/03/04 all satisfied. Ready for Phase 5.
 [2026-03-23T01:33:17.955Z] Phase 4 planning complete: 3 plans in 3 waves. RESEARCH.md + VALIDATION.md created. Plans verified by gsd-plan-checker (VERIFICATION PASSED with warnings). Requirements CONFIG-01/02/03/04 all covered. Ready for execution.
 [2026-03-23T01:16:14.461Z] Phase 3 complete (3/3 plans, 35/35 tests pass, 14/14 must-haves verified). Human verification deferred (live WebApp test). Starting Phase 4.
@@ -129,9 +150,9 @@ Phase 1-5 complete. Phase 6: 1/2 plans done (Plan 00 TDD ✅). Ready for Plan 01
 [2026-03-23T00:32:05Z] Phase 2 Plan 02 (Transfer Market Navigator) completato. 1 commit: TransferMarketNavigator class con go_to_transfer_list(), SELECTORS dict con 4 chiavi, _random_delay helper. Import test e selector completeness check passano.
 [2026-03-23T00:27:48Z] Phase 2 Plan 00 (test infrastructure) complete. 4 commits: pytest requirements, test fixtures, 5 model tests, 16 detector tests. 21 tests collectible.
 [2026-03-23T00:17:17.124Z] Nyquist compliance fix applied to Phase 2: Wave 0 test setup plan created, detector plan updated to use pytest, VALIDATION.md set to nyquist_compliant: true, CHECK.md shows 0 warnings
-[2026-03-22T23:43:20.136Z] Phase 1 bug fixed: load_session() now uses context.add_cookies() instead of invalid context.storage_state assignment. Phase 1 fully verified at 4/4 criteria.
-[2026-03-23T00:30:00+01:00] Fase 1 completata. 3 piani eseguiti in wave 1. File creati: browser/controller.py, browser/auth.py, main.py, config.json, requirements.txt.
 [2026-03-23T12:30:00+01:00] Bug fix: load_session() corretto da context.storage_state = state a context.add_cookies(). Phase 1 verificata 4/4.
+[2026-03-23T00:30:00+01:00] Fase 1 completata. 3 piani eseguiti in wave 1. File creati: browser/controller.py, browser/auth.py, main.py, config.json, requirements.txt.
+[2026-03-22T23:43:20.136Z] Phase 1 bug fixed: load_session() now uses context.add_cookies() instead of invalid context.storage_state assignment. Phase 1 fully verified at 4/4 criteria.
 
 ### Accumulated Context (from previous milestones):
 - Project uses Python 3.13 with tkinter for GUIs
@@ -153,15 +174,4 @@ Phase 1-5 complete. Phase 6: 1/2 plans done (Plan 00 TDD ✅). Ready for Plan 01
 - Session recovery: is_session_expired checks URL+.ut-app+.ea-app, ensure_session full recovery flow
 - Integration error handling: ensure_session before navigation, try/except with reload retry, rate_limiter.wait() at cycle boundaries
 
-Last updated: 2026-04-06T14:12:00Z
-
-[2026-04-06T14:12:00Z] Phase 6 Plan 01 complete (Integration). 1 commit: main.py Telegram integration (d2e3ab0). BotState initialized, TelegramHandler started after auth, pause check before ensure_session, force_relist bypass inside hold window, stats update after relist, graceful shutdown on Ctrl+C. SoldHandler wired for /del_sold. 112/112 tests pass. TELEGRAM-10 satisfied. Task 2 (human verify) requires live Telegram testing.
-
-[2026-04-06T00:00:00Z] Phase 6 planning complete: v1.1 milestone — Telegram Commands & Sold Cleanup. 2 plans across 2 waves. Plan 00 (TDD): BotState dataclass with thread safety, TelegramHandler with 8 command handlers, SoldHandler for sold items cleanup. Plan 01 (Integration): wire Telegram thread into main.py, BotState checks for pause/resume/force_relist, human verify of all commands. 10 requirements (TELEGRAM-01 through TELEGRAM-10) all mapped. REQUIREMENTS.md, RESEARCH.md, VALIDATION.md created.
-
-[2026-03-27T17:25:00Z] Phase 5 complete. Milestone v1.0 MVP ready. 4 piani eseguiti in Phase 5. Inserita pre-navigazione (sveglia 60s prima), polling progressivo ad alta precisione e secondi nei log. Risolto il bug critico della condizione di polling al minuto di sync. Il bot naviga e si mette in attesa di precisione prima del relist.
-[2026-03-26T18:25:00Z] Bug fix: Sold items non rilevati correttamente. Modificato detector.py per riconoscere se un listing è nella sezione "Sold Items" cercando heading nel DOM. Ora i giocatori venduti vengono correttamente conteggiati (7 venduti vs 0 prima).
-[2026-03-26T18:15:00Z] Polling implementation: Aggiunta logica polling in main.py per listing che stanno per scadere prima del minuto 10. Trigger: listing scade prima di sync_minute - 60 secondi. Loop: ogni 15 secondi, max 60 secondi. Navigazione: Transfers → Transfer List. Azione: relist immediato appena trova scaduti. 21 tests pass.
-[2026-03-23T07:39:00Z] Phase 5 Plan 02 complete (Error recovery & rate limiting). 2 commits: navigator+relist RateLimiter (f2541d3), main.py session check+retry+rate limiting (ab27995). _random_delay removed from navigator.py and relist.py. ensure_session called before navigation. rate_limiter.wait() after relist batch. 68/68 tests pass. ERROR-01/02/03/04 satisfied. Ready for Plan 03.
-[2026-03-23T02:48:59Z] Phase 5 Plan 01 complete (Logging integration). 2 commits: JsonFormatter wiring (b7db2c7), history subcommand (5a539b2). setup_logging with 3 handlers. action_logger calls in main(). 'fifa-relist history' CLI. LOG-01/02/04 satisfied. Ready for Plan 02.
-[2026-03-23T02:33:56Z] Phase 5 Plan 00 complete (TDD ActionLogEntry+RateLimiter+ErrorHandler). 7 commits: RED/GREEN for 3 tasks + deps. 18 new tests (7+5+6), full suite 68/68. Requirements LOG-01/02/04 and ERROR-01/02/03/04 satisfied. models/action_log.py, browser/rate_limiter.py, browser/error_handler.py created. requirements.txt updated with tenacity>=8.0, rich>=13.0. Ready for Plan 01 (logging integration).
+Last updated: 2026-04-12T10:42:00Z

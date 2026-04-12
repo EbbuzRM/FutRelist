@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable
 
 
@@ -26,11 +26,16 @@ class BotState:
 
     _paused: bool = field(default=False, repr=False)
     _force_relist: bool = field(default=False, repr=False)
+    _reboot_event: threading.Event = field(default_factory=threading.Event, repr=False)
     cycle_count: int = field(default=0)
     last_relisted: int = field(default=0)
     last_failed: int = field(default=0)
     last_scan_time: datetime | None = field(default=None)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    # Console mode: deep sleep, zero WebApp interaction
+    _console_mode: bool = field(default=False, repr=False)
+    _console_mode_until: datetime | None = field(default=None, repr=False)
 
     # Command queue for thread-safe operations
     _pending_commands: list[dict] = field(default_factory=list, repr=False)
@@ -43,9 +48,36 @@ class BotState:
             self._paused = value
 
     def is_paused(self) -> bool:
-        """Restituisce True se il bot è in pausa."""
+        """Restituisce True se il bot è in pausa o in console mode."""
         with self._lock:
-            return self._paused
+            # Console mode auto-resume check
+            if self._console_mode and self._console_mode_until:
+                if datetime.now() >= self._console_mode_until:
+                    self._console_mode = False
+                    self._console_mode_until = None
+            return self._paused or self._console_mode
+
+    # --- Reboot ---
+
+    def request_reboot(self) -> None:
+        """Segnala al main loop che il bot deve riavviarsi.
+
+        Usa threading.Event: sveglia istantaneamente qualsiasi
+        wait_interruptible() in corso nel main thread.
+        """
+        self._reboot_event.set()
+
+    def is_reboot_requested(self) -> bool:
+        """Restituisce True se è stato richiesto un reboot."""
+        return self._reboot_event.is_set()
+
+    def wait_interruptible(self, seconds: float) -> bool:
+        """Attende fino a `seconds` ma si interrompe subito se arriva un reboot.
+
+        Sostituisce time.sleep() nel main loop.
+        Ritorna True se il reboot è stato richiesto (sleep interrotto).
+        """
+        return self._reboot_event.wait(timeout=seconds)
 
     # --- Force Relist (flag consumato alla lettura) ---
 
@@ -82,6 +114,36 @@ class BotState:
                 return self._pending_commands.pop(0)
             return None
 
+    # --- Console Mode (deep sleep — zero WebApp) ---
+
+    def set_console_mode(self, active: bool, hours: float | None = None) -> None:
+        """Attiva/disattiva la modalità console (deep sleep).
+
+        Args:
+            active: True per attivare, False per disattivare.
+            hours: Se specificato, auto-resume dopo N ore.
+        """
+        with self._lock:
+            self._console_mode = active
+            if active and hours:
+                self._console_mode_until = datetime.now() + timedelta(hours=hours)
+            else:
+                self._console_mode_until = None
+
+    def is_console_mode(self) -> bool:
+        """Restituisce True se il bot è in modalità console."""
+        with self._lock:
+            if self._console_mode and self._console_mode_until:
+                if datetime.now() >= self._console_mode_until:
+                    self._console_mode = False
+                    self._console_mode_until = None
+            return self._console_mode
+
+    def get_console_mode_until(self) -> datetime | None:
+        """Restituisce il timestamp di auto-resume, o None."""
+        with self._lock:
+            return self._console_mode_until
+
     def has_commands(self) -> bool:
         """Controlla se ci sono comandi in coda."""
         with self._lock:
@@ -108,8 +170,13 @@ class BotState:
     def get_status(self) -> dict[str, Any]:
         """Restituisce un dict con lo stato corrente del bot."""
         with self._lock:
+            console_until = None
+            if self._console_mode_until:
+                console_until = self._console_mode_until.strftime("%H:%M")
             return {
                 "paused": self._paused,
+                "console_mode": self._console_mode,
+                "console_until": console_until,
                 "force_relist": self._force_relist,
                 "cycle_count": self.cycle_count,
                 "last_relisted": self.last_relisted,

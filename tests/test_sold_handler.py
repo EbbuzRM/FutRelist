@@ -169,7 +169,15 @@ class TestClearSoldItems:
         """Pulsante Clear non trovato → False."""
         clear_btn = MagicMock()
         clear_btn.count.return_value = 0
-        mock_page.get_by_role.side_effect = lambda role, name=None: clear_btn
+
+        def mock_get_by_role(role, name=None):
+            return clear_btn
+
+        mock_page.get_by_role.side_effect = mock_get_by_role
+
+        locator_mock = MagicMock()
+        locator_mock.count.return_value = 0
+        mock_page.locator.return_value = locator_mock
 
         result = handler._clear_sold_items()
         assert result is False

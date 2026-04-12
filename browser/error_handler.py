@@ -117,13 +117,20 @@ def ensure_session(
     """
     from browser.auth import AuthError
 
-    if not is_session_expired(page):
+    # 0. Check per modali critici EA (es. Cannot Authenticate). 
+    # Se presente, lo accetta (clicca Ok) e forza il logout immediato.
+    if auth.check_and_handle_disconnect_modal(page):
+        logger.warning("Sessione invalidata dal server (Cannot Authenticate). Avvio re-login immediato.")
+    elif not is_session_expired(page):
         if auth.is_logged_in(page, timeout_ms=5000):
             return
-        # Sessione incerta: potrebbe essere solo caricamento lento
+        # Sessione incerta: potrebbe essere solo caricamento lento o modale non intercettato
         logger.warning("Sessione incerta, tentativo di ricaricamento...")
         page.reload()
         page.wait_for_timeout(3000)
+        # Riprova il check del modale dopo il reload
+        auth.check_and_handle_disconnect_modal(page)
+        
         if not is_session_expired(page) and auth.is_logged_in(page, timeout_ms=5000):
             return
         # Dopo reload ancora non loggato: cade nel blocco di re-auth sotto

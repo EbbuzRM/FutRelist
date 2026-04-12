@@ -3,7 +3,7 @@ Browser Controller - Wrapper Playwright per automazione FIFA 26 WebApp
 """
 import logging
 from pathlib import Path
-from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
+from playwright.sync_api import sync_playwright, BrowserContext, Page
 
 logger = logging.getLogger(__name__)
 
@@ -14,61 +14,55 @@ class BrowserController:
     def __init__(self, config: dict):
         self.config = config
         self.playwright = None
-        self.browser: Browser | None = None
         self.context: BrowserContext | None = None
         self.page: Page | None = None
         self._is_running = False
 
+    DEFAULT_PROFILE_DIR = Path("storage/browser_profile")
+
     def start(self, user_data_dir: str | None = None) -> Page:
+        """Avvia il browser con profilo persistente.
+
+        Usa launch_persistent_context() in modo che cookie, localStorage e
+        il flag 'browser trusted' di EA vengano scritti su disco e riletti
+        ad ogni avvio successivo, evitando la 2FA ripetuta.
+        """
         if self._is_running:
             raise RuntimeError("Browser già avviato. Usa stop() prima di ricominciare.")
 
         browser_cfg = self.config.get("browser", {})
         viewport = browser_cfg.get("viewport", {"width": 1280, "height": 720})
 
+        # Determina la cartella del profilo: quella passata o quella di default
+        profile_path = Path(user_data_dir) if user_data_dir else self.DEFAULT_PROFILE_DIR
+        profile_path.mkdir(parents=True, exist_ok=True)
+
         logger.info("Avvio Playwright...")
         self.playwright = sync_playwright().start()
 
-        logger.info(f"Lancio browser (headless={browser_cfg.get('headless', False)})...")
-        
-        launch_args = []
-        if user_data_dir:
-            logger.info(f"Usando profilo browser esistente: {user_data_dir}")
-            launch_args.append(f"--user-data-dir={user_data_dir}")
-
-        self.browser = self.playwright.chromium.launch(
-            headless=browser_cfg.get("headless", False),
-            slow_mo=browser_cfg.get("slow_mo", 500),
-            args=launch_args if launch_args else None,
+        logger.info(
+            f"Lancio browser con profilo persistente: {profile_path} "
+            f"(headless={browser_cfg.get('headless', False)})"
         )
 
-        context_args = {
-            "viewport": {
+        # launch_persistent_context salva TUTTI i dati di sessione su disco:
+        # cookie, localStorage, sessionStorage, IndexedDB, service workers.
+        # EA la usa per riconoscere il dispositivo come trusted (no 2FA).
+        self.context = self.playwright.chromium.launch_persistent_context(
+            user_data_dir=str(profile_path),
+            headless=browser_cfg.get("headless", False),
+            slow_mo=browser_cfg.get("slow_mo", 500),
+            viewport={
                 "width": viewport.get("width", 1280),
                 "height": viewport.get("height", 720),
-            }
-        }
+            },
+            args=["--no-sandbox"]
+        )
 
-        # Se NON abbiamo user_data_dir, creiamo un profilo nuovo (primo avvio)
-        # Se ABBIamo user_data_dir, non creiamo nuovo context (il profilo è già aperto)
-        if not user_data_dir:
-            logger.info("Creazione nuovo profilo browser...")
-            self.context = self.browser.new_context(**context_args)
-            self.page = self.context.new_page()
-        else:
-            # Il profilo esistente ha già una context aperta
-            # Prendiamo la prima context disponibile
-            contexts = self.browser.contexts
-            if contexts:
-                self.context = contexts[0]
-                self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
-            else:
-                # Nessuna context, creiamo nuova
-                self.context = self.browser.new_context(**context_args)
-                self.page = self.context.new_page()
+        # Riusa la pagina già aperta oppure ne crea una nuova
+        self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
 
         self._is_running = True
-
         logger.info("Browser avviato con successo")
         return self.page
 
@@ -81,27 +75,31 @@ class BrowserController:
         )
 
         logger.info(f"Navigazione a: {url}")
-        self.page.goto(url, wait_until="networkidle", timeout=60000)
+        self.page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        self.page.wait_for_timeout(3000)
         logger.info(f"Pagina caricata: {self.page.title()}")
 
-    def get_page(self) -> Page:
-        if not self._is_running or not self.page:
-            raise RuntimeError("Browser non avviato. Usa start() prima.")
-        return self.page
 
     def stop(self) -> None:
         logger.info("Chiusura browser...")
 
-        if self.context:
-            self.context.close()
+        # Con launch_persistent_context non c'è un oggetto Browser separato:
+        # chiudere il context salva il profilo su disco e termina il processo.
+        try:
+            if self.context:
+                # Evita crash se la connessione è già chiusa (es. crash browser o Ctrl+C)
+                self.context.close()
+        except Exception as e:
+            logger.debug(f"Errore durante la chiusura del contesto: {e}")
+        finally:
             self.context = None
 
-        if self.browser:
-            self.browser.close()
-            self.browser = None
-
-        if self.playwright:
-            self.playwright.stop()
+        try:
+            if self.playwright:
+                self.playwright.stop()
+        except Exception:
+            pass
+        finally:
             self.playwright = None
 
         self.page = None

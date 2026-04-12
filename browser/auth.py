@@ -17,6 +17,8 @@ class AuthError(Exception):
 SELECTORS = {
     # Selettore per il messaggio di sessione console attiva
     "console_error": '.ut-messaging-view, .dialog-body, .dialog-title',
+    # Dialog messaggi generici / errori
+    "generic_dialog": '.dialog-body, .ut-messaging-view',
 }
 
 
@@ -59,6 +61,44 @@ class AuthManager:
             logger.info(f"Sessione attiva con {len(cookies)} cookies (persistita via profilo browser)")
         except Exception as e:
             logger.debug(f"Impossibile leggere storage_state (non critico): {e}")
+
+    def check_and_handle_disconnect_modal(self, page: Page) -> bool:
+        """Controlla se c'è il popup 'Cannot Authenticate' / 'Impossibile autenticare'.
+        Clicca 'Ok' se lo trova e aspetta il logout.
+        
+        Ritorna True se ha trovato e gestito il modale.
+        """
+        try:
+            # Parole chiave del modale di disconnessione
+            disconnect_keywords = [
+                "cannot authenticate",
+                "unable to authenticate with the football",
+                "logged out of the application",
+                "impossibile autenticare",
+                "sarai disconnesso dall'applicazione"
+            ]
+            
+            dialogs = page.query_selector_all(SELECTORS["generic_dialog"])
+            for dialog in dialogs:
+                if dialog and dialog.is_visible():
+                    text = dialog.text_content().lower()
+                    if any(kw in text for kw in disconnect_keywords):
+                        logger.warning("Rilevato modale ERROR/DISCONNECT ('Cannot Authenticate'). Clicco OK...")
+                        # Cerca il pulsante Ok / OK
+                        ok_btn = dialog.query_selector('button:has-text("Ok"), button:has-text("OK")')
+                        if ok_btn:
+                            ok_btn.click(timeout=3000)
+                        else:
+                            # Fallback Playwright
+                            page.get_by_role("button", name=re.compile("ok", re.IGNORECASE)).first.click(timeout=3000)
+                            
+                        logger.info("Modale disconnessione accettato. Attesa redirect a login...")
+                        page.wait_for_timeout(3000)
+                        return True
+            return False
+        except Exception as e:
+            logger.debug(f"Errore durante check_and_handle_disconnect_modal: {e}")
+            return False
 
     def is_logged_in(self, page: Page, timeout_ms: int = 15000) -> bool:
         """Verifica se l'utente è correttamente loggato nella WebApp.

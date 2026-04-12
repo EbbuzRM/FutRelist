@@ -83,6 +83,30 @@ Each task was committed atomically:
 - Wired SoldHandler into TelegramHandler via `set_sold_handler()` method (Rule 2 fix — method was missing from TelegramHandler but required by plan)
 - Force relist uses `elif force_relist:` branch that falls through to normal relist logic, not a separate standalone block
 
+## Enhancement: Reboot Command (2026-04-09)
+
+### Problema
+- `/reboot` usava `sys.exit(0)` dal thread Telegram
+- In Python, sys.exit() da thread secondario uccide solo quel thread, non il processo intero
+- Risultato: 2 bot in esecuzione → conflitto sul profilo browser
+
+### Soluzione
+- Aggiunto `_reboot_event: threading.Event` in BotState (bot_state.py:29)
+- `/reboot` ora chiama `bot_state.request_reboot()` invece di subprocess+sys.exit
+- Main loop usa `bot_state.wait_interruptible(next_wait)` invece di `time.sleep(next_wait)`
+- Quando l'event si sblocca: shutdown pulito (Telegram.stop() + controller.stop()) → subprocess.Popen → sys.exit(0)
+
+### Flusso
+1. Utente invia `/reboot`
+2. Thread Telegram → `bot_state.request_reboot()` → `_reboot_event.set()`
+3. Main loop in `wait_interruptible()` si sblocca istantaneamente (anche se mancavano 50 minuti)
+4. Main loop fa break → cleanup pulito → spawn nuovo processo → sys.exit(0) dal main thread
+
+### Vantaggi
+- Reboot immediato (non aspetta il prossimo ciclo)
+- shutdown pulito: browser chiuso, Telegram fermato prima di rilanciare
+- Nessun conflitto di profilo browser
+
 ## Deviations from Plan
 
 ### Auto-fixed Issues

@@ -35,6 +35,7 @@ class ListingDefaults:
     price_adjustment_value: float = 0.0
     min_price: int = 200
     max_price: int = 15_000_000
+    sync_minute_offset: int | None = None
 
     def __post_init__(self):
         if self.relist_mode not in VALID_RELIST_MODES:
@@ -53,6 +54,8 @@ class ListingDefaults:
             raise ValueError(
                 f"Invalid price range: {self.min_price}–{self.max_price}"
             )
+        if self.sync_minute_offset is not None and not (0 <= self.sync_minute_offset <= 59):
+            raise ValueError("sync_minute_offset must be between 0 and 59")
 
 
 @dataclass
@@ -70,6 +73,13 @@ class RateLimitingConfig:
 
 
 @dataclass
+class NotificationsConfig:
+    """Configurazione globale per sistemi di alert esterni."""
+    telegram_token: str = ""
+    telegram_chat_id: str = ""
+
+
+@dataclass
 class AppConfig:
     """Root configuration combining all sub-configs."""
 
@@ -77,6 +87,7 @@ class AppConfig:
     listing_defaults: ListingDefaults = field(default_factory=ListingDefaults)
     scan_interval_seconds: int = 60
     rate_limiting: RateLimitingConfig = field(default_factory=RateLimitingConfig)
+    notifications: NotificationsConfig = field(default_factory=NotificationsConfig)
 
     def __post_init__(self):
         if not (10 <= self.scan_interval_seconds <= 3600):
@@ -99,6 +110,7 @@ class AppConfig:
             listing_defaults=ListingDefaults(**data.get("listing_defaults", {})),
             scan_interval_seconds=data.get("scan_interval_seconds", 60),
             rate_limiting=RateLimitingConfig(**data.get("rate_limiting", {})),
+            notifications=NotificationsConfig(**data.get("notifications", {})),
         )
 
     def to_dict(self) -> dict:
@@ -119,11 +131,16 @@ class AppConfig:
                 "price_adjustment_value": self.listing_defaults.price_adjustment_value,
                 "min_price": self.listing_defaults.min_price,
                 "max_price": self.listing_defaults.max_price,
+                "sync_minute_offset": self.listing_defaults.sync_minute_offset,
             },
             "scan_interval_seconds": self.scan_interval_seconds,
             "rate_limiting": {
                 "min_delay_ms": self.rate_limiting.min_delay_ms,
                 "max_delay_ms": self.rate_limiting.max_delay_ms,
+            },
+            "notifications": {
+                "telegram_token": self.notifications.telegram_token,
+                "telegram_chat_id": self.notifications.telegram_chat_id,
             },
         }
 
@@ -141,9 +158,12 @@ _FIELD_CASTS: dict[str, tuple[str, str, type]] = {
     "listing_defaults.price_adjustment_value":  ("listing_defaults", "price_adjustment_value", float),
     "listing_defaults.min_price":               ("listing_defaults", "min_price", int),
     "listing_defaults.max_price":               ("listing_defaults", "max_price", int),
+    "listing_defaults.sync_minute_offset":      ("listing_defaults", "sync_minute_offset", int),
     "scan_interval_seconds":        ("", "scan_interval_seconds", int),
     "rate_limiting.min_delay_ms":   ("rate_limiting", "min_delay_ms", int),
     "rate_limiting.max_delay_ms":   ("rate_limiting", "max_delay_ms", int),
+    "notifications.telegram_token": ("notifications", "telegram_token", str),
+    "notifications.telegram_chat_id": ("notifications", "telegram_chat_id", str),
 }
 
 _TRUE_VALUES = {"true", "1", "yes"}
