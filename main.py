@@ -753,9 +753,13 @@ def main() -> None:
             now = datetime.now()
             next_golden = get_next_golden_hour(now)
             if next_golden and is_in_golden_period(now) and now < next_golden:
-                wait_secs = (next_golden - now).total_seconds()
-                logger.info(f"[Golden] Attesa precisa: {format_duration(int(wait_secs))} per le {next_golden.strftime('%H:%M:%S')}.")
-                time.sleep(wait_secs)
+                # Only wait if we're NOT already in a golden relist window (:09-:11)
+                if not is_in_golden_window(now):
+                    wait_secs = (next_golden - now).total_seconds()
+                    logger.info(f"[Golden] Attesa precisa: {format_duration(int(wait_secs))} per le {next_golden.strftime('%H:%M:%S')}.")
+                    time.sleep(wait_secs)
+                else:
+                    logger.info(f"[Golden] Già nella finestra golden ({now.strftime('%H:%M:%S')}), procedo con scansione immediata.")
 
             fifa_logger.info(f"--- [SCANSIONE IBRIDA] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
             scan = detector.scan_listings()
@@ -806,10 +810,17 @@ def main() -> None:
 
                 if in_hold and not force_relist:
                     next_g = get_next_golden_hour(datetime.now())
-                    if next_g:
+                    if next_g is not None:
+                        # Genuine hold: there's a future golden coming
                         fifa_logger.info(f"[HOLD] {scan.expired_count} scaduti rilevati ma in HOLD WINDOW.")
                         fifa_logger.info(f"[HOLD] Prossima golden: {next_g.strftime('%H:%M')}. Relist rimandato.")
-                    next_wait = 60
+                        next_wait = 60
+                    else:
+                        # No more goldens today — override hold, relist immediately
+                        logger.info("[Golden] Fascia golden terminata, nessuna golden futura. Relist immediato.")
+                        fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti (post-golden). Rilisto...")
+                        # Proceed to relist (fall through to else block)
+                        in_hold = False
 
                 else:
                     # Relist SEMPRE — sia in free drift che in golden window
