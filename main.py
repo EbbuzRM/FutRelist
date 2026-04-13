@@ -482,6 +482,108 @@ def _compute_next_wait(
     return wait
 
 
+def _golden_retry_relist(
+    executor,
+    detector,
+    navigator,
+    page,
+    bot_state: BotState,
+    auth,
+    config: dict,
+    fifa_logger: logging.Logger,
+    initial_succeeded: int = 0,
+    initial_failed: int = 0,
+) -> tuple[int, int, bool]:
+    """Retry relist during golden window for Processing items.
+
+    After an initial relist, EA may still have items in "Processing..." state.
+    This helper loops: wait → navigate → fresh scan → relist remaining, until
+    all items are relisted or the golden window closes.
+
+    Args:
+        executor: RelistExecutor instance.
+        detector: ListingDetector instance.
+        navigator: TransferMarketNavigator instance.
+        page: Playwright Page object.
+        bot_state: BotState for interruptible waits.
+        auth: AuthManager for session recovery.
+        config: Config dict.
+        fifa_logger: Logger for FIFA actions.
+        initial_succeeded: Succeeded count from the initial relist (for logging).
+        initial_failed: Failed count from the initial relist (for logging).
+
+    Returns:
+        (total_succeeded, total_failed, should_continue):
+        - total_succeeded: items relisted in this retry loop (NOT including initial)
+        - total_failed: items that failed in this retry loop
+        - should_continue: True if the main loop should `continue` (session lost / reboot)
+    """
+    retry_succeeded = 0
+    retry_failed = 0
+
+    if not is_in_golden_window(datetime.now()):
+        return (0, 0, False)
+
+    fifa_logger.info(
+        f"[Golden Retry] Inizio ciclo retry per ritardatari/Processing items. "
+        f"Initial: {initial_succeeded} successi, {initial_failed} falliti."
+    )
+
+    while is_in_golden_window(datetime.now()):
+        # Wait 5-10s (random, interruptible by Telegram)
+        wait_secs = random.uniform(5, 10)
+        fifa_logger.info(f"[Golden Retry] Attesa {wait_secs:.1f}s prima del rescan...")
+
+        if bot_state.wait_interruptible(wait_secs):
+            fifa_logger.info("[Golden Retry] Reboot richiesto durante attesa — esco.")
+            return (retry_succeeded, retry_failed, True)
+
+        # Navigate back to Transfer List (page may have changed after relist)
+        if not navigate_with_retry(navigator, page):
+            fifa_logger.warning("[Golden Retry] Navigazione fallita — esco dal retry.")
+            break
+
+        # Fresh scan — critical: must not use stale data
+        scan = detector.scan_listings()
+
+        if scan.expired_count == 0:
+            fifa_logger.info("[Golden Retry] Tutti gli item sono stati relistati! Uscita dal retry.")
+            break
+
+        # Relist remaining expired/processing items
+        fifa_logger.info(f"[Golden Retry] Trovati {scan.expired_count} item scaduti/processing. Rilisto...")
+
+        if executor.relist_mode == "all":
+            batch = executor.relist_all(count=scan.expired_count)
+            succeeded = batch.succeeded
+            failed = batch.total - batch.succeeded
+            if batch.relist_error:
+                fifa_logger.error(f"[Golden Retry] ERRORE RELIST: {batch.relist_error}")
+                _save_error_screenshot(page, fifa_logger)
+                if _handle_session_recovery(executor, auth, config, page, fifa_logger):
+                    return (retry_succeeded, retry_failed, True)
+        else:
+            expired = [l for l in scan.listings if l.needs_relist]
+            succeeded, failed = relist_expired_listings(executor, expired)
+
+        retry_succeeded += succeeded
+        retry_failed += failed
+        fifa_logger.info(
+            f"[Golden Retry] Relist completato: {succeeded} successi, {failed} falliti. "
+            f"Totale retry: {retry_succeeded}/{retry_failed}."
+        )
+
+    # Log exit reason
+    if not is_in_golden_window(datetime.now()):
+        fifa_logger.info(
+            f"[Golden Retry] Finestra golden chiusa. Alcuni item potrebbero "
+            f"aver bisogno di relist nel prossimo ciclo normale. "
+            f"Totale retry: {retry_succeeded} successi, {retry_failed} falliti."
+        )
+
+    return (retry_succeeded, retry_failed, False)
+
+
 def _active_wait_with_heartbeat(
     wait_seconds: int,
     page,
