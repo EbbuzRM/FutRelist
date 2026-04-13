@@ -1,7 +1,7 @@
 # FIFA 26 Auto-Relist Tool - Roadmap
 
 ## Current Status: PRODUCTION / MAINTENANCE MODE
-**Latest Milestone:** v1.3 Golden Hour Bug Fixes — SHIPPED 2026-04-12
+**Latest Milestone:** v1.7 Golden Processing Retry — SHIPPED 2026-04-14
 
 ## Phases
 
@@ -143,7 +143,7 @@ Fixes:
 2. ✅ EA popups no longer block Transfer List navigation
 3. ✅ Expired items relisted after last golden when no more goldens remain
 4. ✅ Ritardatari caught within 10s during golden windows
-5. ✅ All 641 tests pass (122 original + 519 timeline)
+5. ✅ All 658 tests pass (132 original + 519 timeline + 10 golden retry)
 
 ---
 
@@ -156,6 +156,9 @@ Fixes:
 | v1.2 | Protection & Stealth | 2026-04-11 | 6+ | 122 |
 | v1.3 | Golden Hour Bug Fixes | 2026-04-12 | 7 | 641 |
 | v1.4 | Telegram /logs Bug Fix | 2026-04-13 | 8 | 20 |
+| v1.5 | PROCESSING State Fix | 2026-04-13 | 8 | 648 |
+| v1.6 | Batch Report & Screenshot Fix | 2026-04-13 | 8 | 648 |
+| v1.7 | Golden Processing Retry | 2026-04-14 | 8 | 658 |
 
 ## Future Milestones
 

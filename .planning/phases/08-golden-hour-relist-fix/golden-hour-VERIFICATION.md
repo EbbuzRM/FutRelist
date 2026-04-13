@@ -8,6 +8,7 @@ re_verification:
   previous_score: 6/6
   gaps_closed:
     - "Dead code branch claim corrected — elif 0 < seconds_until_golden <= 30 IS reachable (e.g. 16:09:45)"
+    - "Fix 2 & 3: get_next_golden_hour now returns the current golden until :11:59, ensuring windows and proximity checks work correctly after :10:00"
   gaps_remaining: []
   regressions:
     - "Fix 1: post-nav wait fires outside golden period (e.g. 14:00 would wait 2h until 16:10)"

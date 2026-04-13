@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: Batch Report & Screenshot Fix
+milestone: v1.7
+milestone_name: Golden Processing Retry
 status: production
-last_updated: "2026-04-13T14:45:00Z"
+last_updated: "2026-04-14T16:30:00Z"
 progress:
   total_phases: 7
   completed_phases: 7
-  total_plans: 22
-  completed_plans: 22
+  total_plans: 24
+  completed_plans: 24
 ---
 
 # Project State
@@ -16,6 +16,37 @@ progress:
 ## Status: PRODUCTION / MAINTENANCE MODE
 
 All planned phases complete. The bot is running in production, relisting items successfully.
+
+### Today's Fixes (April 14, 2026)
+
+**Bug Fix: Stale Processing Check (commit d63d342)**
+- After `relist_all()`, the code checked the STALE `scan` object for PROCESSING items, causing false "⚠️ 14 item ancora in Processing dopo relist" warnings and unnecessary 10-15s rapid polling.
+- Fix: Removed the stale scan check entirely. After relist, compute next_wait normally. The next cycle will verify naturally.
+- Also fixed: Misleading log message "46 scaduti, 14 in processing" → "46 scaduti (di cui 14 in processing)" to make clear Processing is a subset of expired, not additional.
+- Also cleaned up: Removed sync-conflict files and unnecessary scroll code.
+
+**Feature: Golden Processing Retry Loop (commits b9fc754 + 1f60c59)**
+- New function: `_golden_retry_relist()` in main.py
+- During golden window (:09-:11), after initial relist succeeds, if Processing items remain: wait 5-10s random (interruptible by Telegram) → navigate to Transfer List → fresh scan (NEVER stale data) → relist if expired_count > 0, accumulate stats → repeat until clear or golden window closes.
+- Only during golden hours — outside golden window, normal cycle handles it.
+- 10 new unit tests in tests/test_golden_retry.py covering: no retry outside golden, single retry, multiple retries, window closes mid-retry, reboot during wait, navigation failure, per_listing mode, session recovery, wait timing, fresh scan verification.
+
+### Tonight's Fixes (April 13, 2026)
+
+**Bug Fix: Golden Hour "Missed Target" due to millisecond delay**
+- At 16:10:01 the bot calculated the next golden as 17:10 instead of acting on 16:10, causing an unnecessary 1h HOLD.
+- Fixed: `get_next_golden_hour()` now considers a golden target still "current" as long as the time is within the `GOLDEN_RELIST_WINDOW` (:09-:11).
+- Updated: `tests/test_golden_timeline.py` now includes 7 new test cases for boundary conditions (16:10:00, 16:11:59, etc.) to ensure the fix is verified and permanent.
+
+**Stability & Logic Improvements**
+- **Manual Relist Heuristic**: Improved detection to look for timers near 1h/3h/6h, reducing false positives.
+- **Preventive Session Check**: Added an "aggressive" session check 3 minutes before any Golden Hour target to ensure the bot is logged in for the pre-nav.
+- **Telegram Responsiveness**: Modified `wait_interruptible` and heartbeat loops to break immediately when a Telegram command is queued, making the bot much more responsive to user interaction.
+- **Startup Blindness Fix**: The bot now always performs a full scan on the first cycle (Cycle 1) even during a Golden HOLD window. This ensures it captures the "ground truth" of the Transfer List (and detects manual relists) before entering efficient heartbeat-based HOLD.
+- **Precision Wait Guard**: Added `is_close_to_golden` guard to the precision wait logic. This prevents the bot from entering long blocking sleeps (e.g., 48 minutes at 17:21) before scanning the Transfer List.
+- **Async Precision Wait**: Replaced `time.sleep` with `wait_interruptible` in the precision wait block, ensuring the bot remains responsive to Telegram commands even during the final countdown to a Golden Hour.
+- **Processing Timer Optimization**: Reduced aggressive polling interval from 15s to 10s for items in `PROCESSING` state or near expiry, ensuring faster relisting during critical windows.
+- **Perfect Pre-Nav Sync**: Optimized the pre-nav loop to hit exactly `:09:30` by disabling heartbeats in the final 3 minutes and performing a guaranteed session check.
 
 ### Shipped Milestones
 - v1.0 Auto-Relist MVP — SHIPPED 2026-03-23
@@ -25,6 +56,7 @@ All planned phases complete. The bot is running in production, relisting items s
 - v1.4 Wait All Expired & Telegram Reports — SHIPPED 2026-04-13
 - v1.5 PROCESSING State Fix — SHIPPED 2026-04-13
 - v1.6 Batch Report & Screenshot Fix — SHIPPED 2026-04-13
+- v1.7 Golden Processing Retry — SHIPPED 2026-04-14
 
 ### All Phases Complete (7/7)
 
@@ -36,9 +68,10 @@ All planned phases complete. The bot is running in production, relisting items s
 - [x] Phase 6: Telegram Bot Commands + Sold Items Cleanup (TELEGRAM-01~10)
 - [x] Phase 7: Bug Fixes & Stability (GOLDEN-FIX-01~03, POLLING-01)
 
-### Test Suite: 641 tests, all passing
-- 122 original unit/feature tests
-- 519 golden timeline simulation tests (tests/test_golden_timeline.py)
+### Test Suite: 658 tests, all passing
+- 132 original unit/feature tests
+- 526 golden timeline simulation tests (tests/test_golden_timeline.py)
+- 10 golden processing retry tests (tests/test_golden_retry.py)
 
 ### Production Verification
 - 53 items relisted, 0 failures
@@ -48,7 +81,7 @@ All planned phases complete. The bot is running in production, relisting items s
 - Relist batch notifications showing accurate count of active/expired items
 - Handling of "Processing" elements effectively waits before relist
 - Aggregated Telegram reports show consistent item counts (capped at total_count)
-- Telegram screenshot correctly scrolls to "Active Transfers" before capture
+- Golden Processing Retry: during golden window, automatically retries relist for Processing items with fresh scans
 
 ### Tonight's Fixes (April 12, 2026)
 
@@ -68,7 +101,9 @@ All planned phases complete. The bot is running in production, relisting items s
 - Changed from 15-20s random interval to 10s fixed for more responsive ritardatari catch during golden windows
 
 ### Current Activity
-[2026-04-13T14:45:00Z] v1.6 Batch Report & Screenshot Fix: Corrected inconsistent numbers in aggregated Telegram notifications (49 active + 55 relisted on 51 total items). Now "Relistati" is capped at total_count and reflect batch progress, while "Totale oggetti" gives the overall context. Added auto-scroll to "Active Transfers" section before taking the screenshot to ensure the image shows the actual items instead of empty Sold/Unsold sections.
+[2026-04-14T16:30:00Z] v1.7 Golden Processing Retry: Fixed stale Processing check that caused false warnings and unnecessary rapid polling after relist_all(). Added _golden_retry_relist() function that, during golden window, automatically retries relist for items still in Processing state using fresh scans (never stale data). Includes 10 new unit tests. Total test count: 658.
+
+[2026-04-13T14:45:00Z] v1.6 Batch Report & Screenshot Fix: Corrected inconsistent numbers in aggregated Telegram notifications (49 active + 55 relisted on 51 total items). Now "Relistati" is capped at total_count and reflect batch progress, while "Totale oggetti" gives the overall context.
 
 [2026-04-13T11:30:00Z] PROCESSING state fix shipped. New ListingState.PROCESSING enum captures items in EA limbo (expired but still visible as "active" in DOM). Fixes in detector.py: added "processing"/"elaborazion" detection → returns PROCESSING instead of UNKNOWN. Main.py safety net: after relist, if PROCESSING items remain, force 15s wait instead of normal expiry wait. Notification accumulator now tracks expired_detected across all cycles in batch.
 
@@ -95,8 +130,8 @@ All planned phases complete. The bot is running in production, relisting items s
 - Console Mode: Deep Sleep via /console and /online commands
 - Heartbeat: dynamic click 'Clear Sold' every 2.5-5 min random
 - Aggregated reports: capped counts at total_count for logical consistency
-- Auto-scroll to "Active Transfers" for clear Telegram screenshots
+- Golden Processing Retry: _golden_retry_relist() retries Processing items during golden window with fresh scans, interruptible by Telegram
 - 519 timeline simulation tests covering every minute 14:00-20:59 + golden boundaries
 - Every relist block MUST have an `else` fallback for normal relist (AGENTS.md rule)
 
-Last updated: 2026-04-13T14:45:00Z
+Last updated: 2026-04-14T16:30:00Z

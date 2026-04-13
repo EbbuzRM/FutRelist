@@ -55,6 +55,17 @@
 
 ---
 
+### v1.7 Golden Processing Retry — SHIPPED 2026-04-14
+**Tests:** 658 passing (132 original + 519 golden timeline + 10 golden retry + 7 misc)
+**Key accomplishments:**
+- **Bug Fix (d63d342):** Removed stale Processing check after relist_all(). The STALE `scan` object was checked for PROCESSING items, causing false "⚠️ 14 item ancora in Processing dopo relist" warnings and unnecessary 10-15s rapid polling. After relist, next_wait is computed normally and the next cycle verifies naturally.
+- **Log clarity (d63d342):** Fixed misleading log "46 scaduti, 14 in processing" → "46 scaduti (di cui 14 in processing)" — Processing is a subset of expired, not additional items.
+- **Cleanup (d63d342):** Removed sync-conflict files and unnecessary scroll code.
+- **Feature (b9fc754 + 1f60c59):** Added `_golden_retry_relist()` function in main.py. During golden window (:09-:11), after initial relist succeeds, if Processing items remain: wait 5-10s random (interruptible by Telegram) → navigate to Transfer List → fresh scan (NEVER stale data) → relist if expired_count > 0, accumulate stats → repeat until clear or golden window closes. Only active during golden hours — outside golden window, normal cycle handles it.
+- **10 new unit tests** in tests/test_golden_retry.py covering: no retry outside golden, single retry, multiple retries, window closes mid-retry, reboot during wait, navigation failure, per_listing mode, session recovery, wait timing, fresh scan verification.
+
+---
+
 ## Future Milestones
 
 ### v2.0 Enhanced Trading
