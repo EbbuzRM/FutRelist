@@ -1,12 +1,12 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-04-11
+**Analysis Date:** 2026-04-12
 
 ## Directory Layout
 
 ```
 C:\App\fifa-relist\
-├── main.py                 # Entry point, main loop, CLI
+├── main.py                 # Entry point, main loop, CLI (~1060 lines)
 ├── bot_state.py            # Thread-safe state for remote control
 ├── telegram_handler.py     # Telegram bot commands via polling
 ├── notifier.py             # Telegram alert helpers
@@ -36,8 +36,9 @@ C:\App\fifa-relist\
 - Key files: `listing.py` (ListingState, PlayerListing, ListingScanResult)
 
 **tests/:**
-- Purpose: Unit tests with pytest
+- Purpose: Unit tests with pytest (641 total)
 - Contains: test_*.py files, conftest.py
+- Key file: `test_golden_timeline.py` (519 golden hour timeline simulation tests)
 - Run with: `pytest`
 
 ## Key File Locations
@@ -60,6 +61,7 @@ C:\App\fifa-relist\
 **Testing:**
 - `tests/conftest.py`: pytest fixtures
 - `tests/test_*.py`: Unit tests for each module
+- `tests/test_golden_timeline.py`: 519 golden hour timeline simulation tests
 
 ## Naming Conventions
 
@@ -109,4 +111,4 @@ C:\App\fifa-relist\
 
 ---
 
-*Structure analysis: 2026-04-11*
+*Structure analysis: 2026-04-12*

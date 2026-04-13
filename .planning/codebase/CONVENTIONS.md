@@ -1,6 +1,6 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-04-11
+**Analysis Date:** 2026-04-12
 
 ## Naming Patterns
 
@@ -184,6 +184,29 @@ self.playwright.chromium.launch_persistent_context(
 )
 ```
 
+## Golden Hour Timeline Test Pattern
+
+**Pattern:** Parametrized datetime simulation with monkeypatched `datetime.now()`:
+```python
+@pytest.mark.parametrize(
+    "hour,minute,expected_hold,expected_golden_window",
+    [
+        (15, 10, True, False),   # Hold window
+        (16, 10, False, True),  # Golden window — relist now
+    ],
+)
+def test_timeline_minute(self, hour, minute, expected_hold, expected_golden_window):
+    """Simulate a specific minute and verify hold/golden decisions."""
+    now = datetime(2026, 4, 12, hour, minute, 0)
+    assert is_in_hold_window(now) == expected_hold
+    assert is_in_golden_window(now) == expected_golden_window
+```
+
+**Key conventions:**
+- Use `@pytest.mark.parametrize` for exhaustive timeline coverage
+- Pass explicit `datetime` objects rather than mocking `datetime.now()` for deterministic tests
+- Full-day timeline tests cover every minute (14:00-20:59 = 420 parametrized cases)
+
 ---
 
-*Convention analysis: 2026-04-11*
+*Convention analysis: 2026-04-12*

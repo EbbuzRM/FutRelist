@@ -358,6 +358,7 @@ def _send_batch_notification(
     accumulator: dict,
     last_relist_error: str | None,
     logger: logging.Logger,
+    scan=None,
 ) -> None:
     """Invia il report Telegram aggregato e pulisce lo screenshot."""
     if not app_config.notifications.telegram_token:
@@ -365,22 +366,47 @@ def _send_batch_notification(
 
     screenshot_path = "relist_report.png"
     try:
+        # Calcola numeri POST-relist logicamente consistenti.
+        # Il conteggio grezzo accumulato (relisted/expired_detected) può superare
+        # il totale oggetti quando item in stato PROCESSING vengono contati
+        # come "expired" in più cicli consecutivi. Cappiamo al totale reale.
+        totale_oggetti = scan.total_count if scan else 0
+        failed = accumulator['failed']
+
+        # Dopo il relist, tutti gli oggetti non-falliti dovrebbero essere attivi
+        attivi_post_relist = max(totale_oggetti - failed, 0)
+
+        # Rilistati non può superare il totale oggetti
+        rilistati = min(accumulator['relisted'], totale_oggetti) if totale_oggetti else accumulator['relisted']
+
         page.screenshot(path=screenshot_path)
         error_msg = f" ⚠️ Error: {last_relist_error}" if last_relist_error else ""
         msg = (
             f"🔔 Report Aggregato\n"
             f"-------------------\n"
             f"📦 Cicli: {accumulator['cycles']}\n"
-            f"🚀 Totale Rilistati: {accumulator['relisted']}\n"
-            f"❌ Falliti: {accumulator['failed']}{error_msg}\n"
+            f"📋 Totale oggetti: {totale_oggetti}\n"
+            f"🚀 Relistati: {rilistati}\n"
+            f"❌ Falliti: {failed}{error_msg}\n"
             f"🕒 Modalità: ⚽ Drift Ibrido"
         )
+        # Import moved here to avoid circular imports if any, already present but good practice
+        from notifier import send_telegram_photo
         send_telegram_photo(app_config.notifications, screenshot_path, msg)
     except Exception as e:
         logger.error(f"Errore invio notifica: {e}")
     finally:
+        import os
         if os.path.exists(screenshot_path):
             os.remove(screenshot_path)
+            
+        # Sicurezza: scrolliamo di nuovo in cima alla pagina per essere certi 
+        # che il tasto "Re-list All" e le sezioni superiori siano visibili per il prossimo ciclo.
+        try:
+            page.evaluate("window.scrollTo(0, 0)")
+            page.wait_for_timeout(500)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -657,7 +683,7 @@ def main() -> None:
         # Notification batching — dichiarati FUORI dal loop (persistono tra i cicli)
         last_notification_time: datetime | None = None
         last_relist_error: str | None = None
-        notification_accumulator = {"relisted": 0, "failed": 0, "cycles": 0}
+        notification_accumulator = {"relisted": 0, "failed": 0, "cycles": 0, "expired_detected": 0}
         NOTIFICATION_INTERVAL = 300   # invia ogni 5 minuti max
         NOTIFICATION_THRESHOLD = 5    # oppure quando >= 5 item accumulati
 
@@ -844,7 +870,22 @@ def main() -> None:
 
                     fifa_logger.info(f"Relist completato: {succeeded} successi, {failed} falliti.")
                     bot_state.update_stats(cycle=cycle, relisted=succeeded, failed=failed)
-                    next_wait = _compute_next_wait(scan, datetime.now(), fifa_logger)
+
+                    # Safety net: se ci sono ancora item Processing dopo il relist,
+                    # probabilmente EA non li ha ancora spostati in Expired.
+                    # Polling aggressivo a 15s finché non spariscono.
+                    processing_remaining = sum(
+                        1 for l in scan.listings
+                        if l.state == ListingState.PROCESSING
+                    )
+                    if processing_remaining > 0:
+                        fifa_logger.info(
+                            f"⚠️ {processing_remaining} item ancora in Processing dopo relist "
+                            f"— polling ogni 15s finché non vengono confermati da EA."
+                        )
+                        next_wait = 15
+                    else:
+                        next_wait = _compute_next_wait(scan, datetime.now(), fifa_logger)
 
             else:
                 fifa_logger.info("Nessun oggetto scaduto trovato.")
@@ -886,6 +927,7 @@ def main() -> None:
                 notification_accumulator["relisted"] += succeeded
                 notification_accumulator["failed"] += failed
                 notification_accumulator["cycles"] += 1
+                notification_accumulator["expired_detected"] += scan.expired_count
 
                 now_notify = datetime.now()
                 time_since_last = (
@@ -915,9 +957,9 @@ def main() -> None:
                     )
 
                 if should_notify:
-                    _send_batch_notification(app_config, page, notification_accumulator, last_relist_error, logger)
+                    _send_batch_notification(app_config, page, notification_accumulator, last_relist_error, logger, scan)
                     last_relist_error = None
-                    notification_accumulator = {"relisted": 0, "failed": 0, "cycles": 0}
+                    notification_accumulator = {"relisted": 0, "failed": 0, "cycles": 0, "expired_detected": 0}
                     last_notification_time = now_notify
 
             # --- ATTESA PROSSIMO CICLO (interrompibile da /reboot o heartbeat) ---

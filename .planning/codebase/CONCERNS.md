@@ -1,6 +1,6 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-04-11
+**Analysis Date:** 2026-04-12
 
 ## Overview
 
@@ -97,7 +97,7 @@ def calculate_adjusted_price(current_price: int, adjustment_type: str, adjustmen
 
 ## Known Bugs
 
-### BUG-001: Session Recovery Not Attempted During Golden Window
+### BUG-001: Session Recovery Not Attempted During Golden Window ✅ PARTIALLY FIXED
 
 **Symptom:** If session expires while bot is in golden hold loop (`_golden_hold_loop`), it returns to main loop but may not properly recover before the golden window closes.
 
@@ -105,7 +105,9 @@ def calculate_adjusted_price(current_price: int, adjustment_type: str, adjustmen
 
 **Trigger:** Session timeout during 15:10-18:15 hold period.
 
-**Workaround:** None — requires manual restart.
+**Fix:** Heartbeat mechanism now runs during hold loop, providing basic session health checks. Still needs improvement for full recovery before golden window closes.
+
+**Workaround:** Heartbeat keeps session alive in most cases.
 
 ---
 
@@ -130,6 +132,42 @@ def calculate_adjusted_price(current_price: int, adjustment_type: str, adjustmen
 **Trigger:** Clock change during bot execution.
 
 **Workaround:** None.
+
+---
+
+### BUG-004: EA Popup Blocks Navigation ✅ FIXED (aa52cb3)
+
+**Symptom:** EA promotional popup (e.g., "See what's new") appears over the Transfer List, blocking the "Transfer List" button click. Bot clicks the popup overlay instead of the navigation button, causing `TimeoutError` and failed navigation.
+
+**Files:** `browser/navigator.py`
+
+**Trigger:** EA shows a promotional popup between clicking "Transfers" and "Transfer List".
+
+**Fix:** Added `dismiss_popups()` call (Escape key) between Transfers and Transfer List clicks, plus a 3-attempt retry loop with popup dismissal on each attempt.
+
+---
+
+### BUG-005: Golden Wait Skips Relist ✅ FIXED (20da86e)
+
+**Symptom:** When bot enters the golden wait block (waiting for :10), it sleeps for the full wait duration even if already inside the golden window (:09-:11). This caused the bot to miss the relist window entirely.
+
+**Files:** `main.py`
+
+**Trigger:** Bot computes wait to next golden hour, but is already within the :09-:11 execution window.
+
+**Fix:** Added `is_in_golden_window()` check at the start of the golden wait block — if already in the window, skip sleep and proceed to relist immediately.
+
+---
+
+### BUG-006: Post-Golden Hold Too Aggressive ✅ FIXED (20da86e)
+
+**Symptom:** After the last golden hour (18:10), 61 expired items were not relisted because `is_in_hold_window()` returned True and `get_next_golden_hour()` returned None — the hold had no future golden to wait for, and the else branch for normal relist was never reached.
+
+**Files:** `main.py`
+
+**Trigger:** After 18:11, expired items in hold with no future golden hour.
+
+**Fix:** Added hold override when `get_next_golden_hour()` returns None — if there's no future golden to wait for, skip hold and relist immediately regardless of hold window status.
 
 ---
 
@@ -219,6 +257,16 @@ def calculate_adjusted_price(current_price: int, adjustment_type: str, adjustmen
 
 ---
 
+### FRAG-004: Navigator Popup Retry Loop
+
+**Files:** `browser/navigator.py`
+
+**Why fragile:** The 3-attempt retry loop for popup dismissal is robust for typical EA popups, but could still fail if a popup is persistent (reappears immediately after dismissal) or if a new type of overlay appears that doesn't respond to Escape key.
+
+**Safe modification:** If EA introduces new popup types, the `dismiss_popups()` method may need additional dismissal strategies (clicking close buttons, waiting for overlay fade, etc.). The retry count (3) may need increasing for especially aggressive popups.
+
+---
+
 ## Scaling Limits
 
 ### SCALE-001: Single Browser Instance
@@ -275,15 +323,15 @@ def calculate_adjusted_price(current_price: int, adjustment_type: str, adjustmen
 
 ---
 
-### GAP-002: No Golden Hour Timing Tests
+### GAP-002: No Golden Hour Timing Tests ✅ FIXED
 
-**What's not tested:** Precise timing of golden hour logic, hold window behavior.
+**What's not tested:** ~~Precise timing of golden hour logic, hold window behavior.~~ Now covered by 519 timeline tests in `tests/test_golden_timeline.py`.
 
-**Files:** `main.py` (lines 288-349, 725-745)
+**Files:** `main.py` (lines 288-349, 725-745), `tests/test_golden_timeline.py`
 
-**Risk:** Golden hour bugs discovered only at runtime.
+**Risk:** Golden hour bugs discovered only at runtime — **now extensively tested**.
 
-**Priority:** High
+**Priority:** ~~High~~ Resolved
 
 ---
 
@@ -301,11 +349,13 @@ def calculate_adjusted_price(current_price: int, adjustment_type: str, adjustmen
 
 ## Missing Critical Features
 
-### MISS-001: Health Check Before Golden Window
+### MISS-001: Health Check Before Golden Window ✅ PARTIALLY ADDRESSED
 
 **Problem:** Bot doesn't verify browser health before entering golden hold loop. If browser crashes during hold, it won't be detected until the next main loop iteration (after golden window passes).
 
 **Blocks:** Reliable golden hour operation.
+
+**Current status:** Heartbeat mechanism now runs during the hold loop, providing periodic health checks. Full pre-golden browser health verification not yet implemented.
 
 ---
 
@@ -317,4 +367,4 @@ def calculate_adjusted_price(current_price: int, adjustment_type: str, adjustmen
 
 ---
 
-*Concerns audit: 2026-04-11*
+*Concerns audit: 2026-04-12*

@@ -1,11 +1,11 @@
 # Technology Stack
 
-**Analysis Date:** 2026-04-11
+**Analysis Date:** 2026-04-12
 
 ## Languages
 
 **Primary:**
-- Python 3.9+ - Main scripting language for automation
+- Python 3.13 - Main scripting language for automation
 
 **Secondary:**
 - None detected - Pure Python project
@@ -13,7 +13,7 @@
 ## Runtime
 
 **Environment:**
-- Python 3.9+ (standard CPython)
+- Python 3.13 (standard CPython)
 - Platform: Windows/macOS/Linux compatible
 
 **Package Manager:**
@@ -79,7 +79,7 @@
 ## Platform Requirements
 
 **Development:**
-- Python 3.9+
+- Python 3.13
 - Playwright browsers installed (`playwright install`)
 
 **Production:**
@@ -88,4 +88,4 @@
 
 ---
 
-*Stack analysis: 2026-04-11*
+*Stack analysis: 2026-04-12*

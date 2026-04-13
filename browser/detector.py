@@ -135,6 +135,10 @@ def determine_state(state_text: str) -> ListingState:
         return ListingState.SOLD
     if any(kw in text for kw in ("expired", "scadut", "expir")):
         return ListingState.EXPIRED
+    # Processing... = item in limbo EA: scaduti ma non ancora visibili come "Expired".
+    # EA li lascia temporaneamente nella sezione "active" del DOM con questo testo.
+    if any(kw in text for kw in ("processing", "elaborazion")):
+        return ListingState.PROCESSING
     if any(kw in text for kw in ("active", "attiv", "selling", "vendita", "minut", "hour", "ora", "second", "<", "m ", "h ", "s ")):
         return ListingState.ACTIVE
 
@@ -263,11 +267,21 @@ class ListingDetector:
                 f"state_text={state_text!r} section={section!r} time={raw.get('time')!r}"
             )
 
-            # La sezione rilevata per posizione è la fonte più affidabile
+            # La sezione rilevata per posizione è la fonte più affidabile,
+            # ECCEZIONE: "Processing..." appare nella sezione 'active' del DOM
+            # ma non è un listing attivo — è in limbo post-scadenza lato EA.
+            # Il testo del timer ha priorità sulla sezione in questo caso specifico.
+            state_text_lower = state_text.lower()
+            is_processing = any(kw in state_text_lower for kw in ("processing", "elaborazion"))
+
             if section == "sold":
                 state = ListingState.SOLD
             elif section == "expired":
                 state = ListingState.EXPIRED
+            elif section == "active" and is_processing:
+                # Override: EA mette i Processing... in sezione active, ma vanno trattati
+                # come PROCESSING (da relistare), non come ACTIVE (timer valido).
+                state = ListingState.PROCESSING
             elif section == "active":
                 state = ListingState.ACTIVE
             else:
@@ -289,8 +303,12 @@ class ListingDetector:
 
         # Step 5: build scan result
         active_count = sum(1 for l in listings if l.state == ListingState.ACTIVE)
-        expired_count = sum(1 for l in listings if l.state == ListingState.EXPIRED)
+        expired_count = sum(
+            1 for l in listings
+            if l.state in (ListingState.EXPIRED, ListingState.PROCESSING)
+        )
         sold_count = sum(1 for l in listings if l.state == ListingState.SOLD)
+        processing_count = sum(1 for l in listings if l.state == ListingState.PROCESSING)
 
         result = ListingScanResult(
             total_count=len(listings),
@@ -300,9 +318,10 @@ class ListingDetector:
             listings=listings,
         )
 
+        processing_log = f", {processing_count} in processing" if processing_count > 0 else ""
         logger.info(
             f"Scansione completata: {result.total_count} listing "
-            f"({active_count} attivi, {expired_count} scaduti, {sold_count} venduti)"
+            f"({active_count} attivi, {expired_count} scaduti{processing_log}, {sold_count} venduti)"
         )
         return result
 

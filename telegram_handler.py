@@ -113,10 +113,12 @@ class TelegramHandler:
                 for update in updates:
                     try:
                         self._handle_update(update)
-                        self._offset = update.get("update_id", 0) + 1
                     except Exception as e:
                         logger.error(f"Errore elaborazione update: {e}")
-                        # Non aggiornare offset, così il messaggio verrà ritentato al prossimo polling
+                    finally:
+                        # Always update offset even if message send failed
+                        # to prevent Telegram from resending the same message
+                        self._offset = update.get("update_id", 0) + 1
             except Exception as e:
                 logger.error(f"Errore polling Telegram: {e}")
                 self._stop_event.wait(timeout=5)  # Pausa prima di riprovare

@@ -1,9 +1,9 @@
 # FIFA 26 Auto-Relist Tool — Codebase Map
 
-**Analysis Date:** 2026-04-11
+**Analysis Date:** 2026-04-13
 **Project Root:** `C:\App\fifa-relist`
-**Language:** Python 3.9+
-**Current Phase:** Phase 6 complete (Telegram Commands & Sold Cleanup) — v1.0 MVP ready
+**Language:** Python 3.13
+**Current Phase:** Phase 7+ (Stability & Detailed Reporting) — v1.4 shipped
 
 ---
 
@@ -82,7 +82,7 @@ fifa-relist/
 
 | Aspect | Detail |
 |--------|--------|
-| **Path** | `main.py` (1032 lines) |
+| **Path** | `main.py` (1061+ lines) |
 | **Responsibility** | Application bootstrap, golden hour logic, main scan loop, CLI commands |
 | **Imports from project** | All browser modules, config, models, bot_state, telegram_handler, notifier |
 | **External imports** | `json`, `logging`, `os`, `sys`, `argparse`, `threading`, `time`, `datetime` |
@@ -197,7 +197,7 @@ fifa-relist/
 | **Path** | `telegram_handler.py` |
 | **Responsibility** | Telegram bot commands via long polling |
 | **Class** | `TelegramHandler` |
-| **Commands** | `/status`, `/pause`, `/resume`, `/force_relist`, `/del_sold`, `/logs`, `/reboot`, `/console` |
+| **Commands** | `/status`, `/pause`, `/resume`, `/force_relist`, `/del_sold`, `/logs`, `/reboot`, `/console`, `/online` |
 | **Config consumed** | `notifications.telegram_token`, `notifications.telegram_chat_id` |
 | **Connected to** | `main.py`, `bot_state.py`, `notifier.py` |
 
@@ -227,7 +227,7 @@ fifa-relist/
 | Aspect | Detail |
 |--------|--------|
 | **Path** | `models/listing.py` |
-| **Classes** | `ListingState` (enum: ACTIVE, EXPIRED, SOLD); `PlayerListing`; `ListingScanResult` |
+| **Classes** | `ListingState` (enum: ACTIVE, EXPIRED, PROCESSING, SOLD); `PlayerListing`; `ListingScanResult` |
 | **Connected to** | `browser/detector.py`, `main.py` |
 
 ### `models/relist_result.py` — Relist Result Models
@@ -357,6 +357,8 @@ From `requirements.txt`:
 - ✅ Telegram commands (/status, /pause, /resume, /force_relist, /del_sold, /logs, /reboot, /console)
 - ✅ Sold items cleanup (SoldHandler)
 - ✅ Reboot command with subprocess respawn
+- ✅ "Wait All Expired" logic (waits for processing items before relisting)
+- ✅ Detailed Telegram reports (Active with timer vs. Expired vs. Just Relisted)
 
 ### Key Selectors (in `browser/detector.py` and `browser/relist.py`)
 - `.listFUTItem` — player listing container
@@ -404,4 +406,4 @@ From `requirements.txt`:
 
 ---
 
-*Codebase map: 2026-04-11 — Phase 6 complete, v1.0 MVP ready, ~20 source files, ~2000+ lines of application code.*
+*Codebase map: 2026-04-13 — v1.4 shipped, ~20 source files, ~2500+ lines of application code.*

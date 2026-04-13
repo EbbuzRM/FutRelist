@@ -1,6 +1,6 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-04-11
+**Analysis Date:** 2026-04-12
 
 ## Test Framework
 
@@ -39,7 +39,8 @@ tests/
 ├── test_sold_handler.py
 ├── test_error_handler.py
 ├── test_relist.py
-└── test_listing_model.py
+├── test_listing_model.py
+└── test_golden_timeline.py  # Golden hour timeline simulation (519 tests)
 ```
 
 **Naming:** `test_<module_name>.py`
@@ -241,6 +242,62 @@ def test_parse_price_none(self):
 2. **No external API calls** - Use fixtures for HTML samples
 3. **No sleep-dependent timing** - Monkeypatch time.sleep
 
+## Golden Hour Timeline Tests
+
+**File:** `tests/test_golden_timeline.py`
+
+**Total tests:** 519 (parametrized timeline simulation)
+
+**Purpose:** Exhaustive validation of golden hour timing logic by simulating every minute of a full day (14:00-20:59) and testing boundary conditions for hold windows, golden windows, and post-golden hold override.
+
+**Test Classes and Counts:**
+
+| Class | Tests | Purpose |
+|-------|-------|---------|
+| `TestGetNextGoldenHour` | 11 | Next golden hour calculation |
+| `TestIsInGoldenPeriod` | 7 | Golden period detection (15:10-18:15) |
+| `TestIsInHoldWindow` | 14 | Hold window logic |
+| `TestIsInGoldenWindow` | 10 | Golden window detection (:09-:11) |
+| `TestIsCloseToGolden` | 7 | Proximity to golden hour |
+| `TestHoldDecisionLogic` | 4 | Hold vs. relist decision |
+| `TestGoldenWaitSkipLogic` | 5 | Skip sleep when already in golden window |
+| `TestComputeNextWaitGoldenWindow` | 2 | Wait computation near golden |
+| `TestFullDayTimeline` | 420 | Every minute 14:00-20:59 |
+| `TestGoldenWindowBoundaries` | 8 | Golden window edge cases |
+| `TestHoldWindowBoundaries` | 8 | Hold window edge cases |
+| `TestGetNextGoldenHourBoundaries` | 5 | Next golden boundary conditions |
+| `TestPostGoldenHoldOverride` | 6 | Hold override after last golden |
+| `TestGoldenConstantsConsistency` | 7 | Constant consistency checks |
+| `TestComputeNextWaitIntegration` | 5 | Integration wait computation |
+
+**Parametrized Timeline Test Pattern:**
+```python
+@pytest.mark.parametrize(
+    "hour,minute,expected_hold,expected_golden_window",
+    [
+        # Before golden period — normal relist
+        (14, 0, False, False),
+        (15, 0, False, False),
+        # Hold window — don't relist
+        (15, 10, True, False),
+        # Pre-nav window
+        (16, 9, True, True),  # pre-nav at :09
+        # Golden window — relist now
+        (16, 10, False, True),
+        # After golden — hold for next
+        (16, 12, True, False),
+        # ... (420 parametrized cases total)
+    ],
+)
+def test_timeline_minute(self, hour, minute, expected_hold, expected_golden_window):
+    """Simulate a specific minute and verify hold/golden decisions."""
+    now = datetime(2026, 4, 12, hour, minute, 0)
+    assert is_in_hold_window(now) == expected_hold
+    assert is_in_golden_window(now) == expected_golden_window
+```
+
+**Key insight:** The `TestFullDayTimeline` class tests every single minute from 14:00 to 20:59 (420 minutes), ensuring no off-by-one errors or boundary bugs in golden hour logic.
+
 ---
 
-*Testing analysis: 2026-04-11*
+*Testing analysis: 2026-04-12*

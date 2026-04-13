@@ -137,6 +137,17 @@ Each task was committed atomically:
 - LSP warning "telegram is possibly unbound" in KeyboardInterrupt handler — fixed by initializing `telegram = None` at top of try block
 - Pre-existing test failures in `test_error_handler.py` and `test_rate_limiter.py` are unrelated to these changes (112 tests pass)
 
+### Bug Fix: /logs Command Not Responding on Second Invocation (2026-04-13)
+
+**Problema:** Il comando `/logs` funzionava alla prima esecuzione ma non rispondeva alle successive.
+
+**Causa:** Nel blocco try/except del polling, l'offset di Telegram veniva aggiornato SOLO se l'elaborazione e l'invio del messaggio riuscivano. Se l'invio falliva (es. timeout rete), il comando rimaneva "in attesa" e veniva ignorato ai cicli successivi.
+
+**Soluzione:** Spostato l'aggiornamento dell'offset in un blocco `finally` così che venga aggiornato sempre, anche se l'elaborazione o l'invio del messaggio fallisce.
+
+**Files modified:** `telegram_handler.py:113-120`
+**Verification:** 20 tests pass
+
 ## User Setup Required
 
 None - no external service configuration required. Telegram token and chat_id are already configured in config.json.

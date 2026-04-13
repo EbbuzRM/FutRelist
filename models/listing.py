@@ -17,6 +17,7 @@ class ListingState(enum.Enum):
     ACTIVE = "active"       # attualmente sul mercato
     EXPIRED = "expired"     # non venduto, da rimettere in lista
     SOLD = "sold"           # venduto con successo
+    PROCESSING = "processing"  # in attesa di conferma EA (limbo post-scadenza)
     UNKNOWN = "unknown"     # stato non determinabile
 
 
@@ -36,8 +37,11 @@ class PlayerListing:
 
     @property
     def needs_relist(self) -> bool:
-        """True se il listing è scaduto e va rimesso in vendita."""
-        return self.state == ListingState.EXPIRED
+        """True se il listing è scaduto e va rimesso in vendita.
+        Include PROCESSING: item che EA tiene in limbo dopo la scadenza,
+        visibili nella sezione 'active' del DOM ma non più attivi.
+        """
+        return self.state in (ListingState.EXPIRED, ListingState.PROCESSING)
 
 
 @dataclass
@@ -49,6 +53,11 @@ class ListingScanResult:
     expired_count: int
     sold_count: int
     listings: list[PlayerListing] = field(default_factory=list)
+
+    @property
+    def processing_count(self) -> int:
+        """Numero di listing in stato Processing (limbo EA)."""
+        return sum(1 for l in self.listings if l.state == ListingState.PROCESSING)
 
     @property
     def is_empty(self) -> bool:

@@ -1,6 +1,6 @@
 # Architecture
 
-**Analysis Date:** 2026-04-11
+**Analysis Date:** 2026-04-12
 
 ## Pattern Overview
 
@@ -16,7 +16,7 @@
 
 **Orchestration (main.py):**
 - Purpose: Main entry point and control loop
-- Location: `main.py` (1032 lines)
+- Location: `main.py` (1060 lines)
 - Contains: CLI parser, logging setup, golden hour logic, main scan loop
 - Depends on: All browser modules, config, models, notifier, telegram_handler
 - Used by: Direct execution (`python main.py run`)
@@ -55,7 +55,7 @@
 
 1. **Initialize** → Load config → Start browser → Authenticate
 2. **Session Check** → `ensure_session()` verifies validity
-3. **Golden Sync** → If in golden period (15:10-18:15) and not in relist window, hold until :10
+3. **Golden Sync** → If in golden period (15:10-18:15) and not in relist window, hold until :10. If already in golden window (:09-:11), skip sleep and relist immediately.
 4. **Navigate** → `navigator.go_to_transfer_list()` reaches Transfer List
 5. **Scan** → `detector.scan_listings()` reads DOM, returns ListingScanResult
 6. **Decision** → 
@@ -111,6 +111,7 @@
 - Session expiry: Reload + re-authenticate (in `error_handler.py`)
 - Console detection: Wait loop (30 min checks, max 4 hours)
 - Navigation timeout: Retry with page reload
+- Navigation blocked by popup: 3-attempt retry with `dismiss_popups()` + Escape key (in `navigator.py`)
 - Relist errors: Check for error banner, session validation
 
 ## Cross-Cutting Concerns
@@ -123,4 +124,4 @@
 
 ---
 
-*Architecture analysis: 2026-04-11*
+*Architecture analysis: 2026-04-12*

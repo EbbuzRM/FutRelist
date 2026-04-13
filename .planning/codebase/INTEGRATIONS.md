@@ -1,6 +1,6 @@
 # External Integrations
 
-**Analysis Date:** 2026-04-11
+**Analysis Date:** 2026-04-12
 
 ## APIs & External Services
 
@@ -21,7 +21,7 @@
   - Config: `notifications.telegram_token` and `notifications.telegram_chat_id`
   - Features:
     - Batch notifications every 5 minutes or 5+ items relisted
-    - Remote control: `/status`, `/pause`, `/resume`, `/force_relist`, `/del_sold`, `/logs`, `/reboot`, `/console`
+    - Remote control: `/status`, `/pause`, `/resume`, `/force_relist`, `/del_sold`, `/logs`, `/reboot`, `/console`, `/online`
 
 **Telegram Handler Implementation** (`telegram_handler.py`):
 - Long polling with offset tracking
@@ -114,4 +114,4 @@ logs/
 
 ---
 
-*Integration audit: 2026-04-11*
+*Integration audit: 2026-04-12*
