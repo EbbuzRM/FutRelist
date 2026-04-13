@@ -318,7 +318,7 @@ class ListingDetector:
             listings=listings,
         )
 
-        processing_log = f", {processing_count} in processing" if processing_count > 0 else ""
+        processing_log = f" (di cui {processing_count} in processing)" if processing_count > 0 else ""
         logger.info(
             f"Scansione completata: {result.total_count} listing "
             f"({active_count} attivi, {expired_count} scaduti{processing_log}, {sold_count} venduti)"

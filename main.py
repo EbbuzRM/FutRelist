@@ -288,17 +288,20 @@ def get_active_with_timer_count(scan: ListingScanResult) -> int:
 def get_next_golden_hour(now: datetime) -> datetime | None:
     """Restituisce il prossimo target :10 (16:10, 17:10, 18:10) come datetime.
 
-    Se siamo dopo le 18:10, restituisce None (nessuna golden oggi).
-    Se siamo prima delle 16:10, restituisce 16:10.
-    Se siamo tra 16:10-17:10, restituisce 17:10.
-    Se siamo tra 17:10-18:10, restituisce 18:10.
+    La golden è considerata ancora 'corrente' finché siamo nella sua finestra di rilist
+    (:09-:11). Questo evita che un ritardo di pochi secondi alle :10:01 faccia saltare
+    il rilist spostando l'obiettivo all'ora successiva.
     """
     golden_targets = [
         now.replace(hour=h, minute=GOLDEN_MINUTE, second=0, microsecond=0)
         for h in GOLDEN_HOURS
     ]
     for target in golden_targets:
-        if now < target:
+        # La golden è ancora valida finché siamo nella finestra (fino a :11:59)
+        window_end_min = max(GOLDEN_RELIST_WINDOW)
+        window_end = target.replace(minute=window_end_min, second=59, microsecond=0)
+        
+        if now <= window_end:
             return target
     return None
 
@@ -399,14 +402,6 @@ def _send_batch_notification(
         import os
         if os.path.exists(screenshot_path):
             os.remove(screenshot_path)
-            
-        # Sicurezza: scrolliamo di nuovo in cima alla pagina per essere certi 
-        # che il tasto "Re-list All" e le sezioni superiori siano visibili per il prossimo ciclo.
-        try:
-            page.evaluate("window.scrollTo(0, 0)")
-            page.wait_for_timeout(500)
-        except Exception:
-            pass
 
 
 # ---------------------------------------------------------------------------
@@ -513,6 +508,10 @@ def _active_wait_with_heartbeat(
         if bot_state.wait_interruptible(current_wait):
             return True  # Reboot richiesto
             
+        if bot_state.has_commands():
+            logger.debug("Interrompo attesa heartbeat per processare comandi Telegram")
+            return False # Interrotto per comandi
+            
         waited += current_wait
         
         # Esegui l'heartbeat solo se non abbiamo finito l'attesa e non siamo in pausa/console mode
@@ -579,7 +578,17 @@ def _golden_hold_loop(
     seconds_until_pre_nav = (pre_nav_time - now).total_seconds()
 
     while seconds_until_pre_nav > 0:
-        wait_chunk = max(1, min(3600, int(seconds_until_pre_nav)))
+        # Se mancano meno di 180 secondi al pre-nav, non facciamo più heartbeat lunghi
+        # per non rischiare di sforare il target delle 09:30.
+        if seconds_until_pre_nav <= 180:
+            logger.info(f"[Golden] Prossimità pre-nav: attesa di precisione di {int(seconds_until_pre_nav)}s.")
+            # Attesa di precisione senza heartbeat (interrompibile da Telegram/Reboot)
+            if bot_state.wait_interruptible(seconds_until_pre_nav):
+                return next_golden
+            break # Esci dal loop per fare il controllo sessione finale
+
+        # Calcola un chunk di attesa sicuro per l'heartbeat
+        wait_chunk = max(1, min(180, int(seconds_until_pre_nav - 120)))
         status_console.print(make_status_table("Pausa Sincro Golden", 0, 0, 0, cycle))
         logger.info(
             f"[Golden] HOLD: mancano {format_duration(int(seconds_until_golden))} "
@@ -590,6 +599,10 @@ def _golden_hold_loop(
         if _active_wait_with_heartbeat(wait_chunk, page, auth, bot_state, logger):
             logger.info("[Reboot] HOLD interrotto per reboot richiesto.")
             return next_golden # Ritorna per permettere il reboot nel main loop
+            
+        if bot_state.has_commands():
+            logger.info("[Golden] HOLD interrotto per processare comandi Telegram.")
+            return next_golden
 
         now = datetime.now()
         next_golden = get_next_golden_hour(now)
@@ -600,8 +613,9 @@ def _golden_hold_loop(
         seconds_until_golden = (next_golden - now).total_seconds()
         seconds_until_pre_nav = (pre_nav_time - now).total_seconds()
 
-        # Verifica finale della sessione (veloce se già loggato)
-        ensure_session(page, auth, controller, get_credentials)
+    # --- CONTROLLO SESSIONE FINALE (PRIMISSIMA DEL PRE-NAV) ---
+    logger.info("[Golden] Controllo sessione finale pre-navigazione...")
+    ensure_session(page, auth, controller, get_credentials, timeout_ms=10000)
 
     return next_golden
 
@@ -752,7 +766,10 @@ def main() -> None:
             now = datetime.now()
             next_golden = get_next_golden_hour(now)
 
-            if next_golden and is_in_golden_period(now) and not is_in_golden_window(now):
+            # ECCEZIONE: al ciclo 1 (avvio bot o reboot) facciamo sempre una scansione completa
+            # per non essere "ciechi" sulla situazione reale della Transfer List.
+            # Dal ciclo 2 in poi, se siamo in HOLD, usiamo il loop ottimizzato.
+            if cycle > 1 and next_golden and is_in_golden_period(now) and not is_in_golden_window(now):
                 pre_nav_time = next_golden.replace(minute=GOLDEN_PRE_NAV_MINUTE, second=30, microsecond=0)
                 seconds_until_pre_nav = (pre_nav_time - now).total_seconds()
                 seconds_until_golden = (next_golden - now).total_seconds()
@@ -768,6 +785,8 @@ def main() -> None:
                         logger.info("[Golden] PRE-NAV AVVIATA! Navigo ora per arrivare al :10 preciso.")
                 elif 0 < seconds_until_golden <= 30:
                     logger.info(f"[Golden] Timing perfetto! Mancano {int(seconds_until_golden)}s al :10, procedo.")
+                    # Verifica sessione finale anche se arriviamo qui senza passare dal loop
+                    ensure_session(page, auth, controller, get_credentials, timeout_ms=10000)
                 # else: siamo dopo il :10, naviga normalmente
 
             if not navigate_with_retry(navigator, page):
@@ -779,12 +798,18 @@ def main() -> None:
             now = datetime.now()
             next_golden = get_next_golden_hour(now)
             if next_golden and is_in_golden_period(now) and now < next_golden:
-                # Only wait if we're NOT already in a golden relist window (:09-:11)
-                if not is_in_golden_window(now):
+                # Solo se siamo a ridosso della golden (:08-:12) facciamo l'attesa di precisione
+                if is_close_to_golden(now) and not is_in_golden_window(now):
                     wait_secs = (next_golden - now).total_seconds()
                     logger.info(f"[Golden] Attesa precisa: {format_duration(int(wait_secs))} per le {next_golden.strftime('%H:%M:%S')}.")
-                    time.sleep(wait_secs)
-                else:
+                    # Sostituisci time.sleep(wait_secs) con wait_interruptible() per non bloccare Telegram
+                    if bot_state.wait_interruptible(wait_secs):
+                        logger.info("[Reboot] Attesa precisione interrotta per reboot.")
+                        break # Reboot
+                    if bot_state.has_commands():
+                        logger.info("[Golden] Attesa precisione interrotta per processare comandi Telegram.")
+                        # Non facciamo break, lasciamo che il loop principale processi i comandi
+                elif is_in_golden_window(now):
                     logger.info(f"[Golden] Già nella finestra golden ({now.strftime('%H:%M:%S')}), procedo con scansione immediata.")
 
             fifa_logger.info(f"--- [SCANSIONE IBRIDA] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
@@ -812,12 +837,18 @@ def main() -> None:
                 if active_times:
                     min_t = min(active_times)
                     max_t = max(active_times)
-                    # Se i timer sono tutti tra 15-22 minuti e la differenza tra max e min
-                    # è piccola (≤90s), significa che sono stati relistati tutti insieme.
-                    if 900 <= min_t <= 1320 and (max_t - min_t) <= 90:
+                    # Heuristic: se i timer sono vicini a 1 ora (3500-3600s) o 6 ore (21500-21600s)
+                    # e la differenza tra max e min è piccola (≤90s), significa che sono stati relistati tutti insieme.
+                    is_recently_relisted = (
+                        (3400 <= min_t <= 3600) or # 1h
+                        (10600 <= min_t <= 10800) or # 3h
+                        (21400 <= min_t <= 21600)    # 6h
+                    ) and (max_t - min_t) <= 90
+                    
+                    if is_recently_relisted:
                         fifa_logger.info(
-                            f"[⚠️ RELIST MANUALE RILEVATO] Tutti gli item hanno timer simile "
-                            f"({min_t//60}-{max_t//60} min). Qualcuno ha già relistato."
+                            f"[⚠️ RELIST MANUALE RILEVATO] Gli item hanno timer coerenti con un relist recente "
+                            f"({min_t//60} min). Qualcuno ha già agito."
                         )
                         fifa_logger.info(
                             f"Bot si ritira. Prossimo check tra {format_duration(min_t - 20)}."
@@ -871,21 +902,7 @@ def main() -> None:
                     fifa_logger.info(f"Relist completato: {succeeded} successi, {failed} falliti.")
                     bot_state.update_stats(cycle=cycle, relisted=succeeded, failed=failed)
 
-                    # Safety net: se ci sono ancora item Processing dopo il relist,
-                    # probabilmente EA non li ha ancora spostati in Expired.
-                    # Polling aggressivo a 15s finché non spariscono.
-                    processing_remaining = sum(
-                        1 for l in scan.listings
-                        if l.state == ListingState.PROCESSING
-                    )
-                    if processing_remaining > 0:
-                        fifa_logger.info(
-                            f"⚠️ {processing_remaining} item ancora in Processing dopo relist "
-                            f"— polling ogni 15s finché non vengono confermati da EA."
-                        )
-                        next_wait = 15
-                    else:
-                        next_wait = _compute_next_wait(scan, datetime.now(), fifa_logger)
+                    next_wait = _compute_next_wait(scan, datetime.now(), fifa_logger)
 
             else:
                 fifa_logger.info("Nessun oggetto scaduto trovato.")
@@ -893,8 +910,8 @@ def main() -> None:
                 min_active = get_min_active_seconds(scan)
 
                 if is_close_to_golden(now_ne) and (min_active is not None and min_active < 120):
-                    next_wait = 15
-                    fifa_logger.info(f"Prossimità Golden: item scade tra {min_active}s, polling rapido.")
+                    next_wait = 10
+                    fifa_logger.info(f"Prossimità Golden: item scade tra {min_active}s, polling rapido (10s).")
                 elif is_in_hold_window(now_ne):
                     next_g = get_next_golden_hour(now_ne)
                     if next_g:
