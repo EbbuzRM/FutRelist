@@ -1002,6 +1002,27 @@ def main() -> None:
                         succeeded, failed = relist_expired_listings(executor, expired)
 
                     fifa_logger.info(f"Relist completato: {succeeded} successi, {failed} falliti.")
+
+                    # --- GOLDEN RETRY: relist ritardatari/Processing durante golden window ---
+                    now_retry = datetime.now()
+                    if is_in_golden_window(now_retry) and succeeded > 0:
+                        retry_succeeded, retry_failed, should_continue = _golden_retry_relist(
+                            executor=executor,
+                            detector=detector,
+                            navigator=navigator,
+                            page=page,
+                            bot_state=bot_state,
+                            auth=auth,
+                            config=config,
+                            fifa_logger=fifa_logger,
+                            initial_succeeded=succeeded,
+                            initial_failed=failed,
+                        )
+                        succeeded += retry_succeeded
+                        failed += retry_failed
+                        if should_continue:
+                            continue
+
                     bot_state.update_stats(cycle=cycle, relisted=succeeded, failed=failed)
 
                     next_wait = _compute_next_wait(scan, datetime.now(), fifa_logger)
