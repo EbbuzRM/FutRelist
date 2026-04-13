@@ -107,6 +107,7 @@ def ensure_session(
     auth: "AuthManager",
     controller,
     get_credentials_fn: Callable[[], tuple[str, str]] | None = None,
+    timeout_ms: int = 5000,
 ) -> None:
     """Verifica la sessione e tenta il recupero se scaduta.
 
@@ -122,7 +123,7 @@ def ensure_session(
     if auth.check_and_handle_disconnect_modal(page):
         logger.warning("Sessione invalidata dal server (Cannot Authenticate). Avvio re-login immediato.")
     elif not is_session_expired(page):
-        if auth.is_logged_in(page, timeout_ms=5000):
+        if auth.is_logged_in(page, timeout_ms=timeout_ms):
             return
         # Sessione incerta: potrebbe essere solo caricamento lento o modale non intercettato
         logger.warning("Sessione incerta, tentativo di ricaricamento...")
@@ -131,7 +132,7 @@ def ensure_session(
         # Riprova il check del modale dopo il reload
         auth.check_and_handle_disconnect_modal(page)
         
-        if not is_session_expired(page) and auth.is_logged_in(page, timeout_ms=5000):
+        if not is_session_expired(page) and auth.is_logged_in(page, timeout_ms=timeout_ms):
             return
         # Dopo reload ancora non loggato: cade nel blocco di re-auth sotto
 

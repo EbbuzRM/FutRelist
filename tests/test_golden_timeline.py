@@ -72,18 +72,26 @@ class TestGetNextGoldenHour:
             ("15:30", "16:10"),
             # Just before 16:10 — next is 16:10
             ("16:05", "16:10"),
-            # Exactly at 16:10 — past it, next is 17:10
-            ("16:10", "17:10"),
-            # Just after 16:10 — next is 17:10
-            ("16:11", "17:10"),
+            # Exactly at 16:10 — still 16:10 (within window :09-:11)
+            ("16:10", "16:10"),
+            # Just after 16:10 — still 16:10 (within window :09-:11)
+            ("16:11", "16:10"),
+            # Just after window closes — next is 17:10
+            ("16:12", "17:10"),
             # Just before 17:10 — next is 17:10
             ("17:09", "17:10"),
-            # Exactly at 17:10 — past it, next is 18:10
-            ("17:10", "18:10"),
-            # Exactly at 18:10 — past it, None
-            ("18:10", None),
-            # After 18:10 — None
-            ("18:11", None),
+            # Exactly at 17:10 — still 17:10
+            ("17:10", "17:10"),
+            # Just after 17:10 — still 17:10
+            ("17:11", "17:10"),
+            # After window closes — next is 18:10
+            ("17:12", "18:10"),
+            # Exactly at 18:10 — still 18:10
+            ("18:10", "18:10"),
+            # Exactly at 18:11 — still 18:10
+            ("18:11", "18:10"),
+            # After 18:11 — None (no more goldens)
+            ("18:12", None),
             # Well after golden period — None
             ("19:00", None),
             # At 18:15 — no more goldens
@@ -551,8 +559,20 @@ class TestGetNextGoldenHourBoundaries:
         assert result == dt(16, 10)
 
     def test_exactly_16_10(self):
-        """At exactly 16:10, we've passed it -> next golden is 17:10."""
+        """At exactly 16:10, we are in the window -> still 16:10."""
         now = dt(16, 10, 0)
+        result = get_next_golden_hour(now)
+        assert result == dt(16, 10)
+
+    def test_just_after_16_10(self):
+        """At 16:11:59, we are still in the window -> still 16:10."""
+        now = dt(16, 11, 59)
+        result = get_next_golden_hour(now)
+        assert result == dt(16, 10)
+
+    def test_window_closes_16_12(self):
+        """At 16:12:00, window closed -> next is 17:10."""
+        now = dt(16, 12, 0)
         result = get_next_golden_hour(now)
         assert result == dt(17, 10)
 
@@ -563,8 +583,14 @@ class TestGetNextGoldenHourBoundaries:
         assert result == dt(18, 10)
 
     def test_exactly_18_10(self):
-        """At exactly 18:10, we've passed it -> None."""
+        """At exactly 18:10, we are in the window -> still 18:10."""
         now = dt(18, 10, 0)
+        result = get_next_golden_hour(now)
+        assert result == dt(18, 10)
+
+    def test_last_window_closes_18_12(self):
+        """At 18:12:00, last window closed -> None."""
+        now = dt(18, 12, 0)
         result = get_next_golden_hour(now)
         assert result is None
 

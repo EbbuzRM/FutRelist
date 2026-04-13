@@ -27,6 +27,7 @@ class BotState:
     _paused: bool = field(default=False, repr=False)
     _force_relist: bool = field(default=False, repr=False)
     _reboot_event: threading.Event = field(default_factory=threading.Event, repr=False)
+    _command_event: threading.Event = field(default_factory=threading.Event, repr=False)
     cycle_count: int = field(default=0)
     last_relisted: int = field(default=0)
     last_failed: int = field(default=0)
@@ -72,12 +73,28 @@ class BotState:
         return self._reboot_event.is_set()
 
     def wait_interruptible(self, seconds: float) -> bool:
-        """Attende fino a `seconds` ma si interrompe subito se arriva un reboot.
+        """Attende fino a `seconds` ma si interrompe subito se arriva un reboot o un comando.
 
         Sostituisce time.sleep() nel main loop.
         Ritorna True se il reboot è stato richiesto (sleep interrotto).
         """
-        return self._reboot_event.wait(timeout=seconds)
+        # Aspettiamo fino a seconds, svegliati da reboot o comando
+        # Nota: usiamo un piccolo trucco, aspettiamo reboot_event, ma se non arriva
+        # controlliamo se c'è un comando o un reboot effettivo.
+        start = datetime.now()
+        while (datetime.now() - start).total_seconds() < seconds:
+            remaining = seconds - (datetime.now() - start).total_seconds()
+            if remaining <= 0: break
+            
+            # Aspetta reboot (il timeout è l'unica cosa che ci serve qui)
+            # ma controlliamo anche i comandi ogni 2 secondi
+            if self._reboot_event.wait(timeout=min(remaining, 2.0)):
+                return True # Reboot!
+            
+            if self.has_commands():
+                return False # Comando in coda, svegliati (ma non è reboot)
+                
+        return self._reboot_event.is_set()
 
     # --- Force Relist (flag consumato alla lettura) ---
 
