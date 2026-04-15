@@ -86,10 +86,11 @@ Puoi controllare il bot direttamente da Telegram, anche mentre è in esecuzione:
 | `/online` | Disattiva modalità console e riprende operazioni normali |
 | `/del_sold` | Cancella gli oggetti venduti e raccoglie i crediti |
 | `/screenshot` | Richiedi screenshot della WebApp |
-| `/logs [righe]` | Mostra le ultime righe del log (default 20) |
+| `/logs [righe]` | Mostra le ultime righe del log (default 20, massimo 60) |
 | `/help` | Mostra tutti i comandi disponibili |
 
 > 💡 Tutti i comandi funzionano anche mentre il bot è in attesa. Non è necessario riavviare.
+> ⚠️ Limite `/logs`: massimo 60 righe (oltre Telegram rifiuta il messaggio)
 
 ---
 
