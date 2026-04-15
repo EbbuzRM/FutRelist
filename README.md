@@ -13,7 +13,6 @@ Questo script automatizza la rimessa in vendita (relisting) degli oggetti sul me
 ---
 
 ## 🏆 Golden Hours Logic ✨
-> **La funzionalità più importante del bot. Non modificare.**
 
 Questa logica è stata progettata per massimizzare le vendite sfruttando i momenti di maggior traffico sul mercato FUT.
 
@@ -37,8 +36,6 @@ Il bot si comporta in questo modo:
 | 17:12 → 18:08       | ⏸️ HOLD → Pre-nav 18:09:30 |
 | 18:10 - 18:11       | 🚀 RELIST TASSATIVO |
 | Dopo le 18:15       | ✅ Relist istantaneo |
-
-> 🚨 **REGOLA FERREA**: MAI rilistare prima del minuto 10. Anche se gli oggetti sono scaduti alle 16:09, il bot aspetta esattamente il minuto 10.
 
 ---
 
@@ -66,22 +63,13 @@ Nuovi parametri per la velocità del bot:
 
 ---
 
-## 🛡️ Caratteristiche Anti-Ban aggiornate
+## 🛡️ Caratteristiche Anti-Ban
 - ✅ **Precisione al secondo**: Relist eseguiti esattamente all'inizio del minuto 10
 - ✅ **Rate limiting randomico**: Pause variabili tra ogni azione, non fisse
 - ✅ **Rilevamento relist manuale**: Se rilevi che tu hai già rilistato manualmente, il bot salta il ciclo
 - ✅ **Heartbeat automatico**: Mantiene la sessione attiva senza fare azioni inutili
 - ✅ **Skip retry intelligente**: Non ripete il relist se è stato già fatto con successo
 - ✅ **Profilo browser persistente**: Non richiede 2FA ad ogni avvio
-
----
-
-## 📊 Comportamenti corretti garantiti
-1. ❌ **Nessun relist prima del minuto 10** - anche se è già :09, il bot attende
-2. ✅ Skip del golden retry quando non ci sono oggetti scaduti
-3. ✅ Ignora l'heuristica di relist manuale per 3 minuti dopo che il bot stesso ha rilistato
-4. ✅ Non viene mai più perso il relist normale fuori dalla fascia golden
-5. ✅ Finestra di tolleranza :09-:11 per ritardi di rete
 
 ## 📱 Comandi Telegram
 
@@ -91,9 +79,14 @@ Puoi controllare il bot direttamente da Telegram, anche mentre è in esecuzione:
 |---|---|
 | `/status` | Mostra lo stato attuale del bot, numero di listing, ultimo relist |
 | `/reboot` | Riavvia il bot in modo pulito (chiude il browser e ricarica tutto il codice) |
-| `/force` | Forza un relist immediato, bypassando la hold window |
+| `/force_relist` | Forza un relist immediato, bypassando la hold window |
 | `/pause` | Metti in pausa il relist automatico |
 | `/resume` | Riprendi il relist automatico |
+| `/console [ore]` | Attiva modalità console (deep sleep, zero interazione). Opzionale specifica ore (es. `/console 2`) |
+| `/online` | Disattiva modalità console e riprende operazioni normali |
+| `/del_sold` | Cancella gli oggetti venduti e raccoglie i crediti |
+| `/screenshot` | Richiedi screenshot della WebApp |
+| `/logs [righe]` | Mostra le ultime righe del log (default 20) |
 | `/help` | Mostra tutti i comandi disponibili |
 
 > 💡 Tutti i comandi funzionano anche mentre il bot è in attesa. Non è necessario riavviare.
@@ -109,10 +102,3 @@ Il bot avvierà Chrome, effettuerà il login e inizierà a gestire la lista merc
 
 ---
 
-## 📋 Note versione
-**v2.1.0**
-- Implementata e stabilizzata la logica Golden Hours ufficiale
-- Aggiunto rate limiting configurabile con limite hard di sicurezza
-- Risolto bug storico che bloccava il relist fuori dalla fascia golden
-- Aggiunto rilevamento relist manuale con esclusione per azioni del bot
-- Aggiunto pre-navigazione automatica 30 secondi prima di ogni golden hour
