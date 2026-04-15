@@ -7,8 +7,11 @@ as dataclasses with __post_init__ validation.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 VALID_DURATIONS = ["1h", "3h", "6h", "12h", "24h", "3d"]
 VALID_RELIST_MODES = ["all", "per_listing"]
@@ -66,6 +69,10 @@ class RateLimitingConfig:
     max_delay_ms: int = 5000
 
     def __post_init__(self):
+        if self.min_delay_ms < 800:
+            logger.warning(f"Rate limiting min delay %sms è troppo basso. Sovrascritto a 800ms (limite minimo sicuro)", self.min_delay_ms)
+            self.min_delay_ms = 800
+        
         if self.min_delay_ms > self.max_delay_ms:
             raise ValueError(
                 "rate_limiting min_delay_ms must be <= max_delay_ms"

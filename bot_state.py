@@ -32,6 +32,7 @@ class BotState:
     last_relisted: int = field(default=0)
     last_failed: int = field(default=0)
     last_scan_time: datetime | None = field(default=None)
+    last_relisted_by_bot: datetime | None = field(default=None)  # Timestamp dell'ultimo relist eseguito dal bot
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     # Console mode: deep sleep, zero WebApp interaction
@@ -181,6 +182,16 @@ class BotState:
             self.last_relisted += relisted
             self.last_failed += failed
             self.last_scan_time = datetime.now()
+            # Se abbiamo appena fatto un relist con successo, impostiamo il flag
+            if relisted > 0:
+                self.last_relisted_by_bot = datetime.now()
+
+    def get_seconds_since_last_relist_by_bot(self) -> float | None:
+        """Restituisce i secondi dall'ultimo relist del bot, o None se mai fatto."""
+        with self._lock:
+            if self.last_relisted_by_bot is None:
+                return None
+            return (datetime.now() - self.last_relisted_by_bot).total_seconds()
 
     # --- Snapshot dello stato ---
 

@@ -43,6 +43,16 @@ La logica delle **Golden Hours** è il cuore del bot. **NON deve mai essere modi
 | 18:10-18:11 | RELIST TASSATIVO + ritardatari |
 | Dopo 18:15 | Relist normale (subito) |
 
+### 🕐 REGOLA CRITICA: Relist SOLO al minuto 10
+Durante la fascia golden, il relist deve avvenire **ESATTAMENTE al minuto 10** (16:10, 17:10, 18:10), **MAI prima**.
+
+**Regole ferree:**
+1. Se siamo nella golden window (:09-:11) ma i minuti sono **:09**, il relist **DEVE essere posticipato** - il bot deve attendere fino al minuto 10
+2. L'heuristica di "relist manuale rilevato" **NON deve attivarsi** se il bot stesso ha fatto il relist da poco (entro 3 minuti dal relist recente)
+3. Se il relist viene eseguito dal bot, impostare un flag `last_relisted_by_bot` con timestamp - questo flag disattiva l'heuristica di rilevamento relist manuale
+
+Questo impede che il bot faccia relist alle 16:09 (quando dovrebbe solo navigare/prepararsi) e poi l'heuristica pensi erroneamente che qualcuno ha già agito manualmente.
+
 ## ⚠️ REGOLA CRITICA: Relist Normale (NON DIMENTICARE)
 
 Il relist **fuori dalla fascia golden** (prima delle 15:10 e dopo le 18:15) deve essere **SEMPRE immediato**.

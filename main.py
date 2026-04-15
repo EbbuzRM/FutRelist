@@ -493,6 +493,7 @@ def _golden_retry_relist(
     fifa_logger: logging.Logger,
     initial_succeeded: int = 0,
     initial_failed: int = 0,
+    processing_count: int = 0,
 ) -> tuple[int, int, bool]:
     """Retry relist during golden window for Processing items.
 
@@ -511,6 +512,7 @@ def _golden_retry_relist(
         fifa_logger: Logger for FIFA actions.
         initial_succeeded: Succeeded count from the initial relist (for logging).
         initial_failed: Failed count from the initial relist (for logging).
+        processing_count: Number of items that were in Processing state during initial scan.
 
     Returns:
         (total_succeeded, total_failed, should_continue):
@@ -520,6 +522,14 @@ def _golden_retry_relist(
     """
     retry_succeeded = 0
     retry_failed = 0
+
+    # Se non ci sono falliti né processing items, skippa il retry
+    if initial_failed == 0 and processing_count == 0:
+        fifa_logger.info(
+            f"[Golden Retry] Nessun fallimento iniziale. Retry non necessario. "
+            f"Uscita dal retry."
+        )
+        return (0, 0, False)
 
     if not is_in_golden_window(datetime.now()):
         return (0, 0, False)
@@ -924,48 +934,73 @@ def main() -> None:
             # --- RILEVAMENTO RELIST MANUALE ---
             # Se alla golden hour tutti gli item hanno timer simile (~17-21 min),
             # qualcuno ha già relistato manualmente → il bot si ritira.
+            # MA: se il bot stesso ha fatto il relist di recente (entro 3 min), ignora questa heuristica.
             now_scan = datetime.now()
             if (
                 scan.active_count > 0
                 and scan.expired_count == 0
                 and is_in_golden_window(now_scan)
             ):
-                active_times = [
-                    l.time_remaining_seconds
-                    for l in scan.listings
-                    if l.state == ListingState.ACTIVE
-                    and l.time_remaining_seconds is not None
-                ]
-                if active_times:
-                    min_t = min(active_times)
-                    max_t = max(active_times)
-                    # Heuristic: se i timer sono vicini a 1 ora (3500-3600s) o 6 ore (21500-21600s)
-                    # e la differenza tra max e min è piccola (≤90s), significa che sono stati relistati tutti insieme.
-                    is_recently_relisted = (
-                        (3400 <= min_t <= 3600) or # 1h
-                        (10600 <= min_t <= 10800) or # 3h
-                        (21400 <= min_t <= 21600)    # 6h
-                    ) and (max_t - min_t) <= 90
-                    
-                    if is_recently_relisted:
-                        fifa_logger.info(
-                            f"[⚠️ RELIST MANUALE RILEVATO] Gli item hanno timer coerenti con un relist recente "
-                            f"({min_t//60} min). Qualcuno ha già agito."
-                        )
-                        fifa_logger.info(
-                            f"Bot si ritira. Prossimo check tra {format_duration(min_t - 20)}."
-                        )
-                        next_wait = max(min_t - 20, 60)
-                        logger.info(f"Fine ciclo {cycle}. In attesa per {format_duration(next_wait)}...")
-                        rate_limiter.wait()
-                        if _active_wait_with_heartbeat(int(next_wait), page, auth, bot_state, logger):
-                            logger.info("[Reboot] Sleep interrotto — reboot immediato!")
-                            break
-                        continue
+                # CONTROLLO CRITICO: il bot ha appena fatto relist? Se sì, ignora l'heuristica
+                seconds_since_bot_relist = bot_state.get_seconds_since_last_relist_by_bot()
+                if seconds_since_bot_relist is not None and seconds_since_bot_relist < 180:
+                    fifa_logger.info(
+                        f"[Bot Relist] Il bot ha rilistato {seconds_since_bot_relist:.0f}s fa. "
+                        f"I timer coerenti sono normali. Ignoro heuristica relist manuale."
+                    )
+                else:
+                    active_times = [
+                        l.time_remaining_seconds
+                        for l in scan.listings
+                        if l.state == ListingState.ACTIVE
+                        and l.time_remaining_seconds is not None
+                    ]
+                    if active_times:
+                        min_t = min(active_times)
+                        max_t = max(active_times)
+                        # Heuristic: se i timer sono vicini a 1 ora (3500-3600s) o 6 ore (21500-21600s)
+                        # e la differenza tra max e min è piccola (≤90s), significa che sono stati relistati tutti insieme.
+                        is_recently_relisted = (
+                            (3400 <= min_t <= 3600) or # 1h
+                            (10600 <= min_t <= 10800) or # 3h
+                            (21400 <= min_t <= 21600)    # 6h
+                        ) and (max_t - min_t) <= 90
+                        
+                        if is_recently_relisted:
+                            fifa_logger.info(
+                                f"[⚠️ RELIST MANUALE RILEVATO] Gli item hanno timer coerenti con un relist recente "
+                                f"({min_t//60} min). Qualcuno ha già agito."
+                            )
+                            fifa_logger.info(
+                                f"Bot si ritira. Prossimo check tra {format_duration(min_t - 20)}."
+                            )
+                            next_wait = max(min_t - 20, 60)
+                            logger.info(f"Fine ciclo {cycle}. In attesa per {format_duration(next_wait)}...")
+                            rate_limiter.wait()
+                            if _active_wait_with_heartbeat(int(next_wait), page, auth, bot_state, logger):
+                                logger.info("[Reboot] Sleep interrotto — reboot immediato!")
+                                break
+                            continue
 
             if scan.expired_count > 0:
-                in_hold = is_in_hold_window(datetime.now())
+                now_relist = datetime.now()
+                in_hold = is_in_hold_window(now_relist)
                 force_relist = bot_state.consume_force_relist()
+
+                # CONTROLLO CRITICO: se siamo nella golden window ma al minuto :09,
+                # il relist DEVE essere posticipato al minuto 10:00 preciso (REGOLA FERRAME)
+                if is_in_golden_window(now_relist) and now_relist.minute == 9:
+                    # Calcola secondi esatti fino alle :10:00
+                    seconds_to_10 = 60 - now_relist.second
+                    fifa_logger.info(f"[Golden] Siamo al minuto 09 ({now_relist.second}s), posticipo al minuto 10:00 preciso.")
+                    fifa_logger.info(f"[Golden] Attendo {seconds_to_10}s per essere esatto alle 10:00.")
+                    next_wait = seconds_to_10
+                    logger.info(f"Fine ciclo {cycle}. In attesa per {format_duration(next_wait)}...")
+                    rate_limiter.wait()
+                    if _active_wait_with_heartbeat(int(next_wait), page, auth, bot_state, logger):
+                        logger.info("[Reboot] Sleep interrotto — reboot immediato!")
+                        break
+                    continue
 
                 if in_hold and not force_relist:
                     next_g = get_next_golden_hour(datetime.now())
@@ -1004,6 +1039,11 @@ def main() -> None:
                     fifa_logger.info(f"Relist completato: {succeeded} successi, {failed} falliti.")
 
                     # --- GOLDEN RETRY: relist ritardatari/Processing durante golden window ---
+                    # Calcola il numero di processing items dalla scansione originale
+                    processing_count = sum(
+                        1 for l in scan.listings
+                        if l.state == ListingState.PROCESSING
+                    )
                     now_retry = datetime.now()
                     if is_in_golden_window(now_retry) and succeeded > 0:
                         retry_succeeded, retry_failed, should_continue = _golden_retry_relist(
@@ -1017,6 +1057,7 @@ def main() -> None:
                             fifa_logger=fifa_logger,
                             initial_succeeded=succeeded,
                             initial_failed=failed,
+                            processing_count=processing_count,
                         )
                         succeeded += retry_succeeded
                         failed += retry_failed
