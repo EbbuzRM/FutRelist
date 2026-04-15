@@ -120,18 +120,10 @@ class RelistExecutor:
             self.page.wait_for_timeout(1500)
             self.rate_limiter.wait()
 
-            # Crea una lista di risultati fittizia per indicare il successo dell'operazione di massa
-            results = [
-                RelistResult(
-                    listing_index=-1, player_name=f"ITEM {i+1}",
-                    old_price=None, new_price=None, success=True,
-                ) for i in range(count)
-            ]
-            
             # Attesa per stabilizzazione UI
             self.page.wait_for_timeout(2000)
 
-            # Verifica errori post-relist
+            # Verifica errori post-relist (banner-level)
             relist_error = self._check_relist_errors()
             if relist_error:
                 logger.error(f"Errore post-relist rilevato: {relist_error}")
@@ -145,7 +137,10 @@ class RelistExecutor:
                 return batch_result
 
             logger.info(f"Re-list All completato per {count} oggetti")
-            batch_result = RelistBatchResult.from_results(results)
+            # NOTA: non possiamo sapere qui quanti siano effettivamente riusciti.
+            # Il conteggio reale viene calcolato in main.py tramite scan post-relist.
+            # Creiamo risultati placeholder — saranno sovrascritti con i conteggi verificati.
+            batch_result = RelistBatchResult.from_results([])
             batch_result.relist_error = None
             return batch_result
         except Exception as e:

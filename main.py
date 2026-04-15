@@ -565,13 +565,19 @@ def _golden_retry_relist(
 
         if executor.relist_mode == "all":
             batch = executor.relist_all(count=scan.expired_count)
-            succeeded = batch.succeeded
-            failed = batch.total - batch.succeeded
             if batch.relist_error:
                 fifa_logger.error(f"[Golden Retry] ERRORE RELIST: {batch.relist_error}")
                 _save_error_screenshot(page, fifa_logger)
                 if _handle_session_recovery(executor, auth, config, page, fifa_logger):
                     return (retry_succeeded, retry_failed, True)
+                succeeded = 0
+                failed = scan.expired_count
+            else:
+                # Verifica post-relist: scan per conteggio effettivo
+                page.wait_for_timeout(2000)
+                post_scan = detector.scan_listings()
+                succeeded = max(scan.expired_count - post_scan.expired_count, 0)
+                failed = post_scan.expired_count
         else:
             expired = [l for l in scan.listings if l.needs_relist]
             succeeded, failed = relist_expired_listings(executor, expired)
@@ -1024,14 +1030,29 @@ def main() -> None:
 
                     if executor.relist_mode == "all":
                         batch = executor.relist_all(count=scan.expired_count)
-                        succeeded = batch.succeeded
-                        failed = batch.total - batch.succeeded
                         if batch.relist_error:
                             last_relist_error = batch.relist_error
                             fifa_logger.error(f"ERRORE RELIST: {last_relist_error}")
                             _save_error_screenshot(page, fifa_logger)
                             if _handle_session_recovery(executor, auth, config, page, fifa_logger):
                                 continue
+                            # Se recovery non serve, il relist è parzialmente fallito
+                            succeeded = 0
+                            failed = scan.expired_count
+                        else:
+                            # Verifica post-relist: scan per conteggio effettivo
+                            page.wait_for_timeout(2000)
+                            post_scan = detector.scan_listings()
+                            pre_expired = scan.expired_count
+                            post_expired = post_scan.expired_count
+                            succeeded = max(pre_expired - post_expired, 0)
+                            failed = post_expired
+                            if failed > 0:
+                                fifa_logger.info(
+                                    f"[Verifica] Pre-relist: {pre_expired} scaduti, "
+                                    f"Post-relist: {post_expired} ancora scaduti. "
+                                    f"Effettivi: {succeeded} successi, {failed} falliti."
+                                )
                     else:
                         expired = [l for l in scan.listings if l.needs_relist]
                         succeeded, failed = relist_expired_listings(executor, expired)
