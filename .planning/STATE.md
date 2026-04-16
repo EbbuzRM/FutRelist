@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.7
-milestone_name: Golden Processing Retry
+milestone: v1.8
+milestone_name: Two-Phase Post-Relist Verification
 status: production
-last_updated: "2026-04-14T16:30:00Z"
+last_updated: "2026-04-16T12:00:00Z"
 progress:
   total_phases: 7
   completed_phases: 7
@@ -17,7 +17,19 @@ progress:
 
 All planned phases complete. The bot is running in production, relisting items successfully.
 
-### Today's Fixes (April 14, 2026)
+### Today's Fixes (April 16, 2026)
+
+**Bug Fix 4: Two-Phase Post-Relist Verification with Auto-Relist**
+- After "Re-list All", the bot did a single verification scan. If Processing items hadn't completed yet on EA's side, they were counted as "failed"
+- Fix: two-phase verification:
+  1. **1st round**: Re-list All → wait 5s → scan → count `first_succeeded` and `truly_expired` (expired NOT in Processing)
+  2. **2nd round (conditional)**: If `truly_expired > 0` after 1st round → Re-list All immediately → wait 3s → final scan → total count (1st + 2nd round)
+- If 2nd relist fails → log warning, use only 1st round counts
+- Processing items are NEVER counted as failed — next cycle will pick them up
+- Same fix applied both in main loop and `_golden_retry_relist()`
+- Improved logs: `[Verifica 1°]`, `[Verifica 2°]` to distinguish rounds
+
+### Previous Fixes (April 14, 2026)
 
 **Bug Fix: Stale Processing Check (commit d63d342)**
 - After `relist_all()`, the code checked the STALE `scan` object for PROCESSING items, causing false "⚠️ 14 item ancora in Processing dopo relist" warnings and unnecessary 10-15s rapid polling.
@@ -57,6 +69,7 @@ All planned phases complete. The bot is running in production, relisting items s
 - v1.5 PROCESSING State Fix — SHIPPED 2026-04-13
 - v1.6 Batch Report & Screenshot Fix — SHIPPED 2026-04-13
 - v1.7 Golden Processing Retry — SHIPPED 2026-04-14
+- v1.8 Two-Phase Post-Relist Verification — SHIPPED 2026-04-16
 
 ### All Phases Complete (7/7)
 
@@ -101,6 +114,8 @@ All planned phases complete. The bot is running in production, relisting items s
 - Changed from 15-20s random interval to 10s fixed for more responsive ritardatari catch during golden windows
 
 ### Current Activity
+[2026-04-16T12:00:00Z] v1.8 Two-Phase Post-Relist Verification: After "Re-list All", single verification scan miscounted Processing items as failures. Fix: two-phase verification — 1st round (relist → 5s → scan → separate truly expired from Processing), 2nd conditional round (if truly_expired > 0 → immediate re-relist → 3s → final scan). Processing items never counted as failed. Applied in both main loop and _golden_retry_relist(). Logs now show [Verifica 1°] / [Verifica 2°].
+
 [2026-04-14T16:30:00Z] v1.7 Golden Processing Retry: Fixed stale Processing check that caused false warnings and unnecessary rapid polling after relist_all(). Added _golden_retry_relist() function that, during golden window, automatically retries relist for items still in Processing state using fresh scans (never stale data). Includes 10 new unit tests. Total test count: 658.
 
 [2026-04-13T14:45:00Z] v1.6 Batch Report & Screenshot Fix: Corrected inconsistent numbers in aggregated Telegram notifications (49 active + 55 relisted on 51 total items). Now "Relistati" is capped at total_count and reflect batch progress, while "Totale oggetti" gives the overall context.
@@ -131,7 +146,8 @@ All planned phases complete. The bot is running in production, relisting items s
 - Heartbeat: dynamic click 'Clear Sold' every 2.5-5 min random
 - Aggregated reports: capped counts at total_count for logical consistency
 - Golden Processing Retry: _golden_retry_relist() retries Processing items during golden window with fresh scans, interruptible by Telegram
+- Two-Phase Post-Relist Verification: 1st round scans after relist, 2nd conditional round re-relists truly expired items; Processing never counted as failed
 - 519 timeline simulation tests covering every minute 14:00-20:59 + golden boundaries
 - Every relist block MUST have an `else` fallback for normal relist (AGENTS.md rule)
 
-Last updated: 2026-04-14T16:30:00Z
+Last updated: 2026-04-16T12:00:00Z

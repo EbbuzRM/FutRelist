@@ -574,10 +574,54 @@ def _golden_retry_relist(
                 failed = scan.expired_count
             else:
                 # Verifica post-relist: scan per conteggio effettivo
-                page.wait_for_timeout(2000)
+                page.wait_for_timeout(3000)
                 post_scan = detector.scan_listings()
-                succeeded = max(scan.expired_count - post_scan.expired_count, 0)
-                failed = post_scan.expired_count
+                pre_expired = scan.expired_count
+                post_expired = post_scan.expired_count
+                # I PROCESSING item NON sono falliti — EA li sta ancora gestendo
+                post_processing = post_scan.processing_count
+                truly_expired = max(post_expired - post_processing, 0)
+                first_succeeded = max(pre_expired - post_expired, 0)
+
+                # --- 2° RELIST AUTOMATICO ---
+                # Se dopo il 1° relist ci sono ancora item veramente scaduti (non solo Processing),
+                # tentiamo un secondo Re-list All immediato
+                if truly_expired > 0:
+                    fifa_logger.info(
+                        f"[Golden Retry] Ancora {truly_expired} item scaduti dopo il 1° relist. "
+                        f"Tento un secondo Re-list All immediato..."
+                    )
+                    second_batch = executor.relist_all(count=post_expired)
+                    if second_batch.relist_error:
+                        fifa_logger.warning(
+                            f"[Golden Retry] Secondo relist fallito: {second_batch.relist_error}. "
+                            f"Conto solo i successi del 1° round."
+                        )
+                        succeeded = first_succeeded
+                        failed = truly_expired
+                    else:
+                        page.wait_for_timeout(3000)
+                        final_scan = detector.scan_listings()
+                        final_expired = final_scan.expired_count
+                        final_processing = final_scan.processing_count
+                        final_truly_expired = max(final_expired - final_processing, 0)
+                        second_succeeded = max(post_expired - final_expired, 0)
+                        succeeded = first_succeeded + second_succeeded
+                        # Dopo il 2° relist: solo i veri scaduti (non Processing) sono fallimenti
+                        failed = final_truly_expired
+
+                        fifa_logger.info(
+                            f"[Golden Retry] 2° relist: +{second_succeeded} successi aggiuntivi. "
+                            f"Totale: {succeeded} successi, {failed} falliti."
+                        )
+                else:
+                    succeeded = first_succeeded
+                    failed = 0
+                    if post_processing > 0:
+                        fifa_logger.info(
+                            f"[Golden Retry] {post_processing} item ancora in Processing — "
+                            f"EA li sta gestendo. Il prossimo ciclo li prenderà."
+                        )
         else:
             expired = [l for l in scan.listings if l.needs_relist]
             succeeded, failed = relist_expired_listings(executor, expired)
@@ -1041,18 +1085,78 @@ def main() -> None:
                             failed = scan.expired_count
                         else:
                             # Verifica post-relist: scan per conteggio effettivo
-                            page.wait_for_timeout(2000)
+                            # Se c'erano item in Processing prima del relist, diamo più tempo a EA
+                            pre_processing = sum(
+                                1 for l in scan.listings
+                                if l.state == ListingState.PROCESSING
+                            )
+                            wait_ms = 5000 if pre_processing > 0 else 2000
+                            if pre_processing > 0:
+                                fifa_logger.info(
+                                    f"[Verifica] {pre_processing} item in Processing pre-relist. "
+                                    f"Attesa estesa {wait_ms}ms per stabilizzazione EA..."
+                                )
+                            page.wait_for_timeout(wait_ms)
                             post_scan = detector.scan_listings()
                             pre_expired = scan.expired_count
                             post_expired = post_scan.expired_count
-                            succeeded = max(pre_expired - post_expired, 0)
-                            failed = post_expired
-                            if failed > 0:
+                            # I PROCESSING item NON sono falliti — EA li sta ancora gestendo.
+                            # Solo gli item ancora EXPIRED (non Processing) sono veri fallimenti.
+                            post_processing = post_scan.processing_count
+                            truly_expired = max(post_expired - post_processing, 0)
+                            first_succeeded = max(pre_expired - post_expired, 0)
+
+                            if post_expired > 0:
                                 fifa_logger.info(
-                                    f"[Verifica] Pre-relist: {pre_expired} scaduti, "
-                                    f"Post-relist: {post_expired} ancora scaduti. "
-                                    f"Effettivi: {succeeded} successi, {failed} falliti."
+                                    f"[Verifica 1°] Pre-relist: {pre_expired} scaduti, "
+                                    f"Post-relist: {post_expired} ancora scaduti "
+                                    f"(di cui {post_processing} in Processing, "
+                                    f"{truly_expired} veri scaduti). "
+                                    f"1° round: {first_succeeded} successi."
                                 )
+
+                            # --- 2° RELIST AUTOMATICO ---
+                            # Se dopo il 1° relist ci sono ancora item veramente scaduti
+                            # (non solo in Processing), tentiamo un secondo Re-list All
+                            if truly_expired > 0:
+                                fifa_logger.info(
+                                    f"[Verifica] Ancora {truly_expired} item scaduti dopo il 1° relist. "
+                                    f"Tento un secondo Re-list All immediato..."
+                                )
+                                second_batch = executor.relist_all(count=post_expired)
+                                if second_batch.relist_error:
+                                    fifa_logger.warning(
+                                        f"[Verifica] Secondo relist fallito: {second_batch.relist_error}. "
+                                        f"Conto solo i successi del 1° round."
+                                    )
+                                    _save_error_screenshot(page, fifa_logger)
+                                    succeeded = first_succeeded
+                                    failed = truly_expired
+                                else:
+                                    page.wait_for_timeout(3000)
+                                    final_scan = detector.scan_listings()
+                                    final_expired = final_scan.expired_count
+                                    final_processing = final_scan.processing_count
+                                    final_truly_expired = max(final_expired - final_processing, 0)
+                                    second_succeeded = max(post_expired - final_expired, 0)
+                                    succeeded = first_succeeded + second_succeeded
+                                    # Dopo il 2° relist: solo i veri scaduti (non Processing) sono fallimenti
+                                    failed = final_truly_expired
+
+                                    fifa_logger.info(
+                                        f"[Verifica 2°] Post-2° relist: {final_expired} scaduti "
+                                        f"(Processing: {final_processing}, Veri fallimenti: {final_truly_expired}). "
+                                        f"2° round: +{second_succeeded} successi. "
+                                        f"Totale: {succeeded} successi, {failed} falliti."
+                                    )
+                            else:
+                                succeeded = first_succeeded
+                                failed = 0
+                                if post_processing > 0:
+                                    fifa_logger.info(
+                                        f"[Verifica] {post_processing} item ancora in Processing — "
+                                        f"non sono falliti, EA li sta gestendo. Il prossimo ciclo li prenderà."
+                                    )
                     else:
                         expired = [l for l in scan.listings if l.needs_relist]
                         succeeded, failed = relist_expired_listings(executor, expired)

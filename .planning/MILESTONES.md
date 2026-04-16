@@ -66,6 +66,19 @@
 
 ---
 
+### v1.8 Two-Phase Post-Relist Verification — SHIPPED 2026-04-16
+**Tests:** 658 passing (132 original + 519 golden timeline + 10 golden retry + 7 misc)
+**Key accomplishments:**
+- **Bug Fix 4: Two-Phase Post-Relist Verification with Auto-Relist.** After "Re-list All", the bot performed a single verification scan. Processing items not yet completed by EA were incorrectly counted as "failed".
+- **1st round**: Re-list All → wait 5s → scan → count `first_succeeded` and `truly_expired` (expired items NOT in Processing state)
+- **2nd round (conditional)**: If `truly_expired > 0` after 1st round → Re-list All immediately → wait 3s → final scan → total count (1st + 2nd round combined)
+- If 2nd relist fails → log warning, fall back to 1st round counts only
+- Processing items are NEVER counted as failed — the next cycle will pick them up naturally
+- Same fix applied both in the main loop and `_golden_retry_relist()`
+- Improved log labels: `[Verifica 1°]`, `[Verifica 2°]` to clearly distinguish verification rounds
+
+---
+
 ## Future Milestones
 
 ### v2.0 Enhanced Trading

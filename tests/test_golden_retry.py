@@ -114,6 +114,7 @@ class TestSingleRetryClearsAll:
         detector.scan_listings.side_effect = [
             _make_scan(expired_count=3),
             _make_scan(expired_count=0),
+            _make_scan(expired_count=0),  # re-scan after post-relist verification
         ]
 
         navigator = MagicMock()
@@ -129,6 +130,7 @@ class TestSingleRetryClearsAll:
                 executor=executor, detector=detector, navigator=navigator,
                 page=page, bot_state=bot_state, auth=auth, config=config,
                 fifa_logger=fifa_logger, initial_succeeded=3, initial_failed=0,
+                processing_count=3,
             )
 
         assert succeeded == 3
@@ -155,10 +157,26 @@ class TestMultipleRetriesNeeded:
         ]
 
         detector = MagicMock()
+        # Each iteration: fresh scan → relist → post-relist verification scan
+        # Iter 1: 5 expired → relist → 3 still in Processing (not "failed")
+        # Iter 2: 3 expired → relist → 0 expired
+        # Iter 3: 0 expired → break
+        processing_3 = [
+            PlayerListing(index=i, player_name=f"Processing {i}", state=ListingState.PROCESSING)
+            for i in range(3)
+        ]
+        active_2 = [
+            PlayerListing(index=3+i, player_name=f"Active {i}", state=ListingState.ACTIVE,
+                          time_remaining_seconds=3600)
+            for i in range(2)
+        ]
+        post_scan_1 = _make_scan(listings=processing_3 + active_2)
         detector.scan_listings.side_effect = [
-            _make_scan(expired_count=5),
-            _make_scan(expired_count=3),
-            _make_scan(expired_count=0),
+            _make_scan(expired_count=5),     # iter 1: fresh scan
+            post_scan_1,                     # iter 1: post-relist (3 Processing, not "failed")
+            _make_scan(expired_count=3),     # iter 2: fresh scan
+            _make_scan(expired_count=0),     # iter 2: post-relist
+            _make_scan(expired_count=0),     # iter 3: fresh scan → break
         ]
 
         page = MagicMock()
@@ -172,10 +190,10 @@ class TestMultipleRetriesNeeded:
             succeeded, failed, should_continue = _golden_retry_relist(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
-                fifa_logger=fifa_logger,
+                fifa_logger=fifa_logger, processing_count=5,
             )
 
-        assert succeeded == 5 + 3  # 8 total
+        assert succeeded == 2 + 3  # 5 total (2 confirmed active + 3 Processing that become expired in iter 2)
         assert failed == 0
         assert should_continue is False
 
@@ -195,7 +213,10 @@ class TestGoldenWindowClosesMidRetry:
         executor.relist_all.return_value = _make_batch_result(succeeded=2)
 
         detector = MagicMock()
-        detector.scan_listings.return_value = _make_scan(expired_count=2)
+        detector.scan_listings.side_effect = [
+            _make_scan(expired_count=2),     # fresh scan
+            _make_scan(expired_count=0),     # post-relist verification
+        ]
 
         page = MagicMock()
         bot_state = MagicMock()
@@ -208,7 +229,7 @@ class TestGoldenWindowClosesMidRetry:
             succeeded, failed, should_continue = _golden_retry_relist(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
-                fifa_logger=fifa_logger,
+                fifa_logger=fifa_logger, processing_count=2,
             )
 
         # Got 2 relisted before window closed
@@ -243,7 +264,7 @@ class TestRebootInterruptsWait:
         succeeded, failed, should_continue = _golden_retry_relist(
             executor=executor, detector=detector, navigator=MagicMock(),
             page=page, bot_state=bot_state, auth=auth, config=config,
-            fifa_logger=fifa_logger,
+            fifa_logger=fifa_logger, processing_count=1,
         )
 
         assert succeeded == 0
@@ -327,7 +348,7 @@ class TestPerListingModeUsesRelistSingle:
             succeeded, failed, should_continue = _golden_retry_relist(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
-                fifa_logger=fifa_logger,
+                fifa_logger=fifa_logger, processing_count=2,
             )
 
         assert succeeded == 2
@@ -367,7 +388,7 @@ class TestSessionRecoveryOnInvalidSession:
             succeeded, failed, should_continue = _golden_retry_relist(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
-                fifa_logger=fifa_logger,
+                fifa_logger=fifa_logger, processing_count=2,
             )
 
         assert should_continue is True
@@ -391,6 +412,7 @@ class TestWaitTiming:
         detector.scan_listings.side_effect = [
             _make_scan(expired_count=1),
             _make_scan(expired_count=0),
+            _make_scan(expired_count=0),
         ]
 
         page = MagicMock()
@@ -401,10 +423,10 @@ class TestWaitTiming:
         fifa_logger = logging.getLogger("test")
 
         with patch("main.navigate_with_retry", return_value=True):
-            _golden_retry_relist(
+            succeeded, failed, should_continue = _golden_retry_relist(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
-                fifa_logger=fifa_logger,
+                fifa_logger=fifa_logger, processing_count=5,
             )
 
         mock_uniform.assert_called_with(5, 10)
@@ -430,11 +452,22 @@ class TestFreshScanEachRetry:
         ]
 
         detector = MagicMock()
+        # Each iteration: fresh scan + post-relist scan = 2 calls per iteration
+        # 3 iterations: iter1 (2 expired → relist → 1 processing), iter2 (1 expired → relist → 0), iter3 (0 → break)
+        processing_1 = [
+            PlayerListing(index=0, player_name="Processing 0", state=ListingState.PROCESSING),
+        ]
+        active_1 = [
+            PlayerListing(index=1, player_name="Active 0", state=ListingState.ACTIVE,
+                          time_remaining_seconds=3600),
+        ]
+        post_scan_1 = _make_scan(listings=processing_1 + active_1)
         detector.scan_listings.side_effect = [
-            _make_scan(expired_count=2),
-            _make_scan(expired_count=1),
-            _make_scan(expired_count=1),
-            _make_scan(expired_count=0),
+            _make_scan(expired_count=2),     # iter 1: fresh scan
+            post_scan_1,                     # iter 1: post-relist (1 Processing, not "failed")
+            _make_scan(expired_count=1),     # iter 2: fresh scan
+            _make_scan(expired_count=0),     # iter 2: post-relist
+            _make_scan(expired_count=0),     # iter 3: fresh scan → break
         ]
 
         page = MagicMock()
@@ -448,9 +481,9 @@ class TestFreshScanEachRetry:
             succeeded, failed, should_continue = _golden_retry_relist(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
-                fifa_logger=fifa_logger,
+                fifa_logger=fifa_logger, processing_count=2,
             )
 
-        assert detector.scan_listings.call_count == 4
-        assert succeeded == 2 + 1 + 1  # 4 total
+        assert detector.scan_listings.call_count == 5
+        assert succeeded == 1 + 1  # 2 total (1 confirmed active + 1 Processing that became expired)
         assert should_continue is False

@@ -2,6 +2,17 @@
 
 ---
 
+[2026-04-16T12:00:00Z] v1.8 Two-Phase Post-Relist Verification shipped:
+- Bug Fix 4: Verifica post-relist a due fasi con auto-relist
+- Dopo "Re-list All", il bot faceva una sola scan di verifica. Se c'erano Processing items non ancora completati da EA, venivano contati come "falliti"
+- Fix: verifica a due fasi:
+  1. **1° round**: Re-list All → wait 5s → scan → conta `first_succeeded` e `truly_expired` (scaduti NON in Processing)
+  2. **2° round (condizionale)**: Se `truly_expired > 0` dopo il 1° round → Re-list All immediato → wait 3s → scan finale → conteggio totale (1° + 2° round)
+- Se il secondo relist fallisce → log warning, usa solo i conteggi del 1° round
+- Processing items NON sono mai contati come falliti — il prossimo ciclo li prenderà
+- Stessa fix applicata sia nel main loop che in `_golden_retry_relist()`
+- Log migliorati: `[Verifica 1°]`, `[Verifica 2°]` per distinguere i round
+
 [2026-04-13T11:30:00Z] PROCESSING state fix shipped:
 - Nuovo enum ListingState.PROCESSING per item in limbo EA (scaduti ma visibili come "active" nel DOM)
 - detector.py: riconoscimento "processing"/"elaborazion" → PROCESSING invece di UNKNOWN
