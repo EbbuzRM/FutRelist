@@ -1,0 +1,262 @@
+from __future__ import annotations
+from datetime import datetime
+import logging
+import random
+from typing import Optional, Tuple
+from browser.auth import AuthManager
+from browser.navigator import TransferMarketNavigator
+from browser.detector import ListingDetector
+from browser.relist import RelistExecutor
+from models.listing import ListingState, ListingScanResult
+from logic.golden_hour import (
+    is_in_golden_window,
+    is_in_golden_period,
+    is_in_hold_window,
+    get_next_golden_hour,
+    is_close_to_golden,
+    get_min_active_seconds
+)
+
+logger = logging.getLogger(__name__)
+action_logger = logging.getLogger("actions")
+
+class RelistEngine:
+    """
+    Orchestra la logica di business del mercato trasferimenti:
+    - Scansione dei listing
+    - Gestione Golden Hours e Hold Window
+    - Esecuzione del rilist con doppia verifica post-azione
+    - Calcolo del wait successivo
+    """
+    def __init__(
+        self, 
+        page, 
+        config, 
+        navigator: TransferMarketNavigator, 
+        detector: ListingDetector, 
+        executor: RelistExecutor,
+        auth: AuthManager,
+        bot_state
+    ):
+        self.page = page
+        self.config = config
+        self.navigator = navigator
+        self.detector = detector
+        self.executor = executor
+        self.auth = auth
+        self.bot_state = bot_state
+
+    def process_cycle(self, cycle_num: int, session_keeper) -> Tuple[int, int, int]:
+        """
+        Esegue un singolo ciclo di gestione rilist.
+        Ritorna (succeeded, failed, next_wait).
+        """
+        # 1. Navigazione
+        if not self._navigate_with_retry():
+            return 0, 0, 60
+
+        # 2. Golden Sync (Precision Wait)
+        now = datetime.now()
+        next_golden = get_next_golden_hour(now)
+        if next_golden and is_in_golden_period(now) and now < next_golden:
+            if is_close_to_golden(now) and not is_in_golden_window(now):
+                wait_secs = (next_golden - now).total_seconds()
+                logger.info(f"[Golden] Attesa precisa: {int(wait_secs)}s per le {next_golden.strftime('%H:%M:%S')}.")
+                if self.bot_state.wait_interruptible(wait_secs):
+                    raise InterruptedError("Reboot richiesto")
+            elif is_in_golden_window(now):
+                logger.info(f"[Golden] Già nella finestra golden, procedo.")
+
+        # 3. Scansione
+        fifa_logger = logging.getLogger("fifa")
+        fifa_logger.info(f"--- [SCANSIONE] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
+        scan = self.detector.scan_listings()
+
+        # 4. Heuristic Relist Manuale
+        now_scan = datetime.now()
+        if (scan.active_count > 0 and scan.expired_count == 0 and is_in_golden_window(now_scan)):
+            seconds_since_bot = self.bot_state.get_seconds_since_last_relist_by_bot()
+            if seconds_since_bot is None or seconds_since_bot >= 180:
+                # Verifica timer coerenti
+                active_times = [l.time_remaining_seconds for l in scan.listings if l.state == ListingState.ACTIVE and l.time_remaining_seconds]
+                if active_times:
+                    min_t, max_t = min(active_times), max(active_times)
+                    if ((3400 <= min_t <= 3600) or (10600 <= min_t <= 10800) or (21400 <= min_t <= 21600)) and (max_t - min_t) <= 90:
+                        fifa_logger.info(f"[⚠️ RELIST MANUALE RILEVATO] Bot si ritira. Prossimo check tra {min_t - 20}s.")
+                        return 0, 0, max(min_t - 20, 60)
+
+        # 5. Decisione Relist
+        if scan.expired_count > 0:
+            now_relist = datetime.now()
+            in_hold = is_in_hold_window(now_relist)
+            force_relist = self.bot_state.consume_force_relist()
+
+            # Regola Ferrea: Minuto :09 posticipa a :10
+            if is_in_golden_window(now_relist) and now_relist.minute == 9:
+                seconds_to_10 = 60 - now_relist.second
+                fifa_logger.info(f"[Golden] Minuto 09, posticipo a :10:00 ({seconds_to_10}s).")
+                return 0, 0, seconds_to_10
+
+            if in_hold and not force_relist:
+                next_g = get_next_golden_hour(datetime.now())
+                if next_g:
+                    fifa_logger.info(f"[HOLD] {scan.expired_count} scaduti in HOLD. Prossima golden: {next_g.strftime('%H:%M')}.")
+                    return 0, 0, 60
+                # No more goldens -> override hold
+                in_hold = False
+
+            # RELIST NORMALE / FORCE / GOLDEN WINDOW
+            if force_relist:
+                logger.info("[Telegram] Force relist — bypass hold window")
+            
+            fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti. Rilisto...")
+            
+            succeeded, failed = self._execute_relist_with_verification(scan)
+            
+            # Golden Retry for Processing items
+            if is_in_golden_window(datetime.now()):
+                retry_s, retry_f, reboot = self._golden_retry_loop(succeeded, failed, scan.processing_count)
+                if reboot:
+                    raise InterruptedError("Reboot richiesto")
+                succeeded += retry_s
+                failed += retry_f
+
+            return succeeded, failed, self._compute_next_wait(scan)
+        
+        # Nessun scaduto
+        return 0, 0, self._compute_next_wait(scan)
+
+    def _execute_relist_with_verification(self, scan: ListingScanResult) -> Tuple[int, int]:
+        """Esegue il rilist e verifica i risultati con due round."""
+        fifa_logger = logging.getLogger("fifa")
+        if self.executor.relist_mode == "all":
+            batch = self.executor.relist_all(count=scan.expired_count)
+            if batch.relist_error:
+                fifa_logger.error(f"ERRORE RELIST: {batch.relist_error}")
+                self._save_error_screenshot()
+                if self._handle_session_recovery():
+                    raise InterruptedError("Session recovery richiesto")
+                return 0, scan.expired_count
+            
+            self.page.wait_for_timeout(3000)
+            post_scan = self.detector.scan_listings()
+            
+            first_succeeded = max(scan.expired_count - post_scan.expired_count, 0)
+            truly_expired = max(post_scan.expired_count - post_scan.processing_count, 0)
+            
+            if truly_expired > 0:
+                fifa_logger.info(f"[Verifica 2°] Ancora {truly_expired} scaduti. Secondo tentativo...")
+                second_batch = self.executor.relist_all(count=post_scan.expired_count)
+                if second_batch.relist_error:
+                    return first_succeeded, truly_expired
+                
+                self.page.wait_for_timeout(3000)
+                final_scan = self.detector.scan_listings()
+                second_succeeded = max(post_scan.expired_count - final_scan.expired_count, 0)
+                return first_succeeded + second_succeeded, max(final_scan.expired_count - final_scan.processing_count, 0)
+            
+            return first_succeeded, 0
+        else:
+            expired = [l for l in scan.listings if l.needs_relist]
+            succeeded = 0
+            failed = 0
+            for l in expired:
+                res = self.executor.relist_single(l)
+                if res.success:
+                    succeeded += 1
+                    action_logger.info("Rilist completato", extra={"action": "relist", "player_name": res.player_name, "success": True})
+                else:
+                    failed += 1
+                    action_logger.warning("Rilist fallito", extra={"action": "relist", "player_name": res.player_name, "success": False, "error": res.error})
+            return succeeded, failed
+
+    def _golden_retry_loop(self, initial_s, initial_f, processing_count) -> Tuple[int, int, bool]:
+        """Retry loop per item in Processing durante Golden window."""
+        fifa_logger = logging.getLogger("fifa")
+        retry_s, retry_f = 0, 0
+        
+        if initial_f == 0 and processing_count == 0:
+            return 0, 0, False
+
+        while is_in_golden_window(datetime.now()):
+            wait_secs = random.uniform(5, 10)
+            if self.bot_state.wait_interruptible(wait_secs):
+                return retry_s, retry_f, True
+            
+            if not self._navigate_with_retry():
+                break
+                
+            scan = self.detector.scan_listings()
+            if scan.expired_count == 0:
+                break
+                
+            fifa_logger.info(f"[Golden Retry] Trovati {scan.expired_count} item. Rilisto...")
+            s, f = self._execute_relist_with_verification(scan)
+            retry_s += s
+            retry_f += f
+            
+        return retry_s, retry_f, False
+
+    def _compute_next_wait(self, scan: ListingScanResult) -> int:
+        """Calcola il wait ottimale."""
+        now = datetime.now()
+        if is_in_golden_window(now):
+            return 10
+        
+        min_active = get_min_active_seconds(scan)
+        if min_active:
+            wait = max(min_active - 20, 10)
+            return self._cap_wait(wait, now)
+        
+        if is_in_hold_window(now):
+            ng = get_next_golden_hour(now)
+            if ng:
+                return min(60, int((ng.replace(minute=9, second=30) - now).total_seconds()))
+            return 3600 - 20
+            
+        processing_count = sum(1 for l in scan.listings if l.state == ListingState.ACTIVE and l.time_remaining in ("Processing...", "Elaborazione..."))
+        if processing_count > 0:
+            return 30
+            
+        return self._cap_wait(3600 - 20, now)
+
+    def _cap_wait(self, wait: int, now: datetime) -> int:
+        if not is_in_golden_period(now):
+            return wait
+        ng = get_next_golden_hour(now)
+        if not ng:
+            return wait
+        pre_nav = ng.replace(minute=9, second=0, microsecond=0)
+        secs_to_pre_nav = int((pre_nav - now).total_seconds())
+        return secs_to_pre_nav if 0 < secs_to_pre_nav < wait else wait
+
+    def _navigate_with_retry(self) -> bool:
+        try:
+            return self.navigator.go_to_transfer_list()
+        except Exception:
+            self.page.reload()
+            self.page.wait_for_timeout(3000)
+            try:
+                return self.navigator.go_to_transfer_list()
+            except Exception:
+                return False
+
+    def _handle_session_recovery(self) -> bool:
+        if self.executor.check_session_valid():
+            return False
+        self.page.reload()
+        self.page.wait_for_timeout(3000)
+        if self.executor.check_session_valid():
+            return False
+        self.auth.delete_saved_session()
+        self.page.goto("https://www.ea.com/fifa/ultimate-team/web-app/")
+        self.page.wait_for_timeout(3000)
+        return True
+
+    def _save_error_screenshot(self):
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = f"relist_error_{ts}.png"
+        try:
+            self.page.screenshot(path=path)
+        except Exception:
+            pass
