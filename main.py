@@ -52,33 +52,7 @@ EA_WEBAPP_URL = "https://www.ea.com/fifa/ultimate-team/web-app/"
 action_logger = logging.getLogger("actions")
 
 
-def setup_logging() -> None:
-    log_dir = Path(__file__).parent / "logs"
-    log_dir.mkdir(exist_ok=True)
-
-    file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    )
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(
-        logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
-    )
-
-    logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
-
-    # Logger azioni strutturato (JSON) → logs/actions.jsonl
-    actions_file_handler = logging.FileHandler(
-        log_dir / "actions.jsonl", mode="a", encoding="utf-8"
-    )
-    actions_file_handler.setLevel(logging.INFO)
-    actions_file_handler.setFormatter(JsonFormatter())
-    action_logger.setLevel(logging.INFO)
-    action_logger.addHandler(actions_file_handler)
-    action_logger.propagate = False
+from config.log_config import setup_logging
 
 
 # ---------------------------------------------------------------------------
@@ -438,6 +412,25 @@ def _save_error_screenshot(page, logger: logging.Logger) -> None:
         logger.warning(f"Impossibile salvare screenshot: {e}")
 
 
+def _cap_wait_to_golden_pre_nav(wait: int, now: datetime) -> int:
+    """Cappo qualsiasi wait per non dormire oltre il pre-nav della prossima golden.
+
+    Senza questo, dopo il relist delle 16:10 il bot dorme ~3560s e si sveglia
+    a 17:09:30 quando _golden_hold_loop trova seconds_until_pre_nav <= 0 e viene
+    skippata, bypassando il timing preciso per 17:10 e 18:10.
+    """
+    if not is_in_golden_period(now):
+        return wait
+    ng = get_next_golden_hour(now)
+    if not ng:
+        return wait
+    pre_nav = ng.replace(minute=GOLDEN_PRE_NAV_MINUTE, second=0, microsecond=0)
+    secs_to_pre_nav = int((pre_nav - now).total_seconds())
+    if 0 < secs_to_pre_nav < wait:
+        return secs_to_pre_nav
+    return wait
+
+
 def _compute_next_wait(
     scan: ListingScanResult,
     now: datetime,
@@ -452,6 +445,7 @@ def _compute_next_wait(
     min_active = get_min_active_seconds(scan)
     if min_active is not None:
         wait = max(min_active - 20, 10)
+        wait = _cap_wait_to_golden_pre_nav(wait, now)
         fifa_logger.info(f"Prossimo expiry tra {format_duration(min_active)}. Wait: {format_duration(wait)}")
         return wait
 
@@ -477,7 +471,7 @@ def _compute_next_wait(
         fifa_logger.info(f"{processing_count} oggetti in Processing... Polling ogni {format_duration(wait)}.")
         return wait
 
-    wait = 3600 - 20
+    wait = _cap_wait_to_golden_pre_nav(3600 - 20, now)
     fifa_logger.info(f"Tutti relistati. Wait: {format_duration(wait)}")
     return wait
 
@@ -649,7 +643,9 @@ def _active_wait_with_heartbeat(
     page,
     auth,
     bot_state: BotState,
-    logger: logging.Logger
+    logger: logging.Logger,
+    min_heartbeat_delay: int = 150,
+    max_heartbeat_delay: int = 300
 ) -> bool:
     """Attesa in chunk: ogni ~3 minuti esegue un refresh della pagina (Heartbeat).
     Usa il pulsante 'Clear Sold' invece di ricaricare la pagina per non perdere
@@ -662,8 +658,8 @@ def _active_wait_with_heartbeat(
     
     while waited < wait_seconds:
         remaining = wait_seconds - waited
-        # Intervallo casuale tra 2.5 e 5 minuti per non essere prevedibili
-        current_heartbeat_interval = random.randint(150, 300)
+        # Intervallo casuale per non essere prevedibili
+        current_heartbeat_interval = random.randint(min_heartbeat_delay, max_heartbeat_delay)
         current_wait = min(current_heartbeat_interval, remaining)
         
         # Attesa passiva per questo chunk
@@ -740,9 +736,15 @@ def _golden_hold_loop(
     seconds_until_pre_nav = (pre_nav_time - now).total_seconds()
 
     while seconds_until_pre_nav > 0:
-        # Se mancano meno di 180 secondi al pre-nav, non facciamo più heartbeat lunghi
-        # per non rischiare di sforare il target delle 09:30.
-        if seconds_until_pre_nav <= 180:
+        # Determina i parametri heartbeat in base al tempo rimanente
+        if seconds_until_pre_nav > 300:
+            # Più di 5 minuti: heartbeat normale
+            min_delay, max_delay = 150, 300
+        elif seconds_until_pre_nav > 180:
+            # Meno di 5 minuti ma più di 3 minuti: heartbeat più frequente
+            min_delay, max_delay = 60, 120
+        else:
+            # Meno di 3 minuti: attesa di precisione senza heartbeat
             logger.info(f"[Golden] Prossimità pre-nav: attesa di precisione di {int(seconds_until_pre_nav)}s.")
             # Attesa di precisione senza heartbeat (interrompibile da Telegram/Reboot)
             if bot_state.wait_interruptible(seconds_until_pre_nav):
@@ -756,12 +758,12 @@ def _golden_hold_loop(
             f"[Golden] HOLD: mancano {format_duration(int(seconds_until_golden))} "
             f"alle {next_golden.strftime('%H:%M')}. Mantengo sessione attiva..."
         )
-        
+
         # Usa l'heartbeat invece dello sleep passivo per reagire subito a logout/console
-        if _active_wait_with_heartbeat(wait_chunk, page, auth, bot_state, logger):
+        if _active_wait_with_heartbeat(wait_chunk, page, auth, bot_state, logger, min_delay, max_delay):
             logger.info("[Reboot] HOLD interrotto per reboot richiesto.")
             return next_golden # Ritorna per permettere il reboot nel main loop
-            
+
         if bot_state.has_commands():
             logger.info("[Golden] HOLD interrotto per processare comandi Telegram.")
             return next_golden
@@ -860,8 +862,6 @@ def main() -> None:
         last_notification_time: datetime | None = None
         last_relist_error: str | None = None
         notification_accumulator = {"relisted": 0, "failed": 0, "cycles": 0, "expired_detected": 0}
-        NOTIFICATION_INTERVAL = 300   # invia ogni 5 minuti max
-        NOTIFICATION_THRESHOLD = 5    # oppure quando >= 5 item accumulati
 
         logger.info(
             f"Avvio loop continuo (intervallo: {app_config.scan_interval_seconds}s). "
@@ -1211,6 +1211,7 @@ def main() -> None:
                         next_wait = 300
                 elif min_active is not None:
                     next_wait = max(min_active - 20, 10)
+                    next_wait = _cap_wait_to_golden_pre_nav(next_wait, now_ne)
                     fifa_logger.info(f"Prossimo expiry tra {format_duration(min_active)}. Wait: {format_duration(next_wait)}")
                 else:
                     # Check for Processing items before defaulting to 600s
@@ -1223,50 +1224,42 @@ def main() -> None:
                         next_wait = 30
                         fifa_logger.info(f"{processing_count} oggetti in Processing... Polling ogni {format_duration(next_wait)}.")
                     else:
-                        next_wait = 600
+                        next_wait = _cap_wait_to_golden_pre_nav(600, now_ne)
                         fifa_logger.info(f"Nessun oggetto in lista. Prossimo check tra {format_duration(next_wait)}.")
 
             # --- NOTIFICA FINALE UNIFICATA (BATCHING) ---
+            # Accumula i risultati del ciclo corrente
             if succeeded > 0 or failed > 0:
                 logger.info(f"Ciclo completato. Totale: {succeeded} successi, {failed} fallimenti.")
-
                 notification_accumulator["relisted"] += succeeded
                 notification_accumulator["failed"] += failed
                 notification_accumulator["cycles"] += 1
                 notification_accumulator["expired_detected"] += scan.expired_count
 
-                now_notify = datetime.now()
-                time_since_last = (
-                    (now_notify - last_notification_time).total_seconds()
-                    if last_notification_time else float("inf")
-                )
+            # Decidi se inviare la notifica ORA o accumulare per il prossimo ciclo.
+            # Logica "work-slot finished": invio quando il bot ha finito il lavoro
+            # (next_wait >= 120s = va a dormire) e ci sono relist accumulati.
+            # Durante i cicli rapidi (ritardatari, polling 10s) accumulo e aspetto.
+            ha_accumulato = notification_accumulator["relisted"] > 0 or notification_accumulator["failed"] > 0
+            bot_va_a_dormire = next_wait >= 120  # wait lungo = lavoro finito
+            troppi_cicli_rapidi = notification_accumulator["cycles"] >= 5  # safety net
 
-                # Se il prossimo wait è breve (< 120s) significa che ci sono altri
-                # oggetti in scadenza imminente. Accumuliamo e aspettiamo di rilistare
-                # anche quelli prima di inviare UNA SOLA notifica.
-                # Safety net: dopo 5 cicli rapidi consecutivi, forziamo la notifica.
-                more_items_coming = next_wait <= 120 and notification_accumulator["cycles"] < 5
-
-                should_notify = (
-                    not more_items_coming
-                    and (
-                        time_since_last >= NOTIFICATION_INTERVAL
-                        or notification_accumulator["relisted"] >= NOTIFICATION_THRESHOLD
-                    )
-                )
-
-                if more_items_coming:
-                    logger.info(
-                        f"[Notifica] Accumulo: {notification_accumulator['relisted']} rilistati "
-                        f"in {notification_accumulator['cycles']} cicli. "
-                        f"Attendo altri scaduti tra {format_duration(next_wait)}..."
-                    )
-
-                if should_notify:
+            if ha_accumulato and (bot_va_a_dormire or troppi_cicli_rapidi):
+                # Il bot ha finito → invia il report accumulato
+                try:
                     _send_batch_notification(app_config, page, notification_accumulator, last_relist_error, logger, scan)
-                    last_relist_error = None
-                    notification_accumulator = {"relisted": 0, "failed": 0, "cycles": 0, "expired_detected": 0}
-                    last_notification_time = now_notify
+                except Exception as e:
+                    logger.error(f"[Notifica] Errore invio notifica Telegram: {e}")
+                last_relist_error = None
+                notification_accumulator = {"relisted": 0, "failed": 0, "cycles": 0, "expired_detected": 0}
+                last_notification_time = datetime.now()
+            elif ha_accumulato:
+                # Ciclo rapido in corso → accumulo, notifica dopo
+                logger.info(
+                    f"[Notifica] Accumulo: {notification_accumulator['relisted']} rilistati "
+                    f"in {notification_accumulator['cycles']} cicli. "
+                    f"Attendo altri scaduti tra {format_duration(next_wait)}..."
+                )
 
             # --- ATTESA PROSSIMO CICLO (interrompibile da /reboot o heartbeat) ---
             logger.info(f"Fine ciclo {cycle}. In attesa per {format_duration(next_wait)}...")
