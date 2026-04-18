@@ -77,69 +77,92 @@ def main() -> None:
     app_config = cm.load()
     config = app_config.to_dict()
 
-    send_telegram_alert(app_config.notifications, "✅ Bot avviato (Refactored)!")
+    send_telegram_alert(app_config.notifications, "✅ Bot avviato!")
 
-    controller = BrowserController(config)
-    auth = AuthManager(config)
-    profile_dir = auth.load_session()
-    page = controller.start(user_data_dir=profile_dir)
-    controller.navigate_to_webapp()
-    authenticate(controller, auth, page)
-
-    navigator = TransferMarketNavigator(page, config)
-    detector = ListingDetector(page)
-    executor = RelistExecutor(page, config)
-    rate_limiter = RateLimiter(
-        min_delay_ms=app_config.rate_limiting.min_delay_ms,
-        max_delay_ms=app_config.rate_limiting.max_delay_ms,
-    )
-    
     bot_state = BotState()
-    keeper = SessionKeeper(controller, auth, bot_state, page, get_credentials)
-    engine = RelistEngine(page, config, navigator, detector, executor, auth, bot_state)
-    batch = NotificationBatch()
 
-    if app_config.notifications.telegram_token:
-        telegram = TelegramHandler(
-            token=app_config.notifications.telegram_token,
-            chat_id=app_config.notifications.telegram_chat_id,
-            bot_state=bot_state,
-            page=page,
-            log_dir=Path(__file__).parent / "logs",
-        )
-        telegram.set_sold_handler(SoldHandler(page, config))
-        telegram.start()
-
-    cycle = 0
     while True:
-        cycle += 1
-        if keeper.supervise_state(status_console):
-            continue
-        
-        if bot_state.is_reboot_requested():
-            break
-            
-        while bot_state.has_commands():
-            cmd = bot_state.get_next_command()
-            if cmd and cmd.get("type") == "del_sold":
-                res = cmd.get("callback")()
-                send_telegram_alert(app_config.notifications, f"🧹 Pulizia: {res.items_cleared} oggetti")
-
-        keeper.ensure_session()
-        
         try:
-            succeeded, failed, next_wait = engine.process_cycle(cycle, keeper)
-            batch.accumulate(detector.scan_listings(), succeeded, failed)
+            controller = BrowserController(config)
+            auth = AuthManager(config)
+            profile_dir = auth.load_session()
+            page = controller.start(user_data_dir=profile_dir)
+            controller.navigate_to_webapp()
+            authenticate(controller, auth, page)
+
+            navigator = TransferMarketNavigator(page, config)
+            detector = ListingDetector(page)
+            executor = RelistExecutor(page, config)
+            rate_limiter = RateLimiter(
+                min_delay_ms=app_config.rate_limiting.min_delay_ms,
+                max_delay_ms=app_config.rate_limiting.max_delay_ms,
+            )
+
+            keeper = SessionKeeper(controller, auth, bot_state, page, get_credentials)
+            engine = RelistEngine(page, config, navigator, detector, executor, auth, bot_state)
+            batch = NotificationBatch()
+
+            if app_config.notifications.telegram_token:
+                telegram = TelegramHandler(
+                    token=app_config.notifications.telegram_token,
+                    chat_id=app_config.notifications.telegram_chat_id,
+                    bot_state=bot_state,
+                    page=page,
+                    log_dir=Path(__file__).parent / "logs",
+                )
+                telegram.set_sold_handler(SoldHandler(page, config))
+                telegram.start()
+
+            cycle = 0
+            while True:
+                cycle += 1
+                if keeper.supervise_state(status_console):
+                    continue
+
+                if bot_state.is_reboot_requested():
+                    break
+
+                while bot_state.has_commands():
+                    cmd = bot_state.get_next_command()
+                    if cmd and cmd.get("type") == "del_sold":
+                        res = cmd.get("callback")()
+                        send_telegram_alert(app_config.notifications, f"🧹 Pulizia: {res.items_cleared} oggetti")
+
+                keeper.ensure_session()
+
+                try:
+                    succeeded, failed, next_wait = engine.process_cycle(cycle, keeper)
+                    # stats are now updated inside engine.process_cycle to avoid race conditions with manual relist detection
+                    batch.accumulate(detector.scan_listings(), succeeded, failed)
+
+                    if batch.is_ready_to_flush(next_wait):
+                        batch.flush(app_config, page, logger, detector.scan_listings())
+
+                    rate_limiter.wait()
+                    if keeper.wait_with_heartbeat(next_wait, logger):
+                        break # Reboot
+
+                except InterruptedError:
+                    # This normally means Ctrl+C or a fatal signal to stop the whole app
+                    controller.stop()
+                    return
+
+            # Inner loop broke (Reboot requested or heartbeat reboot)
+            keeper.handle_reboot(controller, app_config.notifications)
+        
+        except Exception as e:
+            if 'keeper' in locals():
+                keeper.handle_critical_error(e, app_config.notifications)
+            else:
+                logger.exception(f"Errore critico prima dell'inizializzazione del keeper: {e}")
+                send_telegram_alert(app_config.notifications, f"🚨 Errore critico: {e}. Riavvio tra 30s...")
+                time.sleep(30)
             
-            if batch.is_ready_to_flush(next_wait):
-                batch.flush(app_config, page, logger, detector.scan_listings())
-                
-            rate_limiter.wait()
-            if keeper.wait_with_heartbeat(next_wait, logger):
-                break # Reboot
-                
-        except InterruptedError:
-            break
+            try:
+                controller.stop()
+            except:
+                pass
+
 
 if __name__ == "__main__":
     main()

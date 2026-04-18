@@ -300,9 +300,55 @@ class TelegramHandler:
         """Invia uno screenshot della WebApp (richiede page)."""
         if self.page is None:
             return "⚠️ Screenshot non disponibile: browser non connesso"
-        # Implementazione effettiva richiede Playwright page — stub per ora
-        logger.info("Screenshot richiesto (non implementato senza page)")
-        return "📸 Screenshot richiesto (in arrivo...)"
+        
+        screenshot_path = "manual_screenshot.png"
+        try:
+            # Esegui screenshot
+            self.page.screenshot(path=screenshot_path)
+            
+            # Invia la foto
+            self._send_photo(screenshot_path)
+            
+            # Elimina file temporaneo
+            if Path(screenshot_path).exists():
+                Path(screenshot_path).unlink()
+                
+            return "📸 Screenshot inviato!"
+        except Exception as e:
+            logger.error(f"Errore durante lo screenshot: {e}")
+            return f"❌ Errore screenshot: {e}"
+
+    def _send_photo(self, photo_path: str) -> None:
+        """Invia una foto tramite API Telegram sendPhoto."""
+        url = f"{self._api_base}/sendPhoto"
+        try:
+            with open(photo_path, "rb") as photo:
+                # Per l'invio di file via urllib, usiamo un payload multipart/form-data
+                # Tuttavia, per semplicità e robustezza in questo bot, usiamo una richiesta
+                # con parametri per il chat_id e il file.
+                
+                # Costruiamo il corpo multipart manualmente per evitare dipendenze esterne
+                boundary = "boundary123"
+                body = (
+                    f"--{boundary}\r\n"
+                    f'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
+                    f"{self.chat_id}\r\n"
+                    f"--{boundary}\r\n"
+                    f'Content-Disposition: form-data; name="photo"; filename="{Path(photo_path).name}"\r\n'
+                    f"Content-Type: image/png\r\n\r\n"
+                ).encode("utf-8") + photo.read() + f"\r\n--{boundary}--".encode("utf-8")
+
+                req = urllib.request.Request(
+                    url,
+                    data=body,
+                    headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    if response.status == 200:
+                        logger.debug("Foto inviata con successo")
+        except Exception as e:
+            logger.error(f"Errore invio foto Telegram: {e}")
 
     def _cmd_del_sold(self, args: list[str]) -> str:
         """Cancella gli oggetti venduti e raccoglie i crediti (richiede page).

@@ -153,8 +153,14 @@ class RelistEngine:
                 self.page.wait_for_timeout(3000)
                 final_scan = self.detector.scan_listings()
                 second_succeeded = max(post_scan.expired_count - final_scan.expired_count, 0)
+                
+                # Update stats IMMEDIATELY after success
+                self.bot_state.update_stats(first_succeeded + second_succeeded, max(final_scan.expired_count - final_scan.processing_count, 0))
+                
                 return first_succeeded + second_succeeded, max(final_scan.expired_count - final_scan.processing_count, 0)
             
+            # Update stats IMMEDIATELY after success
+            self.bot_state.update_stats(first_succeeded, 0)
             return first_succeeded, 0
         else:
             expired = [l for l in scan.listings if l.needs_relist]
@@ -168,6 +174,9 @@ class RelistEngine:
                 else:
                     failed += 1
                     action_logger.warning("Rilist fallito", extra={"action": "relist", "player_name": res.player_name, "success": False, "error": res.error})
+            
+            # Update stats IMMEDIATELY after loop
+            self.bot_state.update_stats(succeeded, failed)
             return succeeded, failed
 
     def _golden_retry_loop(self, initial_s, initial_f, processing_count) -> Tuple[int, int, bool]:
