@@ -297,26 +297,38 @@ class TelegramHandler:
         )
 
     def _cmd_screenshot(self, args: list[str]) -> str:
-        """Invia uno screenshot della WebApp (richiede page)."""
+        """Invia uno screenshot della WebApp (richiede page).
+
+        Queue il comando per essere eseguito nel main thread (Playwright non è thread-safe).
+        """
         if self.page is None:
             return "⚠️ Screenshot non disponibile: browser non connesso"
-        
+
+        # Queue il comando per essere eseguito nel main thread
+        self.bot_state.queue_command(
+            "screenshot",
+            callback=self._execute_screenshot,
+        )
+        return "⏳ Comando in coda: /screenshot sarà eseguito al prossimo ciclo del bot..."
+
+    def _execute_screenshot(self) -> dict:
+        """Esegue lo screenshot nel contesto del main thread."""
         screenshot_path = "manual_screenshot.png"
         try:
-            # Esegui screenshot
+            # Esegui screenshot (nel main thread, thread-safe)
             self.page.screenshot(path=screenshot_path)
-            
-            # Invia la foto
+
+            # Invia la foto (thread-safe, usa urllib)
             self._send_photo(screenshot_path)
-            
+
             # Elimina file temporaneo
             if Path(screenshot_path).exists():
                 Path(screenshot_path).unlink()
-                
-            return "📸 Screenshot inviato!"
+
+            return {"success": True, "message": "Screenshot inviato"}
         except Exception as e:
             logger.error(f"Errore durante lo screenshot: {e}")
-            return f"❌ Errore screenshot: {e}"
+            return {"success": False, "error": str(e)}
 
     def _send_photo(self, photo_path: str) -> None:
         """Invia una foto tramite API Telegram sendPhoto."""

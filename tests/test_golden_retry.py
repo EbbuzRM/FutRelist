@@ -15,9 +15,19 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from main import _golden_retry_relist, is_in_golden_window
+from logic.relist_engine import RelistEngine
+from logic.golden_hour import is_in_golden_window
 from models.listing import ListingState, PlayerListing, ListingScanResult
 
+
+
+def _run_golden_retry_relist_helper(executor, detector, navigator, page, bot_state, auth, config, fifa_logger, initial_succeeded=0, initial_failed=0, processing_count=0):
+    engine = RelistEngine(page, config, navigator, detector, executor, auth, bot_state)
+    try:
+        retry_s, retry_f, reboot = engine._golden_retry_loop(initial_succeeded, initial_failed, processing_count)
+        return retry_s, retry_f, reboot
+    except InterruptedError:
+        return 0, 0, True
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -73,7 +83,7 @@ def _make_batch_result(succeeded: int = 0, failed: int = 0, relist_error: str | 
 class TestNoRetryOutsideGoldenWindow:
     """Helper returns (0, 0, False) when NOT in golden window."""
 
-    @patch("main.is_in_golden_window", return_value=False)
+    @patch("logic.relist_engine.is_in_golden_window", return_value=False)
     def test_no_retry_at_14_00(self, mock_gw):
         """At 14:00, function returns (0, 0) immediately — no loop entered."""
         executor = MagicMock()
@@ -85,7 +95,7 @@ class TestNoRetryOutsideGoldenWindow:
         config = {}
         fifa_logger = logging.getLogger("test")
 
-        result = _golden_retry_relist(
+        result = _run_golden_retry_relist_helper(
             executor=executor, detector=detector, navigator=navigator,
             page=page, bot_state=bot_state, auth=auth, config=config,
             fifa_logger=fifa_logger,
@@ -99,9 +109,9 @@ class TestNoRetryOutsideGoldenWindow:
 class TestSingleRetryClearsAll:
     """At golden window, first scan has expired, second scan has 0 expired → done."""
 
-    @patch("main.datetime")
-    @patch("main.is_in_golden_window", side_effect=[True, True, True, True])
-    @patch("main.random.uniform", return_value=7.0)
+    @patch("logic.relist_engine.datetime")
+    @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True, True])
+    @patch("logic.relist_engine.random.uniform", return_value=7.0)
     def test_single_retry(self, mock_uniform, mock_gw, mock_dt):
         now = dt(16, 10)
         mock_dt.now.return_value = now
@@ -125,8 +135,8 @@ class TestSingleRetryClearsAll:
         config = {}
         fifa_logger = logging.getLogger("test")
 
-        with patch("main.navigate_with_retry", return_value=True):
-            succeeded, failed, should_continue = _golden_retry_relist(
+        with patch.object(RelistEngine, "_navigate_with_retry", return_value=True):
+            succeeded, failed, should_continue = _run_golden_retry_relist_helper(
                 executor=executor, detector=detector, navigator=navigator,
                 page=page, bot_state=bot_state, auth=auth, config=config,
                 fifa_logger=fifa_logger, initial_succeeded=3, initial_failed=0,
@@ -142,9 +152,9 @@ class TestSingleRetryClearsAll:
 class TestMultipleRetriesNeeded:
     """At golden window, scan sequence: 5 expired → 3 expired → 0 expired."""
 
-    @patch("main.datetime")
-    @patch("main.is_in_golden_window", side_effect=[True, True, True, True, True, True])
-    @patch("main.random.uniform", return_value=6.0)
+    @patch("logic.relist_engine.datetime")
+    @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True, True, True, True])
+    @patch("logic.relist_engine.random.uniform", return_value=6.0)
     def test_multiple_retries(self, mock_uniform, mock_gw, mock_dt):
         now = dt(16, 10)
         mock_dt.now.return_value = now
@@ -186,8 +196,8 @@ class TestMultipleRetriesNeeded:
         config = {}
         fifa_logger = logging.getLogger("test")
 
-        with patch("main.navigate_with_retry", return_value=True):
-            succeeded, failed, should_continue = _golden_retry_relist(
+        with patch.object(RelistEngine, "_navigate_with_retry", return_value=True):
+            succeeded, failed, should_continue = _run_golden_retry_relist_helper(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
                 fifa_logger=fifa_logger, processing_count=5,
@@ -201,9 +211,9 @@ class TestMultipleRetriesNeeded:
 class TestGoldenWindowClosesMidRetry:
     """Golden window closes during retry — exits with whatever was relisted."""
 
-    @patch("main.datetime")
-    @patch("main.is_in_golden_window", side_effect=[True, True, False, False])
-    @patch("main.random.uniform", return_value=5.5)
+    @patch("logic.relist_engine.datetime")
+    @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, False])
+    @patch("logic.relist_engine.random.uniform", return_value=5.5)
     def test_window_closes(self, mock_uniform, mock_gw, mock_dt):
         now = dt(16, 10)
         mock_dt.now.return_value = now
@@ -225,8 +235,8 @@ class TestGoldenWindowClosesMidRetry:
         config = {}
         fifa_logger = logging.getLogger("test")
 
-        with patch("main.navigate_with_retry", return_value=True):
-            succeeded, failed, should_continue = _golden_retry_relist(
+        with patch.object(RelistEngine, "_navigate_with_retry", return_value=True):
+            succeeded, failed, should_continue = _run_golden_retry_relist_helper(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
                 fifa_logger=fifa_logger, processing_count=2,
@@ -241,9 +251,9 @@ class TestGoldenWindowClosesMidRetry:
 class TestRebootInterruptsWait:
     """wait_interruptible signals reboot — function returns immediately."""
 
-    @patch("main.datetime")
-    @patch("main.is_in_golden_window", side_effect=[True, True])
-    @patch("main.random.uniform", return_value=8.0)
+    @patch("logic.relist_engine.datetime")
+    @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True])
+    @patch("logic.relist_engine.random.uniform", return_value=8.0)
     def test_reboot_during_wait(self, mock_uniform, mock_gw, mock_dt):
         now = dt(16, 10)
         mock_dt.now.return_value = now
@@ -261,7 +271,7 @@ class TestRebootInterruptsWait:
         config = {}
         fifa_logger = logging.getLogger("test")
 
-        succeeded, failed, should_continue = _golden_retry_relist(
+        succeeded, failed, should_continue = _run_golden_retry_relist_helper(
             executor=executor, detector=detector, navigator=MagicMock(),
             page=page, bot_state=bot_state, auth=auth, config=config,
             fifa_logger=fifa_logger, processing_count=1,
@@ -277,9 +287,9 @@ class TestRebootInterruptsWait:
 class TestNavigationFailureStopsRetry:
     """navigate_with_retry returns False → stops retrying."""
 
-    @patch("main.datetime")
-    @patch("main.is_in_golden_window", side_effect=[True, True, True])
-    @patch("main.random.uniform", return_value=6.5)
+    @patch("logic.relist_engine.datetime")
+    @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True])
+    @patch("logic.relist_engine.random.uniform", return_value=6.5)
     def test_navigation_failure(self, mock_uniform, mock_gw, mock_dt):
         now = dt(16, 10)
         mock_dt.now.return_value = now
@@ -297,8 +307,8 @@ class TestNavigationFailureStopsRetry:
         config = {}
         fifa_logger = logging.getLogger("test")
 
-        with patch("main.navigate_with_retry", return_value=False):
-            succeeded, failed, should_continue = _golden_retry_relist(
+        with patch.object(RelistEngine, "_navigate_with_retry", return_value=False):
+            succeeded, failed, should_continue = _run_golden_retry_relist_helper(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
                 fifa_logger=fifa_logger,
@@ -313,9 +323,9 @@ class TestNavigationFailureStopsRetry:
 class TestPerListingModeUsesRelistSingle:
     """When executor.relist_mode == "per_listing", uses the per-listing path."""
 
-    @patch("main.datetime")
-    @patch("main.is_in_golden_window", side_effect=[True, True, True, True])
-    @patch("main.random.uniform", return_value=7.5)
+    @patch("logic.relist_engine.datetime")
+    @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True, True])
+    @patch("logic.relist_engine.random.uniform", return_value=7.5)
     def test_per_listing_mode(self, mock_uniform, mock_gw, mock_dt):
         now = dt(16, 10)
         mock_dt.now.return_value = now
@@ -343,9 +353,9 @@ class TestPerListingModeUsesRelistSingle:
         config = {}
         fifa_logger = logging.getLogger("test")
 
-        with patch("main.navigate_with_retry", return_value=True), \
-             patch("main.relist_expired_listings", return_value=(2, 0)):
-            succeeded, failed, should_continue = _golden_retry_relist(
+        with patch.object(RelistEngine, "_navigate_with_retry", return_value=True), \
+             patch.object(RelistEngine, "_execute_relist_with_verification", return_value=(2, 0)):
+            succeeded, failed, should_continue = _run_golden_retry_relist_helper(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
                 fifa_logger=fifa_logger, processing_count=2,
@@ -360,9 +370,9 @@ class TestPerListingModeUsesRelistSingle:
 class TestSessionRecoveryOnInvalidSession:
     """When session recovery returns True (needs continue), exit retry loop."""
 
-    @patch("main.datetime")
-    @patch("main.is_in_golden_window", side_effect=[True, True, True])
-    @patch("main.random.uniform", return_value=6.0)
+    @patch("logic.relist_engine.datetime")
+    @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True])
+    @patch("logic.relist_engine.random.uniform", return_value=6.0)
     def test_session_recovery_triggers_exit(self, mock_uniform, mock_gw, mock_dt):
         now = dt(16, 10)
         mock_dt.now.return_value = now
@@ -382,10 +392,10 @@ class TestSessionRecoveryOnInvalidSession:
         config = {}
         fifa_logger = logging.getLogger("test")
 
-        with patch("main.navigate_with_retry", return_value=True), \
-             patch("main._handle_session_recovery", return_value=True), \
-             patch("main._save_error_screenshot"):
-            succeeded, failed, should_continue = _golden_retry_relist(
+        with patch.object(RelistEngine, "_navigate_with_retry", return_value=True), \
+             patch.object(RelistEngine, "_handle_session_recovery", return_value=True), \
+             patch.object(RelistEngine, "_save_error_screenshot"):
+            succeeded, failed, should_continue = _run_golden_retry_relist_helper(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
                 fifa_logger=fifa_logger, processing_count=2,
@@ -397,9 +407,9 @@ class TestSessionRecoveryOnInvalidSession:
 class TestWaitTiming:
     """Verify the retry wait uses random.uniform(5, 10) and passes to wait_interruptible."""
 
-    @patch("main.datetime")
-    @patch("main.is_in_golden_window", side_effect=[True, True, True, True])
-    @patch("main.random.uniform", return_value=8.3)
+    @patch("logic.relist_engine.datetime")
+    @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True, True])
+    @patch("logic.relist_engine.random.uniform", return_value=8.3)
     def test_wait_uses_random_uniform(self, mock_uniform, mock_gw, mock_dt):
         now = dt(16, 10)
         mock_dt.now.return_value = now
@@ -422,8 +432,8 @@ class TestWaitTiming:
         config = {}
         fifa_logger = logging.getLogger("test")
 
-        with patch("main.navigate_with_retry", return_value=True):
-            succeeded, failed, should_continue = _golden_retry_relist(
+        with patch.object(RelistEngine, "_navigate_with_retry", return_value=True):
+            succeeded, failed, should_continue = _run_golden_retry_relist_helper(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
                 fifa_logger=fifa_logger, processing_count=5,
@@ -436,9 +446,9 @@ class TestWaitTiming:
 class TestFreshScanEachRetry:
     """Verify that each retry does a FRESH scan (detector.scan_listings called)."""
 
-    @patch("main.datetime")
-    @patch("main.is_in_golden_window", side_effect=[True, True, True, True, True, True, True, True])
-    @patch("main.random.uniform", return_value=5.0)
+    @patch("logic.relist_engine.datetime")
+    @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True, True, True, True, True, True])
+    @patch("logic.relist_engine.random.uniform", return_value=5.0)
     def test_fresh_scan_each_iteration(self, mock_uniform, mock_gw, mock_dt):
         now = dt(16, 10)
         mock_dt.now.return_value = now
@@ -477,8 +487,8 @@ class TestFreshScanEachRetry:
         config = {}
         fifa_logger = logging.getLogger("test")
 
-        with patch("main.navigate_with_retry", return_value=True):
-            succeeded, failed, should_continue = _golden_retry_relist(
+        with patch.object(RelistEngine, "_navigate_with_retry", return_value=True):
+            succeeded, failed, should_continue = _run_golden_retry_relist_helper(
                 executor=executor, detector=detector, navigator=MagicMock(),
                 page=page, bot_state=bot_state, auth=auth, config=config,
                 fifa_logger=fifa_logger, processing_count=2,

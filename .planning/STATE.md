@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.8
-milestone_name: Two-Phase Post-Relist Verification
+milestone: v1.9
+milestone_name: Main Loop Refactoring
 status: production
-last_updated: "2026-04-16T12:00:00Z"
+last_updated: "2026-04-18T14:07:00Z"
 progress:
   total_phases: 7
   completed_phases: 7
@@ -16,6 +16,39 @@ progress:
 ## Status: PRODUCTION / MAINTENANCE MODE
 
 All planned phases complete. The bot is running in production, relisting items successfully.
+
+### Today's Fixes (April 18, 2026) — Post-Refactoring
+
+**Refactoring: main.py modularizzato (Phase 9)**
+- Estrazione logica Golden Hour in `logic/golden_hour.py` con TDD tests
+- Estrazione logging config in `config/log_config.py`
+- Estrazione NotificationBatch in `core/notification_batch.py`
+- Creazione SessionKeeper in `browser/session_keeper.py`
+- Creazione RelistEngine in `logic/relist_engine.py`
+- main.py ridotto a ~168 righe
+
+**Fix 1: Notification batch invia solo se ci sono risultati**
+- NotificationBatch.flush() ora controlla `if self.relisted == 0 and self.failed == 0: return False` prima di inviare
+- Evita notifiche vuote "0 relistati, 0 falliti"
+
+**Fix 2: Reboot implementation**
+- SessionKeeper.handle_reboot() implementa il loop di riavvio del browser
+- Chiamato in main.py quando `bot_state.is_reboot_requested()` restituisce True
+
+**Fix 3: BotState.clear_reboot_event()**
+- Aggiunto metodo `clear_reboot_event()` in BotState per resettare il reboot flag
+- Chiamato dopo `handle_reboot()` per permettere futuri reboot
+
+**Fix 4: Manual Relist Heuristic fix**
+- update_stats() spostato da main.py dentro RelistEngine.process_cycle()
+- Ora le statistiche si aggiornano immediatamente dopo il relist, non dopo
+- Previene false detection di relist manuali da parte dell'heuristic
+
+**Fix 5: /screenshot thread-safety**
+- Il comando /screenshot ora usa queue_command() come /del_sold
+- Playwright page.screenshot() eseguito nel main thread (non nel thread Telegram)
+- Evita errori thread-safety di Playwright
+- pattern: queue_command("screenshot", callback=self._execute_screenshot)
 
 ### Today's Fixes (April 16, 2026)
 
@@ -150,4 +183,4 @@ All planned phases complete. The bot is running in production, relisting items s
 - 519 timeline simulation tests covering every minute 14:00-20:59 + golden boundaries
 - Every relist block MUST have an `else` fallback for normal relist (AGENTS.md rule)
 
-Last updated: 2026-04-16T12:00:00Z
+\n\n## Decisions\n- [2026-04-18] Extracted Golden Hour logic to logic/golden_hour.py and implemented TDD tests.\n- [2026-04-18] Isolated logging configuration in config/log_config.py.\n- [2026-04-18] Created NotificationBatch class in core/notification_batch.py to handle aggregated Telegram reports.

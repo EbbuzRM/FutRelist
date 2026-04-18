@@ -73,6 +73,10 @@ class BotState:
         """Restituisce True se è stato richiesto un reboot."""
         return self._reboot_event.is_set()
 
+    def clear_reboot_event(self) -> None:
+        """Resetta l'evento di reboot."""
+        self._reboot_event.clear()
+
     def wait_interruptible(self, seconds: float) -> bool:
         """Attende fino a `seconds` ma si interrompe subito se arriva un reboot o un comando.
 

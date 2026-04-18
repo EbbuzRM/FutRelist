@@ -1,10 +1,14 @@
 from __future__ import annotations
 from typing import Optional
 import logging
+import time
 from browser.controller import BrowserController
 from browser.auth import AuthManager
 from browser.error_handler import ensure_session
 from bot_state import BotState
+from notifier import send_telegram_alert
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -125,3 +129,20 @@ class SessionKeeper:
         table.add_column("Errori", justify="right", style="red")
         table.add_row(phase, str(scanned), str(relisted), str(errors))
         return table
+
+    def handle_reboot(self, controller: BrowserController, notifications_config) -> None:
+        """
+        Gestisce la procedura di reboot: notifica, chiusura browser e reset evento.
+        """
+        logger.info("Esecuzione procedura di reboot...")
+        send_telegram_alert(notifications_config, "🔄 Reboot richiesto: riavvio in corso...")
+        controller.stop()
+        self.bot_state.clear_reboot_event()
+
+    def handle_critical_error(self, error: Exception, notifications_config) -> None:
+        """
+        Gestisce l'errore critico all'avvio o durante l'esecuzione.
+        """
+        logger.exception(f"Errore critico: {error}")
+        send_telegram_alert(notifications_config, f"🚨 Errore critico: {error}. Riavvio tra 30s...")
+        time.sleep(30)

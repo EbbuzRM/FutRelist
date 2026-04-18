@@ -22,11 +22,11 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from main import (
+from logic.golden_hour import (
     GOLDEN_CLOSE_WINDOW,
     GOLDEN_HOURS,
     GOLDEN_MINUTE,
@@ -34,13 +34,13 @@ from main import (
     GOLDEN_PERIOD_START,
     GOLDEN_PRE_NAV_MINUTE,
     GOLDEN_RELIST_WINDOW,
-    _compute_next_wait,
     get_next_golden_hour,
     is_close_to_golden,
     is_in_golden_period,
     is_in_golden_window,
     is_in_hold_window,
 )
+from logic.relist_engine import RelistEngine
 from models.listing import ListingScanResult
 
 
@@ -379,24 +379,26 @@ class TestGoldenWaitSkipLogic:
 class TestComputeNextWaitGoldenWindow:
     """Test _compute_next_wait returns 10s during golden window (ritardatari polling)."""
 
-    def test_golden_window_returns_10(self):
+    @patch("logic.relist_engine.datetime")
+    def test_golden_window_returns_10(self, mock_dt):
         """During golden window, _compute_next_wait should return 10s."""
-        now = dt(16, 10)
+        mock_dt.now.return_value = dt(16, 10)
         scan = MagicMock(spec=ListingScanResult)
         scan.listings = []
-        logger = logging.getLogger("test")
-        result = _compute_next_wait(scan, now, logger)
+        engine = RelistEngine(None, None, None, None, None, None, None)
+        result = engine._compute_next_wait(scan)
         assert result == 10, (
             f"During golden window, wait should be 10s for ritardatari polling, got {result}"
         )
 
-    def test_hold_window_returns_wait_until_golden(self):
+    @patch("logic.relist_engine.datetime")
+    def test_hold_window_returns_wait_until_golden(self, mock_dt):
         """During hold, _compute_next_wait should return wait until next golden pre-nav."""
-        now = dt(15, 30)
+        mock_dt.now.return_value = dt(15, 30)
         scan = MagicMock(spec=ListingScanResult)
         scan.listings = []
-        logger = logging.getLogger("test")
-        result = _compute_next_wait(scan, now, logger)
+        engine = RelistEngine(None, None, None, None, None, None, None)
+        result = engine._compute_next_wait(scan)
         # Should be <= 60 (the min of 60 and seconds until golden)
         assert result <= 60, (
             f"During hold, wait should be <= 60s, got {result}"
@@ -720,45 +722,50 @@ class TestComputeNextWaitIntegration:
                 ))
         return scan
 
-    def test_golden_window_16_10_returns_10(self):
+    @patch("logic.relist_engine.datetime")
+    def test_golden_window_16_10_returns_10(self, mock_dt):
         """At 16:10 in golden window -> 10s polling for ritardatari."""
-        now = dt(16, 10)
+        mock_dt.now.return_value = dt(16, 10)
         scan = self._make_scan()
-        logger = logging.getLogger("test")
-        assert _compute_next_wait(scan, now, logger) == 10
+        engine = RelistEngine(None, None, None, None, None, None, None)
+        assert engine._compute_next_wait(scan) == 10
 
-    def test_hold_15_30_returns_short_wait(self):
+    @patch("logic.relist_engine.datetime")
+    def test_hold_15_30_returns_short_wait(self, mock_dt):
         """At 15:30 in hold -> short wait until pre-nav of 16:09:30."""
-        now = dt(15, 30)
+        mock_dt.now.return_value = dt(15, 30)
         scan = self._make_scan()
-        logger = logging.getLogger("test")
-        result = _compute_next_wait(scan, now, logger)
+        engine = RelistEngine(None, None, None, None, None, None, None)
+        result = engine._compute_next_wait(scan)
         # In hold with no active timers, wait is capped at 60s
         assert result <= 60
 
-    def test_hold_16_12_returns_wait_toward_17_09(self):
+    @patch("logic.relist_engine.datetime")
+    def test_hold_16_12_returns_wait_toward_17_09(self, mock_dt):
         """At 16:12 in hold -> wait toward 17:09:30 pre-nav."""
-        now = dt(16, 12)
+        mock_dt.now.return_value = dt(16, 12)
         scan = self._make_scan()
-        logger = logging.getLogger("test")
-        result = _compute_next_wait(scan, now, logger)
+        engine = RelistEngine(None, None, None, None, None, None, None)
+        result = engine._compute_next_wait(scan)
         # In hold, wait is capped at 60s toward pre-nav
         assert result <= 60
 
-    def test_normal_period_14_00_with_active_timer(self):
+    @patch("logic.relist_engine.datetime")
+    def test_normal_period_14_00_with_active_timer(self, mock_dt):
         """At 14:00 (normal) with 30 min active timer -> wait ~29m40s."""
-        now = dt(14, 0)
+        mock_dt.now.return_value = dt(14, 0)
         scan = self._make_scan(active_with_timer=[1800])  # 30 min
-        logger = logging.getLogger("test")
-        result = _compute_next_wait(scan, now, logger)
+        engine = RelistEngine(None, None, None, None, None, None, None)
+        result = engine._compute_next_wait(scan)
         # min_active - 20 = 1780, clamped to max(1780, 10) = 1780
         assert result == 1780
 
-    def test_normal_period_after_18_16_with_active_timer(self):
+    @patch("logic.relist_engine.datetime")
+    def test_normal_period_after_18_16_with_active_timer(self, mock_dt):
         """At 18:16 (post-golden, normal) with 25 min active timer."""
-        now = dt(18, 16)
+        mock_dt.now.return_value = dt(18, 16)
         scan = self._make_scan(active_with_timer=[1500])  # 25 min
-        logger = logging.getLogger("test")
-        result = _compute_next_wait(scan, now, logger)
+        engine = RelistEngine(None, None, None, None, None, None, None)
+        result = engine._compute_next_wait(scan)
         # min_active - 20 = 1480
         assert result == 1480

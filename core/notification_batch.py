@@ -29,11 +29,16 @@ class NotificationBatch:
         """
         Determina se è il momento di inviare la notifica.
         Flush se:
-        1. Il prossimo wait è lungo (> batch_window), quindi abbiamo finito una 'ondata'
-        2. Abbiamo raggiunto il numero massimo di cicli
-        3. Non ci sono più oggetti scaduti da processare (fine batch)
+        1. C'è stata attività (rilist riusciti o fallimenti)
+        2. E si verifica una delle condizioni di flush:
+           - Il prossimo wait è lungo (> batch_window), quindi abbiamo finito una 'ondata'
+           - Abbiamo raggiunto il numero massimo di cicli
         """
         if self.cycles == 0:
+            return False
+        
+        # Evita notifiche se non è successo nulla (nessun rilist e nessun fallimento)
+        if self.relisted == 0 and self.failed == 0:
             return False
         
         # Se il bot sta per dormire a lungo, invia subito il report dell'ondata appena conclusa

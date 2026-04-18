@@ -30,11 +30,39 @@ def test_notification_batch_flush_logic():
     # Case 2: wait is long (> 120) -> True
     # Simulate some activity first
     batch.cycles = 1
+    batch.relisted = 1
+    assert batch.is_ready_to_flush(current_wait=150) is True
+
+def test_notification_batch_no_activity_no_flush():
+    batch = NotificationBatch(batch_window_seconds=120, max_cycles=5)
+    
+    # Simulate cycles but NO activity (no relists, no failures)
+    batch.cycles = 1
+    batch.relisted = 0
+    batch.failed = 0
+    
+    # Should NOT flush even if wait is long
+    assert batch.is_ready_to_flush(current_wait=150) is False
+    # Should NOT flush even if cycles are high
+    batch.cycles = 6
+    assert batch.is_ready_to_flush(current_wait=30) is False
+
+def test_notification_batch_activity_flushes():
+    batch = NotificationBatch(batch_window_seconds=120, max_cycles=5)
+    batch.cycles = 1
+    
+    # Case 1: At least one relist -> Should flush if wait is long
+    batch.relisted = 1
+    batch.failed = 0
     assert batch.is_ready_to_flush(current_wait=150) is True
     
-    # Case 3: cycles exceed max -> True
-    batch.cycles = 6
-    assert batch.is_ready_to_flush(current_wait=30) is True
+    batch.reset()
+    batch.cycles = 1
+    
+    # Case 2: At least one failure -> Should flush if wait is long
+    batch.relisted = 0
+    batch.failed = 1
+    assert batch.is_ready_to_flush(current_wait=150) is True
 
 def test_notification_batch_reset():
     batch = NotificationBatch()

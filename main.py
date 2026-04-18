@@ -124,9 +124,14 @@ def main() -> None:
 
                 while bot_state.has_commands():
                     cmd = bot_state.get_next_command()
-                    if cmd and cmd.get("type") == "del_sold":
+                    if not cmd:
+                        continue
+                        
+                    if cmd.get("type") == "del_sold":
                         res = cmd.get("callback")()
                         send_telegram_alert(app_config.notifications, f"🧹 Pulizia: {res.items_cleared} oggetti")
+                    elif cmd.get("type") == "screenshot":
+                        cmd.get("callback")()
 
                 keeper.ensure_session()
 

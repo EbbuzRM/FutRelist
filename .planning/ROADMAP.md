@@ -1,7 +1,7 @@
 # FIFA 26 Auto-Relist Tool - Roadmap
 
 ## Current Status: PRODUCTION / MAINTENANCE MODE
-**Latest Milestone:** v1.7 Golden Processing Retry — SHIPPED 2026-04-14
+**Latest Milestone:** v1.9 Main Loop Refactoring — SHIPPED 2026-04-18
 
 ## Phases
 
@@ -159,6 +159,8 @@ Fixes:
 | v1.5 | PROCESSING State Fix | 2026-04-13 | 8 | 648 |
 | v1.6 | Batch Report & Screenshot Fix | 2026-04-13 | 8 | 648 |
 | v1.7 | Golden Processing Retry | 2026-04-14 | 8 | 658 |
+| v1.8 | Two-Phase Post-Relist Verification | 2026-04-16 | 8 | 658 |
+| v1.9 | Main Loop Refactoring | 2026-04-18 | 9 | 658 |
 
 ## Future Milestones
 
