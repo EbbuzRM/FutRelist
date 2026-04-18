@@ -20,6 +20,10 @@ from logic.golden_hour import (
 logger = logging.getLogger(__name__)
 action_logger = logging.getLogger("actions")
 
+class ConsoleSessionError(Exception):
+    """Eccezione sollevata quando è attiva una sessione console (rischio ban)."""
+    pass
+
 class RelistEngine:
     """
     Orchestra la logica di business del mercato trasferimenti:
@@ -51,6 +55,18 @@ class RelistEngine:
         Esegue un singolo ciclo di gestione rilist.
         Ritorna (succeeded, failed, next_wait).
         """
+        # 0. Ban Prevention Hard-Lock
+        if self.auth.is_console_session_active(self.page):
+            fifa_logger = logging.getLogger("fifa")
+            fifa_logger.error("Console session detected - aborting relist to prevent ban")
+            
+            # Update bot state and notify
+            self.bot_state.set_console_session_active(True)
+            from notifier import send_telegram_emergency_alert
+            send_telegram_emergency_alert(self.config.notifications, "Console session detected! Aborting all relist actions to prevent ban risk.")
+            
+            raise ConsoleSessionError("Console session detected - aborting relist to prevent ban")
+
         # 1. Navigazione
         if not self._navigate_with_retry():
             return 0, 0, 60
@@ -67,7 +83,6 @@ class RelistEngine:
             elif is_in_golden_window(now):
                 logger.info(f"[Golden] Già nella finestra golden, procedo.")
 
-        # 3. Scansione
         fifa_logger = logging.getLogger("fifa")
         fifa_logger.info(f"--- [SCANSIONE] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
         scan = self.detector.scan_listings()

@@ -40,6 +40,13 @@ class RelistExecutor:
         self.max_price = defaults.get("max_price", 15_000_000)
 
     def _click_relist_button(self, listing_index: int) -> None:
+        # Final Guard: Ban Prevention
+        from browser.auth import AuthManager
+        auth = AuthManager(self.config)
+        if auth.is_console_session_active(self.page):
+            logger.error("Console session detected just before click - ABORTING")
+            raise Exception("Console session active - ban risk")
+
         listing_el = self.page.locator(SELECTORS["listing_items"]).nth(listing_index)
         listing_el.locator(SELECTORS["relist_button"]).click()
         self.page.wait_for_timeout(2000)
@@ -93,6 +100,13 @@ class RelistExecutor:
 
     def relist_all(self, count: int = 1) -> RelistBatchResult:
         """Clicca 'Re-list All' e auto-accetta la modale di conferma HTML."""
+        # Final Guard: Ban Prevention
+        from browser.auth import AuthManager
+        auth = AuthManager(self.config)
+        if auth.is_console_session_active(self.page):
+            logger.error("Console session detected just before Re-list All - ABORTING")
+            raise Exception("Console session active - ban risk")
+
         try:
             # Usiamo locator per resilienza al DOM
             relist_all_btn = self.page.locator(SELECTORS["relist_all_button"]).first

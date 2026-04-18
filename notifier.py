@@ -4,6 +4,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def send_telegram_emergency_alert(config, message: str) -> None:
+    """Invia un messaggio di allerta ad alta priorità (Ban Risk)."""
+    emoji_alert = "🚨 [BAN RISK ALERT] 🚨\n"
+    full_message = f"{emoji_alert}{message}"
+    send_telegram_alert(config, full_message)
+
+
 def send_telegram_alert(config, message: str) -> None:
     """Invia un messaggio Telegram usando la configurazione NotificationsConfig."""
     if not config or not config.telegram_token or not config.telegram_chat_id:

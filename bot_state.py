@@ -26,6 +26,7 @@ class BotState:
 
     _paused: bool = field(default=False, repr=False)
     _force_relist: bool = field(default=False, repr=False)
+    _console_session_active: bool = field(default=False, repr=False)
     _reboot_event: threading.Event = field(default_factory=threading.Event, repr=False)
     _command_event: threading.Event = field(default_factory=threading.Event, repr=False)
     cycle_count: int = field(default=0)
@@ -41,6 +42,16 @@ class BotState:
 
     # Command queue for thread-safe operations
     _pending_commands: list[dict] = field(default_factory=list, repr=False)
+
+    def set_console_session_active(self, active: bool) -> None:
+        """Imposta il flag di sessione console attiva (rischio ban)."""
+        with self._lock:
+            self._console_session_active = active
+
+    def is_console_session_active(self) -> bool:
+        """Ritorna True se è attiva una sessione console."""
+        with self._lock:
+            return self._console_session_active
 
     # --- Pause / Resume ---
 
