@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -84,6 +85,12 @@ class NotificationsConfig:
     """Configurazione globale per sistemi di alert esterni."""
     telegram_token: str = ""
     telegram_chat_id: str = ""
+
+    def __post_init__(self):
+        if not self.telegram_token:
+            self.telegram_token = os.getenv("TELEGRAM_TOKEN", "")
+        if not self.telegram_chat_id:
+            self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
 
 
 @dataclass
