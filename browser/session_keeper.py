@@ -92,44 +92,128 @@ class SessionKeeper:
         return False
 
     def _execute_heartbeat(self) -> None:
-        """Esegue l'azione di heartbeat cliccando 'Clear Sold'."""
+        """Esegue l'azione di heartbeat cliccando 'Transfers' nella sidebar.
+        
+        Cliccando 'Transfers' si forza una richiesta al server EA, garantendo
+        un heartbeat reale anche quando non ci sono oggetti venduti.
+        Dopo il click, gestisce eventuali popup/modali di sessione scaduta.
+        """
         try:
-            clear_btn = self.page.get_by_role("button", name="Clear Sold Items")
-            if not clear_btn.count():
-                clear_btn = self.page.get_by_role("button", name="Cancella oggetti venduti")
-            if not clear_btn.count():
-                clear_btn = self.page.locator('button:has-text("Clear Sold"), button:has-text("Cancella")')
+            # Cerca il pulsante Transfers nella sidebar (EN + IT)
+            transfers_btn = self.page.get_by_role("button", name="Transfers")
+            if not transfers_btn.count():
+                transfers_btn = self.page.get_by_role("button", name=" Transfers")
+            if not transfers_btn.count():
+                transfers_btn = self.page.get_by_role("button", name="Trasferimenti")
+            if not transfers_btn.count():
+                transfers_btn = self.page.get_by_role("button", name=" Trasferimenti")
 
-            if clear_btn.count() and clear_btn.first.is_visible(timeout=3000):
-                clear_btn.first.click(timeout=3000)
+            if transfers_btn.count() and transfers_btn.first.is_visible(timeout=3000):
+                transfers_btn.first.click(timeout=3000)
+                logger.debug("Heartbeat: click su 'Transfers' eseguito")
                 self.page.wait_for_timeout(2000)
-                
-                cancel_btn = self.page.get_by_role("button", name="Cancel")
-                if not cancel_btn.count():
-                    cancel_btn = self.page.get_by_role("button", name="Annulla")
-                if cancel_btn.count() and cancel_btn.first.is_visible(timeout=1000):
-                    cancel_btn.first.click(timeout=2000)
-            
-            self.page.wait_for_timeout(2000)
-                if self.auth.is_console_session_active(self.page):
-                    logger.warning("Heartbeat ha rilevato la console in uso!")
-                    # Set global lock and notify emergency
-                    self.bot_state.set_console_session_active(True)
-                    from notifier import send_telegram_emergency_alert
-                    # Need notifications config - usually passed to handle_critical_error, 
-                    # but we can use the one from the manager if available or just alert.
-                    # For now, we notify using a generic alert if config is not handy, 
-                    # or we can just rely on the next RelistEngine cycle to catch it and alert.
-                    # However, the task asks for trigger here.
-                    # Let's check how to get notifications config.
-                    # Since SessionKeeper doesn't have notifications_config in __init__, 
-                    # we might need to pass it or access it via controller/auth.
-                    # Actually, the RelistEngine handles the high-priority alert. 
-                    # But we set the flag here.
+
+                # Gestisci eventuali popup/modali EA (es. sessione scaduta, "Cannot Authenticate")
+                self._handle_post_heartbeat_modals()
+            else:
+                logger.debug("Heartbeat: pulsante 'Transfers' non visibile, skip")
+
+            # Check sessione dopo heartbeat
+            if self.auth.is_console_session_active(self.page):
+                logger.warning("Heartbeat ha rilevato la console in uso!")
+                self.bot_state.set_console_session_active(True)
+
             if not self.auth.is_logged_in(self.page, timeout_ms=3000):
                 logger.warning("Heartbeat ha rilevato sessione scaduta.")
+
         except Exception as e:
             logger.debug(f"Errore heartbeat: {e}")
+
+    def _handle_post_heartbeat_modals(self) -> None:
+        """Gestisce popup/modali EA che possono apparire dopo il click Transfers.
+        
+        Clicca 'OK' su modali di sessione scaduta ('Cannot Authenticate', ecc.)
+        così il bot può tornare al login invece di rimanere bloccato.
+        """
+        try:
+            # Parole chiave dei modali di disconnessione/sessione scaduta EA
+            disconnect_keywords = [
+                "cannot authenticate",
+                "unable to authenticate with the football",
+                "logged out of the application",
+                "impossibile autenticare",
+                "sarai disconnesso dall'applicazione",
+                "session expired",
+                "sessione scaduta",
+            ]
+
+            # Selettori dialog EA (stesso pattern di auth.py)
+            dialog_selectors = [
+                '.dialog-body',
+                '.ut-messaging-view',
+                '.ea-dialog-view',
+                '.view-modal-container',
+            ]
+
+            for selector in dialog_selectors:
+                dialogs = self.page.query_selector_all(selector)
+                for dialog in dialogs:
+                    if dialog and dialog.is_visible():
+                        text = ""
+                        try:
+                            text = dialog.text_content().lower()
+                        except Exception:
+                            continue
+                        
+                        if any(kw in text for kw in disconnect_keywords):
+                            logger.warning(
+                                f"Heartbeat: rilevato modale sessione scaduta → click OK. "
+                                f"Testo: '{text.strip()[:80]}'"
+                            )
+                            # Cerca il pulsante OK nel dialog o nell'intera pagina
+                            ok_btn = None
+                            try:
+                                ok_btn = dialog.query_selector('button')
+                            except Exception:
+                                pass
+                            
+                            if ok_btn:
+                                try:
+                                    ok_btn.click(timeout=3000)
+                                    logger.info("Heartbeat: click OK su modale sessione scaduta eseguito")
+                                    self.page.wait_for_timeout(2000)
+                                    return
+                                except Exception as e:
+                                    logger.debug(f"Click OK su dialog fallito: {e}")
+                            
+                            # Fallback: cerca OK/Ok nell'intera pagina
+                            for ok_label in ["OK", "Ok", "ok"]:
+                                try:
+                                    page_ok_btn = self.page.get_by_role("button", name=ok_label)
+                                    if page_ok_btn.count() and page_ok_btn.first.is_visible(timeout=1000):
+                                        page_ok_btn.first.click(timeout=3000)
+                                        logger.info(f"Heartbeat: click '{ok_label}' su modale sessione scaduta (fallback)")
+                                        self.page.wait_for_timeout(2000)
+                                        return
+                                except Exception:
+                                    continue
+            
+            # Check anche popup generici di dismissione (es. "Continue", "Got It")
+            # che potrebbero bloccare la UI dopo il click Transfers
+            dismiss_labels = ["Continue", "Continua", "Got It", "Ho capito"]
+            for label in dismiss_labels:
+                try:
+                    btn = self.page.get_by_role("button", name=label)
+                    if btn.count() and btn.first.is_visible(timeout=1000):
+                        btn.first.click(timeout=3000)
+                        self.page.wait_for_timeout(1000)
+                        logger.debug(f"Heartbeat: dismiss popup '{label}'")
+                        break
+                except Exception:
+                    continue
+
+        except Exception as e:
+            logger.debug(f"Errore _handle_post_heartbeat_modals: {e}")
 
     def _make_status_table(self, phase: str, scanned: int, relisted: int, errors: int):
         from rich.table import Table
@@ -148,7 +232,6 @@ class SessionKeeper:
         Gestisce la procedura di reboot: notifica, chiusura browser e reset evento.
         """
         logger.info("Esecuzione procedura di reboot...")
-        send_telegram_alert(notifications_config, "🔄 Reboot richiesto: riavvio in corso...")
         controller.stop()
         self.bot_state.clear_reboot_event()
 

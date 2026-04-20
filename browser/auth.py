@@ -3,6 +3,7 @@ Autenticazione FIFA 26 WebApp - Gestione login e sessione persistente
 """
 import json
 import logging
+import re
 import shutil
 import time
 from pathlib import Path
