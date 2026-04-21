@@ -99,8 +99,14 @@ class SessionKeeper:
         Dopo il click, gestisce eventuali popup/modali di sessione scaduta.
         """
         try:
-            # Cerca il pulsante Transfers nella sidebar (EN + IT)
-            transfers_btn = self.page.get_by_role("button", name="Transfers")
+            # 1. Chiude eventuali popup invisibili che intercettano i pointer events
+            self.page.keyboard.press("Escape")
+            self.page.wait_for_timeout(500)
+
+            # 2. Cerca il pulsante Transfers nella sidebar (usando CSS robusto + fallback testuali)
+            transfers_btn = self.page.locator('button.ut-tab-bar-item.icon-transfer')
+            if not transfers_btn.count():
+                transfers_btn = self.page.get_by_role("button", name="Transfers")
             if not transfers_btn.count():
                 transfers_btn = self.page.get_by_role("button", name=" Transfers")
             if not transfers_btn.count():
@@ -108,8 +114,9 @@ class SessionKeeper:
             if not transfers_btn.count():
                 transfers_btn = self.page.get_by_role("button", name=" Trasferimenti")
 
-            if transfers_btn.count() and transfers_btn.first.is_visible(timeout=3000):
-                transfers_btn.first.click(timeout=3000)
+            if transfers_btn.count():
+                # 3. Clicca con force=True per bypassare "intercepts pointer events"
+                transfers_btn.first.click(timeout=3000, force=True)
                 logger.debug("Heartbeat: click su 'Transfers' eseguito")
                 self.page.wait_for_timeout(2000)
 
