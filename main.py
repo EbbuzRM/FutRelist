@@ -20,13 +20,13 @@ from browser.navigator import TransferMarketNavigator
 from browser.detector import ListingDetector
 from browser.relist import RelistExecutor
 from browser.rate_limiter import RateLimiter
-from bot_state import BotState
+from bot_state import BotState, RebootRequestError
 from telegram_handler import TelegramHandler
 from browser.sold_handler import SoldHandler
 from config.config import ConfigManager
 from config.log_config import setup_logging
 from browser.session_keeper import SessionKeeper
-from logic.relist_engine import RelistEngine
+from logic.relist_engine import RelistEngine, ConsoleSessionError
 from core.notification_batch import NotificationBatch
 from notifier import send_telegram_alert
 
@@ -77,9 +77,8 @@ def main() -> None:
     app_config = cm.load()
     config = app_config.to_dict()
 
-    send_telegram_alert(app_config.notifications, "✅ Bot avviato!")
-
     bot_state = BotState()
+    telegram: TelegramHandler | None = None
 
     while True:
         try:
@@ -112,10 +111,17 @@ def main() -> None:
                 )
                 telegram.set_sold_handler(SoldHandler(page, config))
                 telegram.start()
+            else:
+                telegram = None
+
+            # Conferma avvio sessione (sia all'inizio che dopo reboot)
+            send_telegram_alert(app_config.notifications, "✅ Bot avviato e pronto!")
 
             cycle = 0
             while True:
                 cycle += 1
+                bot_state.update_stats(cycle=1)
+                
                 if keeper.supervise_state(status_console):
                     continue
 
@@ -138,23 +144,40 @@ def main() -> None:
                 try:
                     succeeded, failed, next_wait = engine.process_cycle(cycle, keeper)
                     # stats are now updated inside engine.process_cycle to avoid race conditions with manual relist detection
-                    batch.accumulate(detector.scan_listings(), succeeded, failed)
+                    scan_result = detector.scan_listings()
+                    batch.accumulate(scan_result, succeeded, failed)
 
                     if batch.is_ready_to_flush(next_wait):
-                        batch.flush(app_config, page, logger, detector.scan_listings())
+                        batch.flush(app_config, page, logger, scan_result)
 
                     rate_limiter.wait()
                     if keeper.wait_with_heartbeat(next_wait, logger):
                         break # Reboot
 
+                except RebootRequestError:
+                    # Inviato dal golden loop o dal supervisor per forzare un riavvio dolce
+                    logger.info("Ricevuta richiesta di Reboot interno asincrono.")
+                    break
                 except InterruptedError:
                     # This normally means Ctrl+C or a fatal signal to stop the whole app
                     controller.stop()
                     return
 
             # Inner loop broke (Reboot requested or heartbeat reboot)
+            if telegram:
+                telegram.stop()
             keeper.handle_reboot(controller, app_config.notifications)
         
+        except ConsoleSessionError:
+            logger.warning("Terminazione forzata del ciclo per Console attiva. Preparazione riavvio silente...")
+            try:
+                if telegram:
+                    telegram.stop()
+                controller.stop()
+            except:
+                pass
+            continue
+            
         except Exception as e:
             if 'keeper' in locals():
                 keeper.handle_critical_error(e, app_config.notifications)
@@ -164,6 +187,8 @@ def main() -> None:
                 time.sleep(30)
             
             try:
+                if telegram:
+                    telegram.stop()
                 controller.stop()
             except:
                 pass

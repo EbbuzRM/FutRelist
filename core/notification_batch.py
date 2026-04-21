@@ -58,10 +58,9 @@ class NotificationBatch:
 
         screenshot_path = "relist_report.png"
         try:
+            # Report the actual accumulated count since last flush, not capped to current scan
+            rilistati = self.relisted
             totale_oggetti = scan.total_count if scan else 0
-            
-            # Rilistati non può superare il totale oggetti per coerenza logica
-            rilistati = min(self.relisted, totale_oggetti) if totale_oggetti else self.relisted
             
             page.screenshot(path=screenshot_path)
             error_msg = f" ⚠️ Error: {last_relist_error}" if last_relist_error else ""
@@ -77,7 +76,7 @@ class NotificationBatch:
             )
             
             send_telegram_photo(app_config.notifications, screenshot_path, msg)
-            logger.info(f"Notifica batch inviata: {rilistati} rilistati, {self.failed} falliti.")
+            logger.info(f"Notifica batch inviata: {self.relisted} rilistati, {self.failed} falliti.")
             
         except Exception as e:
             logger.error(f"Errore invio notifica batch: {e}")

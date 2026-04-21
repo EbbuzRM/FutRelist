@@ -125,13 +125,22 @@ class TestBotStateUpdateStats:
         assert isinstance(state.last_scan_time, datetime)
 
     def test_update_accumulates(self):
-        """Chiamate multiple accumulano i contatori."""
+        """Chiamate multiple in un singolo ciclo accumulano. Nuovi cicli resettano last_* ma non total_*."""
         state = BotState()
+        # Inizio ciclo 1 con relist e fail
         state.update_stats(cycle=1, relisted=2, failed=0)
-        state.update_stats(cycle=1, relisted=3, failed=1)
-        assert state.cycle_count == 2
+        # Stesso ciclo, altri relist
+        state.update_stats(relisted=3, failed=1)
+        assert state.cycle_count == 1
         assert state.last_relisted == 5
         assert state.last_failed == 1
+        assert state.total_relisted == 5
+        
+        # Nuovo ciclo 2
+        state.update_stats(cycle=1, relisted=1, failed=1)
+        assert state.cycle_count == 2
+        assert state.last_relisted == 1  # Resettato
+        assert state.total_relisted == 6 # Accumulato storicamente
 
 
 class TestBotStateThreadSafety:

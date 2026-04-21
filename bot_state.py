@@ -11,6 +11,11 @@ from datetime import datetime, timedelta
 from typing import Any, Callable
 
 
+class RebootRequestError(Exception):
+    """Eccezione sollevata per forzare un riavvio pulito della logica da parte del loop principale."""
+    pass
+
+
 @dataclass
 class BotState:
     """Stato condiviso del bot, thread-safe tramite threading.Lock.
@@ -32,6 +37,8 @@ class BotState:
     cycle_count: int = field(default=0)
     last_relisted: int = field(default=0)
     last_failed: int = field(default=0)
+    total_relisted: int = field(default=0)
+    total_failed: int = field(default=0)
     last_scan_time: datetime | None = field(default=None)
     last_relisted_by_bot: datetime | None = field(default=None)  # Timestamp dell'ultimo relist eseguito dal bot
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
@@ -188,15 +195,24 @@ class BotState:
         """Aggiorna i contatori del bot e imposta il timestamp di scansione.
 
         Args:
-            cycle: Numero di cicli da aggiungere (default 0).
-            relisted: Numero di listing relistati da aggiungere.
-            failed: Numero di listing falliti da aggiungere.
+            cycle: Numero di cicli da aggiungere (default 0). Azzera last_relisted/failed se > 0.
+            relisted: Numero di listing relistati da aggiungere all'ultimo e al totale.
+            failed: Numero di listing falliti da aggiungere all'ultimo e al totale.
         """
         with self._lock:
-            self.cycle_count += cycle
+            if cycle > 0:
+                self.cycle_count += cycle
+                self.last_relisted = 0
+                self.last_failed = 0
+                
             self.last_relisted += relisted
             self.last_failed += failed
-            self.last_scan_time = datetime.now()
+            self.total_relisted += relisted
+            self.total_failed += failed
+            
+            if cycle > 0 or relisted > 0 or failed > 0:
+                self.last_scan_time = datetime.now()
+                
             # Se abbiamo appena fatto un relist con successo, impostiamo il flag
             if relisted > 0:
                 self.last_relisted_by_bot = datetime.now()
@@ -224,5 +240,7 @@ class BotState:
                 "cycle_count": self.cycle_count,
                 "last_relisted": self.last_relisted,
                 "last_failed": self.last_failed,
+                "total_relisted": self.total_relisted,
+                "total_failed": self.total_failed,
                 "last_scan_time": self.last_scan_time.isoformat() if self.last_scan_time else None,
             }

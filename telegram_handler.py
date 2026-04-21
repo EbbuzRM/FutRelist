@@ -83,15 +83,24 @@ class TelegramHandler:
 
     def stop(self) -> None:
         """Ferma il thread di polling Telegram."""
+        if not self._running:
+            return
+
         self._running = False
         self._stop_event.set()
+        
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=5)
+            # Il timeout deve essere superiore a quello di getUpdates (30s)
+            # per garantire che il thread termini effettivamente prima di avviarne uno nuovo
+            # evitando l'errore 409 Conflict.
+            logger.info("Tentativo chiusura thread Telegram (attesa fino a 35s)...")
+            self._thread.join(timeout=35)
             
         # Conferma l'ultimo offset elaborato prima di chiudere
         # per evitare che Telegram reinvii gli stessi comandi (es. /reboot doppio)
         if self._offset > 0:
             try:
+                # Poll brevissimo solo per confermare l'offset
                 self._get_updates(offset=self._offset, timeout=1)
             except Exception as e:
                 logger.debug(f"Errore conferma offset finale: {e}")
@@ -229,9 +238,9 @@ class TelegramHandler:
             f"📊 Stato Bot\n\n"
             f"Modalità: {mode}\n"
             f"Force Relist: {'Sì ⚡' if status['force_relist'] else 'No'}\n"
-            f"Cicli: {status['cycle_count']}\n"
-            f"Ultimo relist: {status['last_relisted']} listing\n"
-            f"Ultimi falliti: {status['last_failed']}\n"
+            f"Cicli eseguiti: {status['cycle_count']}\n"
+            f"Ultimo relist: {status['last_relisted']} ok, {status['last_failed']} failed\n"
+            f"Totale storico: {status.get('total_relisted', 0)} ok, {status.get('total_failed', 0)} failed\n"
             f"Ultima scansione: {scan_time}"
         )
 

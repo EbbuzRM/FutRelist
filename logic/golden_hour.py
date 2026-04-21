@@ -8,7 +8,7 @@ from models.listing import ListingState, ListingScanResult
 # ---------------------------------------------------------------------------
 GOLDEN_HOURS: tuple[int, ...] = (16, 17, 18)
 GOLDEN_MINUTE: int = 10          # :10 di ogni golden hour
-GOLDEN_PRE_NAV_MINUTE: int = 9   # navigazione pre-golden a :09:30
+GOLDEN_PRE_NAV_MINUTE: int = 9   # navigazione pre-golden a :09:00
 GOLDEN_RELIST_WINDOW: range = range(9, 12)   # :09 → :11 inclusi
 GOLDEN_CLOSE_WINDOW: range = range(8, 13)    # :08 → :12 "vicino alla golden"
 GOLDEN_PERIOD_START: tuple[int, int] = (15, 10)  # 15:10

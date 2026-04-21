@@ -18,6 +18,7 @@ import pytest
 from logic.relist_engine import RelistEngine
 from logic.golden_hour import is_in_golden_window
 from models.listing import ListingState, PlayerListing, ListingScanResult
+from bot_state import RebootRequestError
 
 
 
@@ -26,7 +27,7 @@ def _run_golden_retry_relist_helper(executor, detector, navigator, page, bot_sta
     try:
         retry_s, retry_f, reboot = engine._golden_retry_loop(initial_succeeded, initial_failed, processing_count)
         return retry_s, retry_f, reboot
-    except InterruptedError:
+    except RebootRequestError:
         return 0, 0, True
 
 # ---------------------------------------------------------------------------
