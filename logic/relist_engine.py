@@ -8,6 +8,7 @@ from browser.navigator import TransferMarketNavigator
 from browser.detector import ListingDetector
 from browser.relist import RelistExecutor
 from models.listing import ListingState, ListingScanResult
+from bot_state import RebootRequestError
 from logic.golden_hour import (
     is_in_golden_window,
     is_in_golden_period,
@@ -67,21 +68,33 @@ class RelistEngine:
             
             raise ConsoleSessionError("Console session detected - aborting relist to prevent ban")
 
-        # 1. Navigazione
+        # 1. Pre-Nav Guard: al minuto :08 NON navigare — aspetta :09:00 senza toccare il browser.
+        #    La navigazione avviene SOLO al :09, così il relist scatta esattamente alle :10.
+        now_pre = datetime.now()
+        if is_in_golden_period(now_pre) and not is_in_golden_window(now_pre):
+            next_golden_pre = get_next_golden_hour(now_pre)
+            if next_golden_pre and is_close_to_golden(now_pre) and now_pre.minute == 8:
+                pre_nav_target = next_golden_pre.replace(minute=9, second=0, microsecond=0)
+                wait_secs = max(1, int((pre_nav_target - now_pre).total_seconds()))
+                logger.info(f"[Golden] Minuto :08 — attendo pre-nav slot :09:00 (tra {wait_secs}s). Non navigo ancora.")
+                if self.bot_state.wait_interruptible(wait_secs):
+                    raise RebootRequestError("Reboot richiesto")
+
+        # 2. Navigazione (avviene normalmente, o al minuto :09 durante golden period)
         if not self._navigate_with_retry():
             return 0, 0, 60
 
-        # 2. Golden Sync (Precision Wait)
+        # 3. Golden Sync: dopo la pre-nav al :09, attesa precisa fino alle :10:00
         now = datetime.now()
         next_golden = get_next_golden_hour(now)
         if next_golden and is_in_golden_period(now) and now < next_golden:
-            if is_close_to_golden(now) and not is_in_golden_window(now):
+            if is_in_golden_window(now) and now.minute == 9:
                 wait_secs = (next_golden - now).total_seconds()
-                logger.info(f"[Golden] Attesa precisa: {int(wait_secs)}s per le {next_golden.strftime('%H:%M:%S')}.")
+                logger.info(f"[Golden] Pre-nav ✅ Transfer List pronta. Attesa precisa: {int(wait_secs)}s per le {next_golden.strftime('%H:%M:%S')}.")
                 if self.bot_state.wait_interruptible(wait_secs):
-                    raise InterruptedError("Reboot richiesto")
+                    raise RebootRequestError("Reboot richiesto")
             elif is_in_golden_window(now):
-                logger.info(f"[Golden] Già nella finestra golden, procedo.")
+                logger.info(f"[Golden] Già nella finestra golden (:10-:11), procedo.")
 
         fifa_logger = logging.getLogger("fifa")
         fifa_logger.info(f"--- [SCANSIONE] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
@@ -132,7 +145,7 @@ class RelistEngine:
             if is_in_golden_window(datetime.now()):
                 retry_s, retry_f, reboot = self._golden_retry_loop(succeeded, failed, scan.processing_count)
                 if reboot:
-                    raise InterruptedError("Reboot richiesto")
+                    raise RebootRequestError("Reboot richiesto dall'utente via Telegram")
                 succeeded += retry_s
                 failed += retry_f
 
@@ -150,7 +163,7 @@ class RelistEngine:
                 fifa_logger.error(f"ERRORE RELIST: {batch.relist_error}")
                 self._save_error_screenshot()
                 if self._handle_session_recovery():
-                    raise InterruptedError("Session recovery richiesto")
+                    raise RebootRequestError("Session recovery richiesto")
                 return 0, scan.expired_count
             
             self.page.wait_for_timeout(3000)
@@ -170,12 +183,12 @@ class RelistEngine:
                 second_succeeded = max(post_scan.expired_count - final_scan.expired_count, 0)
                 
                 # Update stats IMMEDIATELY after success
-                self.bot_state.update_stats(first_succeeded + second_succeeded, max(final_scan.expired_count - final_scan.processing_count, 0))
+                self.bot_state.update_stats(relisted=first_succeeded + second_succeeded, failed=max(final_scan.expired_count - final_scan.processing_count, 0))
                 
                 return first_succeeded + second_succeeded, max(final_scan.expired_count - final_scan.processing_count, 0)
             
             # Update stats IMMEDIATELY after success
-            self.bot_state.update_stats(first_succeeded, 0)
+            self.bot_state.update_stats(relisted=first_succeeded, failed=0)
             return first_succeeded, 0
         else:
             expired = [l for l in scan.listings if l.needs_relist]
@@ -191,7 +204,7 @@ class RelistEngine:
                     action_logger.warning("Rilist fallito", extra={"action": "relist", "player_name": res.player_name, "success": False, "error": res.error})
             
             # Update stats IMMEDIATELY after loop
-            self.bot_state.update_stats(succeeded, failed)
+            self.bot_state.update_stats(relisted=succeeded, failed=failed)
             return succeeded, failed
 
     def _golden_retry_loop(self, initial_s, initial_f, processing_count) -> Tuple[int, int, bool]:
@@ -235,7 +248,7 @@ class RelistEngine:
         if is_in_hold_window(now):
             ng = get_next_golden_hour(now)
             if ng:
-                return min(60, int((ng.replace(minute=9, second=30) - now).total_seconds()))
+                return min(60, int((ng.replace(minute=9, second=0) - now).total_seconds()))
             return 3600 - 20
             
         processing_count = sum(1 for l in scan.listings if l.state == ListingState.ACTIVE and l.time_remaining in ("Processing...", "Elaborazione..."))
