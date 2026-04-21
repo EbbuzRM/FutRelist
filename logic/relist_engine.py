@@ -248,7 +248,12 @@ class RelistEngine:
         if is_in_hold_window(now):
             ng = get_next_golden_hour(now)
             if ng:
-                return min(60, int((ng.replace(minute=9, second=0) - now).total_seconds()))
+                pre_nav = ng.replace(minute=9, second=0, microsecond=0)
+                secs_to_pre_nav = int((pre_nav - now).total_seconds())
+                # Aspetta fino al pre-nav (:09) meno un buffer di 90s.
+                # Il Pre-Nav Guard in process_cycle gestisce il gate finale :08→:09.
+                # NON cappare a 60s: scansionare ogni minuto è palesemente bot-like.
+                return max(30, secs_to_pre_nav - 90)
             return 3600 - 20
             
         processing_count = sum(1 for l in scan.listings if l.state == ListingState.ACTIVE and l.time_remaining in ("Processing...", "Elaborazione..."))

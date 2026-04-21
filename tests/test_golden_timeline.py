@@ -399,9 +399,14 @@ class TestComputeNextWaitGoldenWindow:
         scan.listings = []
         engine = RelistEngine(None, None, None, None, None, None, None)
         result = engine._compute_next_wait(scan)
-        # Should be <= 60 (the min of 60 and seconds until golden)
-        assert result <= 60, (
-            f"During hold, wait should be <= 60s, got {result}"
+        # Nuova spec: durante l'HOLD il wait è proporzionale al tempo fino a :09:00.
+        # A 15:30 → prossima golden :09 = 16:09 = 39 min = 2340s → wait = 2340 - 90 = 2250s
+        # Verifichiamo: deve essere > 60 (non più cappato) e < 3600
+        assert result > 60, (
+            f"During hold, wait should be > 60s (proportional to time until pre-nav), got {result}"
+        )
+        assert result < 3600, (
+            f"During hold, wait should be < 1h, got {result}"
         )
 
 
@@ -737,8 +742,10 @@ class TestComputeNextWaitIntegration:
         scan = self._make_scan()
         engine = RelistEngine(None, None, None, None, None, None, None)
         result = engine._compute_next_wait(scan)
-        # In hold with no active timers, wait is capped at 60s
-        assert result <= 60
+        # Nuova spec: a 15:30 il wait è proporzionale al tempo fino a :09:00 (non più 60s cap).
+        # 15:30 → 16:09 = 39min = 2340s → wait = 2340 - 90 = 2250s
+        assert result > 60, f"At 15:30 during hold, wait should be > 60s, got {result}"
+        assert result < 3600, f"At 15:30 during hold, wait should be < 3600s, got {result}"
 
     @patch("logic.relist_engine.datetime")
     def test_hold_16_12_returns_wait_toward_17_09(self, mock_dt):
@@ -747,8 +754,10 @@ class TestComputeNextWaitIntegration:
         scan = self._make_scan()
         engine = RelistEngine(None, None, None, None, None, None, None)
         result = engine._compute_next_wait(scan)
-        # In hold, wait is capped at 60s toward pre-nav
-        assert result <= 60
+        # Nuova spec: a 16:12 il wait è proporzionale al tempo fino a :09:00 del prossimo golden.
+        # 16:12 → 17:09 = 57min = 3420s → wait = 3420 - 90 = 3330s
+        assert result > 60, f"At 16:12 during hold, wait should be > 60s, got {result}"
+        assert result < 3600, f"At 16:12 during hold, wait should be < 3600s, got {result}"
 
     @patch("logic.relist_engine.datetime")
     def test_normal_period_14_00_with_active_timer(self, mock_dt):
