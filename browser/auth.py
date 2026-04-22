@@ -1,155 +1,186 @@
 #!/usr/bin/env python3
+"""
+EA authentication flow with 2FA and session persistence.
+"""
 
 import asyncio
+import json
 import logging
-from playwright.async_api import Page, TimeoutError as PlaywrightTimeout
-from pathlib import Path
 import os
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+from playwright.async_api import Page, expect
+
+from browser.controller import BrowserController
+
 logger = logging.getLogger(__name__)
 
-class EAAuth:
-    def __init__(self):
-        self.email = os.getenv('EMAIL')
-        self.password = os.getenv('PASSWORD')
-        self.bot_2fa_code = os.getenv('BOT_2FA_CODE')
-        self.is_headless = os.getenv('PLAYWRIGHT_HEADLESS', 'false').lower() == 'true'
-        
-        if not self.email:
-            raise ValueError("EMAIL environment variable is required")
-        if not self.password:
-            raise ValueError("PASSWORD environment variable is required")
-        if not self.is_headless and not self.bot_2fa_code:
-            logger.warning("Running headed mode without BOT_2FA_CODE - will require manual 2FA entry")
 
-    async def login(self, page: Page) -> bool:
-        """
-        Perform EA login with 2FA support
-        Returns True if successful, False if failed
-        """
+class Auth:
+    """EA authentication with 2FA handling."""
+
+    def __init__(self, browser_controller: BrowserController):
+        self.browser_controller = browser_controller
+        self._auth_state_path = Path(".gsd/browser-state/auth_state.json")
+        self._auth_state_path.parent.mkdir(parents=True, exist_ok=True)
+
+    async def _load_auth_state(self) -> Optional[Dict[str, Any]]:
+        """Load saved authentication state."""
         try:
-            logger.info("Starting EA authentication flow")
+            if self._auth_state_path.exists():
+                with open(self._auth_state_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load auth state: {e}")
+        return None
+
+    async def _save_auth_state(self, state: Dict[str, Any]):
+        """Save authentication state."""
+        try:
+            with open(self._auth_state_path, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to save auth state: {e}")
+
+    async def _check_session_validity(self, page: Page) -> bool:
+        """Check if current session is valid."""
+        try:
+            # Check if we're on the Transfer List page
+            await page.goto("https://www.easports.com/fifa/ultimate-team/web-app")
+            await asyncio.sleep(2)
             
-            # Navigate to EA login page
-            await page.goto("https://www.ea.com/login")
-            await page.wait_for_load_state('networkidle')
-            logger.info("Navigated to EA login page")
+            # Look for Transfer List button
+            transfer_list_selector = "text=Transfer List"
+            transfer_list_button = page.locator(transfer_list_selector)
             
-            # Fill email and click Next
-            email_input = page.get_by_role('textbox', name='email')
-            await email_input.fill(self.email)
-            await email_input.press('Enter')
-            logger.info(f"Email filled: {self.email}")
-            
-            # Wait for password page to load
-            await page.wait_for_load_state('networkidle')
-            
-            # Fill password and click Sign In
-            password_input = page.get_by_role('textbox', name='password')
-            await password_input.fill(self.password)
-            sign_in_button = page.get_by_role('button', name='Sign In')
-            await sign_in_button.click()
-            logger.info("Password filled and Sign In clicked")
-            
-            # Handle 2FA if present
-            if await self._handle_2fa(page):
-                logger.info("2FA completed successfully")
-            else:
-                logger.info("No 2FA required or already handled")
-            
-            # Wait for navigation to Transfer List or home page
-            try:
-                # Wait for either Transfer List page or home page
-                await page.wait_for_url(['https://www.ea.com/fifa/transfer-list', 'https://www.ea.com/'], 
-                                      timeout=30000)
-                logger.info("Successfully navigated to authenticated page")
+            if await transfer_list_button.is_visible():
+                logger.info("Session is valid - Transfer List accessible")
                 return True
-            except PlaywrightTimeout:
-                # Check if we're on a page that indicates success
-                current_url = page.url
-                if 'fifa' in current_url or 'ea.com' in current_url:
-                    logger.info(f"Successfully on page: {current_url}")
-                    return True
-                logger.error(f"Failed to navigate to expected page. Current URL: {current_url}")
-                return False
                 
         except Exception as e:
-            logger.error(f"Authentication failed: {str(e)}")
-            return False
+            logger.error(f"Session validity check failed: {e}")
+        
+        return False
 
     async def _handle_2fa(self, page: Page) -> bool:
-        """
-        Handle 2FA authentication
-        Returns True if 2FA was handled, False if 2FA not required or failed
-        """
-        logger.info("Checking for 2FA challenge...")
-        
-        # Look for 2FA indicators - common selectors for 2FA input
-        selectors = [
-            'input[autocomplete="one-time-code"]',
-            'input[name="code"]',
-            'input[placeholder*="code"]',
-            'input[aria-label*="code"]',
-            'input[type="text"]'
-        ]
-        
-        2fa_input = None
-        for selector in selectors:
-            try:
-                elements = page.query_selector_all(selector)
-                for element in elements:
-                    if element.is_visible():
-                        2fa_input = element
-                        break
-                if 2fa_input:
-                    break
-            except:
-                continue
-        
-        if not 2fa_input:
-            logger.info("No 2FA input found - proceeding without 2FA")
-            return False
-        
-        logger.info("2FA challenge detected")
-        
+        """Handle 2FA prompt."""
         try:
-            if self.is_headless:
-                if not self.bot_2fa_code:
-                    raise ValueError("BOT_2FA_CODE environment variable is required for headless mode")
-                
-                # Fill 2FA code automatically
-                await 2fa_input.fill(self.bot_2fa_code)
-                logger.info("2FA code filled from environment variable")
-                
-                # Click submit button
-                submit_selectors = ['button[type="submit"]', 'button:has-text("Verify")', 'button:has-text("Submit")']
-                submit_clicked = False
-                
-                for selector in submit_selectors:
-                    submit_button = page.query_selector(selector)
-                    if submit_button and submit_button.is_visible():
-                        await submit_button.click()
-                        submit_clicked = True
-                        logger.info("2FA submit button clicked")
-                        break
-                
-                if not submit_clicked:
-                    # Press Enter on the input as fallback
-                    await 2fa_input.press('Enter')
-                    logger.info("Pressed Enter to submit 2FA code")
-                
-            else:
-                # Headed mode - wait for manual entry
-                logger.info("Headed mode detected - waiting for manual 2FA code entry...")
-                await page.wait_for_selector('input[autocomplete="one-time-code"]', timeout=120000)
-                logger.info("Manual 2FA entry completed")
+            # Wait for 2FA prompt
+            await expect(page).to_have_url("*/login")
             
-            # Wait a bit for 2FA to process
-            await asyncio.sleep(2)
-            return True
+            # Check for 2FA input
+            two_fa_input = page.locator("//input[@type='tel' and @placeholder='Enter code']")
+            
+            if await two_fa_input.is_visible():
+                logger.info("2FA prompt detected")
+                
+                # Get 2FA code from environment or prompt
+                two_fa_code = os.getenv("BOT_2FA_CODE")
+                
+                if not two_fa_code:
+                    logger.error("BOT_2FA_CODE environment variable not set")
+                    return False
+                
+                # Enter 2FA code
+                await two_fa_input.fill(two_fa_code)
+                
+                # Submit 2FA
+                submit_button = page.locator("//button[text()='Submit' or contains(text(), 'Verify')]")
+                if await submit_button.is_visible():
+                    await submit_button.click()
+                    
+                    # Wait for navigation
+                    await asyncio.sleep(3)
+                    
+                    return True
+        
+        except Exception as e:
+            logger.error(f"2FA handling failed: {e}")
+        
+        return False
+
+    async def _perform_login(self, page: Page) -> bool:
+        """Perform EA login with email and password."""
+        try:
+            # Navigate to login page
+            await page.goto("https://www.easports.com/fifa/ultimate-team/web-app")
+            
+            # Wait for login button
+            login_button = page.locator("//button[contains(text(), 'Log In') or contains(text(), 'Sign In')]")
+            await login_button.click()
+            
+            # Wait for email input
+            await expect(page).to_have_url("*/login")
+            
+            email_input = page.locator("//input[@type='email']")
+            password_input = page.locator("//input[@type='password']")
+            
+            if await email_input.is_visible() and await password_input.is_visible():
+                # Get credentials from environment
+                email = os.getenv("EA_EMAIL")
+                password = os.getenv("EA_PASSWORD")
+                
+                if not email or not password:
+                    logger.error("EA_EMAIL or EA_PASSWORD environment variables not set")
+                    return False
+                
+                # Fill credentials
+                await email_input.fill(email)
+                await password_input.fill(password)
+                
+                # Submit login
+                next_button = page.locator("//button[contains(text(), 'Next') or contains(text(), 'Sign In')]")
+                await next_button.click()
+                
+                # Handle 2FA if present
+                await asyncio.sleep(3)
+                
+                if await self._handle_2fa(page):
+                    logger.info("Login successful with 2FA")
+                    return True
+                else:
+                    logger.info("Login successful without 2FA")
+                    return True
+        
+        except Exception as e:
+            logger.error(f"Login failed: {e}")
+        
+        return False
+
+    async def login(self, page: Page) -> bool:
+        """Main login function with session persistence."""
+        try:
+            # Check if we have a valid session
+            if await self._check_session_validity(page):
+                logger.info("Using existing valid session")
+                return True
+            
+            # Try to restore session
+            auth_state = await self._load_auth_state()
+            if auth_state:
+                logger.info("Attempting to restore session from saved state")
+                # Try to use restored session
+                if await self._check_session_validity(page):
+                    return True
+            
+            # Perform fresh login
+            logger.info("Performing fresh login")
+            success = await self._perform_login(page)
+            
+            if success:
+                # Save successful auth state
+                auth_state = {
+                    "last_login": str(asyncio.get_event_loop().time()),
+                    "status": "authenticated"
+                }
+                await self._save_auth_state(auth_state)
+                
+                # Save session state
+                await self.browser_controller.save_session(page.context)
+                
+            return success
             
         except Exception as e:
-            logger.error(f"2FA handling failed: {str(e)}")
+            logger.error(f"Login process failed: {e}")
             return False

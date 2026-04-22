@@ -397,3 +397,137 @@
 2026-04-22 02:09:06,765 [INFO] browser.auth: Sessione rilevata tramite: button:has-text("Home")
 2026-04-22 02:13:24,373 [DEBUG] browser.session_keeper: Heartbeat: click su 'Transfers' eseguito
 2026-04-22 02:13:26,468 [INFO] browser.auth: Sessione rilevata tramite: button:has-text("Home")
+2026-04-22 02:17:17,069 [DEBUG] browser.session_keeper: Heartbeat: click su 'Transfers' eseguito
+2026-04-22 02:17:19,183 [INFO] browser.auth: Sessione rilevata tramite: button:has-text("Home")
+2026-04-22 02:20:50,803 [DEBUG] browser.session_keeper: Heartbeat: click su 'Transfers' eseguito
+2026-04-22 02:20:52,884 [INFO] browser.auth: Sessione rilevata tramite: button:has-text("Home")
+2026-04-22 02:24:42,491 [DEBUG] browser.session_keeper: Heartbeat: click su 'Transfers' eseguito
+2026-04-22 02:24:44,599 [INFO] browser.auth: Sessione rilevata tramite: button:has-text("Home")
+2026-04-22 02:28:06,192 [DEBUG] browser.session_keeper: Heartbeat: click su 'Transfers' eseguito
+2026-04-22 02:28:08,363 [INFO] browser.auth: Sessione rilevata tramite: button:has-text("Home")
+2026-04-22 02:30:39,970 [DEBUG] browser.session_keeper: Heartbeat: click su 'Transfers' eseguito
+2026-04-22 02:30:42,049 [INFO] browser.auth: Sessione rilevata tramite: button:has-text("Home")
+2026-04-22 02:34:51,634 [DEBUG] browser.session_keeper: Heartbeat: click su 'Transfers' eseguito
+2026-04-22 02:34:53,749 [INFO] browser.auth: Sessione rilevata tramite: button:has-text("Home")
+2026-04-22 02:38:10,352 [DEBUG] browser.session_keeper: Heartbeat: click su 'Transfers' eseguito
+2026-04-22 02:38:12,491 [INFO] browser.auth: Sessione rilevata tramite: button:has-text("Home")
+2026-04-22 02:40:07,545 [INFO] browser.auth: Sessione rilevata tramite: button:has-text("Home")
+2026-04-22 02:40:07,560 [INFO] browser.navigator: Inizio navigazione verso Transfer List...
+2026-04-22 02:40:09,798 [INFO] browser.navigator: Clic su Transfers
+2026-04-22 02:40:11,306 [DEBUG] browser.rate_limiter: Rate limit: attesa 1974ms
+2026-04-22 02:40:15,874 [INFO] browser.navigator: Clic su Transfer List
+2026-04-22 02:40:17,383 [DEBUG] browser.rate_limiter: Rate limit: attesa 2168ms
+2026-04-22 02:40:19,608 [INFO] browser.navigator: Transfer List caricata con successo
+2026-04-22 02:40:19,608 [INFO] fifa: --- [SCANSIONE] Minuto 40:19 ---
+2026-04-22 02:40:19,680 [DEBUG] browser.detector:   [item 0] name='Baltimore' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,680 [DEBUG] browser.detector:   [item 1] name='Marta' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,680 [DEBUG] browser.detector:   [item 2] name='Freigang' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,680 [DEBUG] browser.detector:   [item 3] name='Baltimore' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,680 [DEBUG] browser.detector:   [item 4] name='Weir' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 5] name='Nnadozie' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 6] name='Walsh' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 7] name='Nnadozie' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 8] name='Ederson' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 9] name='Miedema' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 10] name='Tielemans' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 11] name='Cuthbert' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 12] name='Weir' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 13] name='Popp' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 14] name='Weir' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 15] name='Girelli' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 16] name='Hasegawa' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 17] name='Caicedo' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 18] name='Miedema' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 19] name='Miedema' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 20] name='Miedema' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,681 [DEBUG] browser.detector:   [item 21] name='Miedema' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,682 [DEBUG] browser.detector:   [item 22] name='Miedema' state_text='Expired' section='expired' time='Expired'
+2026-04-22 02:40:19,682 [DEBUG] browser.detector:   [item 23] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:19,682 [DEBUG] browser.detector:   [item 24] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:19,682 [DEBUG] browser.detector:   [item 25] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:19,682 [DEBUG] browser.detector:   [item 26] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:19,682 [DEBUG] browser.detector:   [item 27] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:19,682 [DEBUG] browser.detector:   [item 28] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:19,682 [DEBUG] browser.detector:   [item 29] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:19,682 [DEBUG] browser.detector:   [item 30] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:19,682 [DEBUG] browser.detector:   [item 31] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:19,682 [DEBUG] browser.detector:   [item 32] name='Mateo' state_text='Processing...' section='active' time='Processing...'
+2026-04-22 02:40:19,682 [INFO] browser.detector: Scansione completata: 33 listing (9 attivi, 24 scaduti (di cui 1 in processing), 0 venduti)
+2026-04-22 02:40:19,682 [INFO] fifa: Trovati 24 oggetti scaduti. Rilisto...
+2026-04-22 02:40:25,890 [INFO] browser.relist: Cliccato 'Re-list All' per 24 oggetti, attesa modale di conferma...
+2026-04-22 02:40:27,901 [INFO] browser.relist: Modale di conferma accettata (Yes cliccato)
+2026-04-22 02:40:29,410 [DEBUG] browser.rate_limiter: Rate limit: attesa 2025ms
+2026-04-22 02:40:33,501 [INFO] browser.relist: Re-list All completato per 24 oggetti
+2026-04-22 02:40:36,577 [DEBUG] browser.detector:   [item 0] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,577 [DEBUG] browser.detector:   [item 1] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,577 [DEBUG] browser.detector:   [item 2] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,577 [DEBUG] browser.detector:   [item 3] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,577 [DEBUG] browser.detector:   [item 4] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,577 [DEBUG] browser.detector:   [item 5] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,577 [DEBUG] browser.detector:   [item 6] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 7] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 8] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 9] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 10] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 11] name='Hasegawa' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 12] name='Weir' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 13] name='Baltimore' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 14] name='Tielemans' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 15] name='Popp' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 16] name='Marta' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 17] name='Girelli' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 18] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 19] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 20] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 21] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,578 [DEBUG] browser.detector:   [item 22] name='Walsh' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,579 [DEBUG] browser.detector:   [item 23] name='Mateo' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,579 [DEBUG] browser.detector:   [item 24] name='Weir' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,579 [DEBUG] browser.detector:   [item 25] name='Weir' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,579 [DEBUG] browser.detector:   [item 26] name='Cuthbert' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,579 [DEBUG] browser.detector:   [item 27] name='Nnadozie' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,579 [DEBUG] browser.detector:   [item 28] name='Nnadozie' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,579 [DEBUG] browser.detector:   [item 29] name='Baltimore' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,579 [DEBUG] browser.detector:   [item 30] name='Freigang' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,579 [DEBUG] browser.detector:   [item 31] name='Caicedo' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,579 [DEBUG] browser.detector:   [item 32] name='Ederson' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,579 [INFO] browser.detector: Scansione completata: 33 listing (33 attivi, 0 scaduti, 0 venduti)
+2026-04-22 02:40:36,647 [DEBUG] browser.detector:   [item 0] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,647 [DEBUG] browser.detector:   [item 1] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,647 [DEBUG] browser.detector:   [item 2] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,647 [DEBUG] browser.detector:   [item 3] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,647 [DEBUG] browser.detector:   [item 4] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,647 [DEBUG] browser.detector:   [item 5] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 6] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 7] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 8] name='Messi' state_text='' section='active' time='---'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 9] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 10] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 11] name='Hasegawa' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 12] name='Weir' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 13] name='Baltimore' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 14] name='Tielemans' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 15] name='Popp' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 16] name='Marta' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 17] name='Girelli' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 18] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 19] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,648 [DEBUG] browser.detector:   [item 20] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 21] name='Miedema' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 22] name='Walsh' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 23] name='Mateo' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 24] name='Weir' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 25] name='Weir' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 26] name='Cuthbert' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 27] name='Nnadozie' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 28] name='Nnadozie' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 29] name='Baltimore' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 30] name='Freigang' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 31] name='Caicedo' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [DEBUG] browser.detector:   [item 32] name='Ederson' state_text='59 Minutes' section='active' time='59 Minutes'
+2026-04-22 02:40:36,649 [INFO] browser.detector: Scansione completata: 33 listing (33 attivi, 0 scaduti, 0 venduti)
+2026-04-22 02:40:38,303 [INFO] notifier: Screenshot Telegram inviato con successo!
+2026-04-22 02:40:38,304 [INFO] __main__: Notifica batch inviata: 24 rilistati, 0 falliti.
+2026-04-22 02:40:38,307 [DEBUG] browser.rate_limiter: Rate limit: attesa 1421ms
+2026-04-22 02:44:04,387 [DEBUG] browser.session_keeper: Heartbeat: click su 'Transfers' eseguito
+2026-04-22 02:44:06,481 [INFO] browser.auth: Sessione rilevata tramite: button:has-text("Home")
