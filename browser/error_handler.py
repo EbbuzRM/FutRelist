@@ -118,10 +118,28 @@ def ensure_session(
     """
     from browser.auth import AuthError
 
-    # 0. Check per modali critici EA (es. Cannot Authenticate). 
+    # 0. Check per modali critici EA (es. Cannot Authenticate).
     # Se presente, lo accetta (clicca Ok) e forza il logout immediato.
     if auth.check_and_handle_disconnect_modal(page):
         logger.warning("Sessione invalidata dal server (Cannot Authenticate). Avvio re-login immediato.")
+        # Attendi che il redirect alla pagina di login sia completo
+        try:
+            page.wait_for_url("**signin.ea.com/**", timeout=10000)
+            logger.info("Redirect a signin.ea.com completato")
+        except Exception:
+            # Se il timeout scade, naviga manualmente
+            logger.warning("Redirect non completato, navigazione forzata...")
+            controller.navigate_to_webapp()
+            page.wait_for_timeout(3000)
+
+        # Ora fai il re-login completo
+        try:
+            from main import authenticate
+            authenticate(controller, auth, page)
+            logger.info("Sessione ripristinata con successo")
+        except Exception as e:
+            raise AuthError(f"Recupero sessione fallito: {e}") from e
+        return
     elif not is_session_expired(page):
         if auth.is_logged_in(page, timeout_ms=timeout_ms):
             return

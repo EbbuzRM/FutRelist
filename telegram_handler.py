@@ -252,7 +252,9 @@ class TelegramHandler:
     def _cmd_resume(self, args: list[str]) -> str:
         """Riavvia il bot dalla pausa."""
         self.bot_state.set_paused(False)
-        return "▶️ Bot riavviato"
+        # Forza un controllo sessione al prossimo ciclo per gestire eventuali modali
+        self.bot_state.set_force_relist(True)
+        return "▶️ Bot riavviato (controllo sessione al prossimo ciclo)"
 
     def _cmd_force_relist(self, args: list[str]) -> str:
         """Attiva il force relist per il prossimo ciclo."""
