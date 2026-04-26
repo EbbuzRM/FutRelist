@@ -44,6 +44,19 @@ def authenticate(controller, auth, page) -> None:
         page.wait_for_timeout(2000)
     
     while True:
+        # Controlla se siamo su signin.ea.com (dopo un modale di disconnessione)
+        current_url = page.url.lower()
+        if "signin.ea.com" in current_url:
+            logger.info("Rilevato signin.ea.com, procedo con login diretto...")
+            # Siamo già sulla pagina di login EA, skip del bottone "Login" della WebApp
+            email, password = get_credentials()
+            if auth.perform_login(page, email, password):
+                auth.save_session(controller.context)
+                return
+            # Se fallisce, riprova dal loop
+            page.wait_for_timeout(3000)
+            continue
+        
         if auth.is_console_session_active(page):
             logger.warning("Sessione console attiva. Attesa...")
             time.sleep(1800)
