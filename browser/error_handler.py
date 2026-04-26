@@ -120,39 +120,9 @@ def ensure_session(
 
     # 0. Check per modali critici EA (es. Cannot Authenticate). 
     # Se presente, lo accetta (clicca Ok) e forza il logout immediato.
-    modal_handled = auth.check_and_handle_disconnect_modal(page)
-    
-    if modal_handled:
+    if auth.check_and_handle_disconnect_modal(page):
         logger.warning("Sessione invalidata dal server (Cannot Authenticate). Avvio re-login immediato.")
-        # Il modale è stato gestito, attendi che la pagina di login sia pronta
-        # e forza un re-autenticazione completa
-        try:
-            current_url = page.url
-            logger.info(f"Dopo modale, URL attuale: {current_url}")
-            
-            # Se siamo su signin.ea.com, siamo pronti per il login
-            # Altrimenti, naviga esplicitamente alla WebApp per far comparire il bottone Login
-            if "signin.ea.com" not in current_url.lower():
-                logger.info("Redirect al login page non completato, navigazione forzata...")
-                controller.navigate_to_webapp()
-                page.wait_for_timeout(3000)
-        except Exception as e:
-            logger.debug(f"Errore durante attesa post-modale: {e}")
-        
-        # Forza re-autenticazione
-        logger.warning("Avvio procedura di re-login dopo modale...")
-        try:
-            from main import authenticate
-            authenticate(controller, auth, page)
-            logger.info("Sessione ripristinata con successo")
-        except AuthError:
-            raise
-        except Exception as e:
-            raise AuthError(f"Recupero sessione fallito in modo inatteso: {e}") from e
-        return
-    
-    # 1. Se non c'è modale, controlla se la sessione è scaduta
-    if not is_session_expired(page):
+    elif not is_session_expired(page):
         if auth.is_logged_in(page, timeout_ms=timeout_ms):
             return
         # Sessione incerta: potrebbe essere solo caricamento lento o modale non intercettato
@@ -160,22 +130,12 @@ def ensure_session(
         page.reload()
         page.wait_for_timeout(3000)
         # Riprova il check del modale dopo il reload
-        if auth.check_and_handle_disconnect_modal(page):
-            logger.warning("Modale rilevato dopo reload. Avvio re-login...")
-            try:
-                from main import authenticate
-                authenticate(controller, auth, page)
-                logger.info("Sessione ripristinata con successo")
-            except AuthError:
-                raise
-            except Exception as e:
-                raise AuthError(f"Recupero sessione fallito in modo inatteso: {e}") from e
-            return
+        auth.check_and_handle_disconnect_modal(page)
         
         if not is_session_expired(page) and auth.is_logged_in(page, timeout_ms=timeout_ms):
             return
         # Dopo reload ancora non loggato: cade nel blocco di re-auth sotto
-    
+
     logger.warning("Sessione non valida, tento il ripristino (incluso eventuale controllo console)...")
     try:
         from main import authenticate
