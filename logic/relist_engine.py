@@ -129,7 +129,7 @@ class RelistEngine:
                 next_g = get_next_golden_hour(datetime.now())
                 if next_g:
                     fifa_logger.info(f"[HOLD] {scan.expired_count} scaduti in HOLD. Prossima golden: {next_g.strftime('%H:%M')}.")
-                    return 0, 0, self._compute_next_wait(scan)
+                    return 0, 0, 60
                 # No more goldens -> override hold
                 in_hold = False
 
@@ -141,17 +141,6 @@ class RelistEngine:
             
             succeeded, failed = self._execute_relist_with_verification(scan)
             
-            # 6. Safety Double Check (Golden Window): se 0 scaduti, verifica ancora e marca come completato.
-            now_post = datetime.now()
-            if is_in_golden_window(now_post) and (succeeded > 0 or scan.expired_count > 0):
-                self.page.wait_for_timeout(7000) # Attesa 7s per allineamento server EA
-                safety_scan = self.detector.scan_listings()
-                if safety_scan.expired_count == 0 and safety_scan.processing_count == 0:
-                    fifa_logger.info(f"[Safety Check] ✅ Conferma 0 scaduti. Golden Hour {now_post.hour}:10 completata con successo.")
-                    self.bot_state.mark_golden_completed(now_post.hour)
-                else:
-                    fifa_logger.warning(f"[Safety Check] ⚠️ Trovati ancora {safety_scan.expired_count} scaduti o {safety_scan.processing_count} in processing. Non marco come completato.")
-
             # Golden Retry for Processing items
             if is_in_golden_window(datetime.now()):
                 retry_s, retry_f, reboot = self._golden_retry_loop(succeeded, failed, scan.processing_count)
@@ -163,15 +152,6 @@ class RelistEngine:
             return succeeded, failed, self._compute_next_wait(scan)
         
         # Nessun scaduto
-        now_final = datetime.now()
-        if not is_in_golden_period(now_final):
-            # Controllo allineamento scadenze imminenti: 
-            # Se ci sono oggetti ACTIVE che scadono entro 30s, non dormire un'ora.
-            imminent = [l for l in scan.listings if l.state == ListingState.ACTIVE and l.time_remaining_seconds is not None and l.time_remaining_seconds <= 30]
-            if imminent:
-                fifa_logger.info(f"Trovati {len(imminent)} oggetti in scadenza imminente (<=30s). Allineamento wait breve.")
-                return 0, 0, 20
-
         return 0, 0, self._compute_next_wait(scan)
 
     def _execute_relist_with_verification(self, scan: ListingScanResult) -> Tuple[int, int]:
@@ -257,44 +237,24 @@ class RelistEngine:
     def _compute_next_wait(self, scan: ListingScanResult) -> int:
         """Calcola il wait ottimale."""
         now = datetime.now()
+        if is_in_golden_window(now):
+            return 10
         
-        # Se siamo in Golden Window e abbiamo già completato con successo l'ora corrente,
-        # aspettiamo direttamente il prossimo pre-nav (minuto :09 dell'ora successiva)
-        # o la fine del golden period (:15) per evitare scansioni a vuoto.
-        if is_in_golden_window(now) and self.bot_state.is_golden_completed(now.hour):
-            ng = get_next_golden_hour(now)
-            # Se la prossima golden è un'ora diversa, puntiamo al suo pre-nav
-            if ng and ng.hour > now.hour:
-                pre_nav = ng.replace(minute=9, second=0, microsecond=0)
-                wait_rest = int((pre_nav - now).total_seconds())
-                if wait_rest > 0:
-                    logger.info(f"[Golden Success] Ora {now.hour}:10 completata. Salto riposo :15 e punto al pre-nav delle {pre_nav.strftime('%H:%M:%S')} ({wait_rest}s).")
-                    return wait_rest
-            
-            # Altrimenti (ultima golden o caso limite), riposo standard fino al :15
-            target_rest = now.replace(minute=15, second=0, microsecond=0)
-            wait_rest = int((target_rest - now).total_seconds())
-            if wait_rest > 0:
-                logger.info(f"[Golden Success] Ora {now.hour}:10 completata. Riposo fino al termine finestra :15 ({wait_rest}s).")
-                return wait_rest
-
+        min_active = get_min_active_seconds(scan)
+        if min_active:
+            wait = max(min_active - 20, 10)
+            return self._cap_wait(wait, now)
+        
         if is_in_hold_window(now):
             ng = get_next_golden_hour(now)
             if ng:
                 pre_nav = ng.replace(minute=9, second=0, microsecond=0)
                 secs_to_pre_nav = int((pre_nav - now).total_seconds())
-                
-                # Se mancano meno di 5 minuti, punta ESATTAMENTE alle :09:00
-                if 0 < secs_to_pre_nav <= 300:
-                    return secs_to_pre_nav
-                
-                # Altrimenti aspetta fino al pre-nav meno un buffer di 120s per sicurezza, 
-                # ma non meno di 60s per evitare troppi heartbeat
-                return max(60, secs_to_pre_nav - 120)
+                # Aspetta fino al pre-nav (:09) meno un buffer di 90s.
+                # Il Pre-Nav Guard in process_cycle gestisce il gate finale :08→:09.
+                # NON cappare a 60s: scansionare ogni minuto è palesemente bot-like.
+                return max(30, secs_to_pre_nav - 90)
             return 3600 - 20
-
-        if is_in_golden_window(now):
-            return 10
             
         processing_count = sum(1 for l in scan.listings if l.state == ListingState.ACTIVE and l.time_remaining in ("Processing...", "Elaborazione..."))
         if processing_count > 0:
@@ -304,9 +264,6 @@ class RelistEngine:
 
     def _cap_wait(self, wait: int, now: datetime) -> int:
         if not is_in_golden_period(now):
-            # Reset flag di completamento se siamo fuori dalla fascia golden
-            # Questo assicura che per la prossima ora golden (es. dalle 16 alle 17) il flag sia pulito.
-            self.bot_state.clear_golden_completed()
             return wait
         ng = get_next_golden_hour(now)
         if not ng:

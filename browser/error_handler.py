@@ -131,7 +131,7 @@ def ensure_session(
             logger.warning("Redirect non completato, navigazione forzata...")
             controller.navigate_to_webapp()
             page.wait_for_timeout(3000)
-
+        
         # Ora fai il re-login completo
         try:
             from main import authenticate
