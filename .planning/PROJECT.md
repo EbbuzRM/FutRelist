@@ -1,106 +1,57 @@
 # FIFA 26 WebApp Auto-Relist Bot
 
 ## Core Value
-Automated relisting of expired players on FIFA 26 WebApp transfer market, running continuously in background with Telegram control, golden hour scheduling, and anti-detection measures.
+Relisting automatizzato di giocatori scaduti sulla WebApp di FIFA 26. Il bot opera in background con controllo remoto via Telegram, sincronizzazione precisa con le Golden Hours e misure di anti-detection avanzate.
 
-## Current Status: PRODUCTION
-**Latest Release:** v1.10 Golden Stability & Session Heartbeat (2026-04-21)
-**Test Suite:** 674 tests passing (148 unit + 526 golden timeline)
-**Production Verified:** 53 items relisted, 0 failures, "Wait All Expired" logic confirmed
+## Current Status: PRODUCTION / STABLE
+**Latest Release:** v1.11 Polling Optimization & Quick Navigation (2026-04-27)
+**Test Suite:** 674 tests passing (148 unit + 526 golden timeline simulation)
+**Production Verified:** Successo confermato su relist di massa, gestione "Processing" e heartbeat stabile.
 
-## Shipped Features
+## Key Shipped Features
 
-### Browser Automation
-- Playwright-based browser controller with persistent profile (no repeated 2FA)
-- EA login flow: email → NEXT → password → Sign in
-- Session cookie persistence across restarts
-- Popup dismissal (EA modals, form containers)
+### Browser & Session Management
+- **Playwright Controller:** Gestione browser con profilo persistente (evita ripetizioni 2FA).
+- **Auth Manager:** Login EA automatico (2-step) e persistenza delle sessioni.
+- **Session Keeper:** Supervisione attiva con **Heartbeat** dinamico (click sulla tab 'Transfers' ogni 2-5 min).
+- **Error Handler:** Detection automatica di sessioni scadute con recovery immediato.
 
-### Auto-Relist Engine
-- DOM-based listing detection (active/expired/sold states)
-- Configurable price adjustment: percentage or fixed, with FIFA bounds (200-15M)
-- RelistExecutor: single item + batch relist with dialog confirmation
-- Golden Hour scheduling: 16:10/17:10/18:10 with :09-:11 window
-- Pre-navigation at :09:00 before each golden
-- Hold window between goldens (expired items wait for next golden)
-- Normal (immediate) relist outside golden period
-- Ritardatari polling at 10s fixed during golden windows
-- "Wait All Expired" logic: waits for all items (including "Processing") to expire before relisting outside golden periods
-
-### Configuration
-- ConfigManager with typed dataclasses (AppConfig, BrowserConfig, ListingDefaults, RateLimitingConfig)
-- CLI subcommands: show/set/reset
-- Deep-merge migration for config schema changes
-- JSON persistence with unknown key preservation
+### Auto-Relist & Golden Hour Logic
+- **Precision Timing:** Relist focalizzato alle **:10** di ogni ora (finestra :09-:11).
+- **Golden Hours:** Target primari 16:10, 17:10, 18:10.
+- **Pre-Navigation:** Navigazione automatica alla Transfer List esattamente alle **:09:00**.
+- **Two-Phase Verification:** Doppio controllo post-relist per garantire che nessun oggetto resti scaduto per errori di rete.
+- **Quick Navigation:** Verifica se il bot è già nella pagina corretta prima di navigare (risparmio ~10s).
 
 ### Telegram Control
-- 8 commands: /status, /pause, /resume, /force_relist, /screenshot, /del_sold, /logs, /help
-- Thread-safe BotState with pause/resume/force_relist/reboot flags
-- SoldHandler: navigate to sold items, collect credits, clear listings
-- Chat authentication (authorized chat_id only)
-- Batch notifications: accumulates events within 120s, sends single summary
-- Detailed Telegram reports: distinct counters for "Active (with timer)", "Expired detected", and "Just Relisted"
+- **11 Comandi:** `/status`, `/pause`, `/resume`, `/console`, `/online`, `/force_relist`, `/screenshot`, `/del_sold`, `/logs`, `/reboot`, `/help`.
+- **Batch Notifications:** Notifiche aggregate ogni 120s per evitare spam.
+- **Report Dettagliati:** Conteggio distinto tra attivi, scaduti rilevati e appena rilistati.
 
 ### Protection & Stealth
-- Console Mode: Deep Sleep via /console and /online (minimizes browser activity)
-- Heartbeat: dynamic 'Clear Sold' click every 2.5-5 min random
-- Rate limiting: 2-5s random delays between actions
-- EA modal auto-dismissal (Cannot Authenticate, form containers)
-- Manual relist detection during Golden Hours
-
-### Logging & Error Handling
-- Structured JSONL logging (actions.jsonl) with ActionLogEntry + JsonFormatter
-- Rich console output with timestamps (%H:%M:%S)
-- CLI history subcommand for viewing action history
-- Session expiry detection and automatic recovery
-- Retry with exponential backoff (tenacity, 2-30s, max 3 attempts)
-- Clean shutdown: browser close + Telegram handler stop + subprocess respawn
+- **Console Mode:** Deep Sleep totale con polling ridotto a 300s.
+- **Rate Limiting:** Delay casuali tra 2s e 5s tra ogni azione.
+- **Pausa Ottimizzata:** Polling a 300s con risveglio istantaneo su comando `/resume`.
 
 ## Tech Stack
 - **Language:** Python 3.13
-- **Browser Automation:** Playwright (persistent profile, anti-detection)
-- **CLI:** argparse with subcommands (run, config, history)
-- **Notifications:** python-telegram-bot (long polling, chat auth)
-- **Logging:** rich (console), python-json-logger (JSONL), standard logging (app.log)
-- **Resilience:** tenacity (retry/backoff), python-dotenv (secrets)
-- **Testing:** pytest (641 tests)
+- **Automation:** Playwright (Chromium)
+- **Notifications:** Telegram Bot API (urllib)
+- **UI & Logging:** Rich (Console), JSONL (Actions history)
+- **Testing:** Pytest (Timeline Simulation)
 
-## Architecture
-```
-fifa-relist/
-├── main.py              — Entry point, main loop, golden hour logic, auth
-├── browser/
-│   ├── controller.py    — Playwright wrapper with persistent profile
-│   ├── auth.py          — EA login (2-step), session management
-│   ├── navigator.py     — Home → Transfers → Transfer List, popup dismissal
-│   ├── detector.py      — DOM scan for listings (state, price, timer)
-│   ├── relist.py        — RelistExecutor (single + batch, price adjustment)
-│   ├── rate_limiter.py  — Random delays (2-5s), from_config()
-│   ├── error_handler.py — Session expiry, retry_on_timeout, ensure_session
-│   └── sold_handler.py  — Sold items cleanup, credit collection
-├── config/
-│   ├── config.py        — Typed dataclasses (4), validation, from_dict/to_dict
-│   └── config.json      — Runtime configuration
-├── models/
-│   ├── listing.py       — ListingState (ACTIVE/EXPIRED/PROCESSING/SOLD), PlayerListing, ListingScanResult
-│   ├── relist_result.py — RelistResult, RelistBatchResult
-│   ├── sold_result.py   — SoldCreditsResult
-│   └── action_log.py    — ActionLogEntry, JsonFormatter, parse_action_history
-├── notifier.py          — Telegram notifications (messages + screenshots)
-├── bot_state.py         — Thread-safe BotState (pause/resume/force/reboot)
-├── telegram_handler.py  — 8 command handlers, long polling, chat auth
-└── tests/
-    ├── test_*.py        — 122 unit/feature tests
-    └── test_golden_timeline.py — 519 golden hour timeline simulations
-```
+## Architecture Overview
+Il bot è strutturato in modo modulare per separare le responsabilità:
+1. **`main.py`**: Orchestratore del boot e del loop.
+2. **`logic/`**: Motore decisionale (`relist_engine`) e gestione timing (`golden_hour`).
+3. **`browser/`**: Interazione WebApp, navigazione, auth e session keep-alive.
+4. **`bot_state.py`**: Gestione stato thread-safe per i comandi remoti.
 
-## Constraints
-- Must handle FIFA 26 WebApp authentication (2-step EA login)
-- Rate limiting awareness (2-5s delays, avoid EA anti-bot detection)
-- Session persistence across restarts (cookie-based)
-- Error recovery for network/UI issues (retry + session check)
-- Golden Hour logic is CRITICAL and must not be modified without explicit approval (see AGENTS.md)
-- Every relist block MUST have an `else` fallback for normal relist
+## Constraints & Rules
+- **Golden Hour Priority:** La logica del minuto :09/:10 è sacra e non va alterata.
+- **Anti-Detection:** Mai scendere sotto i delay minimi di sicurezza (800ms).
+- **Wait Policy:** Utilizzare sempre `wait_interruptible` per i lunghi sleep.
+- **Fallback:** Ogni azione di relist deve prevedere una gestione standard per i casi fuori finestra.
 
-## Last Updated
-2026-04-21
+---
+*Last Updated: 2026-04-27*

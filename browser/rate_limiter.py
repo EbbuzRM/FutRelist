@@ -32,3 +32,9 @@ class RateLimiter:
         delay_ms = random.randint(self.min_delay_ms, self.max_delay_ms)
         logger.debug(f"Rate limit: attesa {delay_ms}ms")
         time.sleep(delay_ms / 1000.0)
+
+    def wait_fast(self) -> None:
+        """Ritardo ridotto (1-2s) per navigazione force (golden retry)."""
+        delay_ms = random.randint(1000, 2000)
+        logger.debug(f"Rate limit (fast): attesa {delay_ms}ms")
+        time.sleep(delay_ms / 1000.0)

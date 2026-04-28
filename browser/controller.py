@@ -1,153 +1,117 @@
-#!/usr/bin/env python3
 """
-Playwright browser controller with persistent session state.
+Browser Controller - Wrapper Playwright per automazione FIFA 26 WebApp
 """
-
-import asyncio
-import json
 import logging
-import os
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
-
-from playwright.async_api import async_playwright, BrowserContext
-
-from config.config_manager import ConfigManager
+from playwright.sync_api import sync_playwright, BrowserContext, Page
 
 logger = logging.getLogger(__name__)
 
 
 class BrowserController:
-    """Playwright browser controller with persistent session state."""
+    """Gestisce browser Playwright per FIFA 26 WebApp."""
 
-    def __init__(self, config: ConfigManager):
+    def __init__(self, config: dict):
         self.config = config
-        self._browser = None
-        self._user_data_dir = self._get_user_data_dir()
-        self._session_state_path = Path(".gsd/browser-state/session.json")
-        self._session_state_path.parent.mkdir(parents=True, exist_ok=True)
+        self.playwright = None
+        self.context: BrowserContext | None = None
+        self.page: Page | None = None
+        self._is_running = False
 
-    def _get_user_data_dir(self) -> Path:
-        """Get or create user data directory."""
-        user_data_dir = self.config.get("browser", "user_data_dir", default="browser-profile")
-        user_data_dir_path = Path(user_data_dir)
-        user_data_dir_path.mkdir(parents=True, exist_ok=True)
-        return user_data_dir_path
+    DEFAULT_PROFILE_DIR = Path("storage/browser_profile")
 
-    async def _save_session_state(self, context: BrowserContext):
-        """Save session cookies and storage."""
+    def start(self, user_data_dir: str | None = None) -> Page:
+        """Avvia il browser con profilo persistente.
+
+        Usa launch_persistent_context() in modo che cookie, localStorage e
+        il flag 'browser trusted' di EA vengano scritti su disco e riletti
+        ad ogni avvio successivo, evitando la 2FA ripetuta.
+        """
+        if self._is_running:
+            raise RuntimeError("Browser già avviato. Usa stop() prima di ricominciare.")
+
+        browser_cfg = self.config.get("browser", {})
+        viewport = browser_cfg.get("viewport", {"width": 1280, "height": 720})
+
+        # Determina la cartella del profilo: quella passata o quella di default
+        profile_path = Path(user_data_dir) if user_data_dir else self.DEFAULT_PROFILE_DIR
+        profile_path.mkdir(parents=True, exist_ok=True)
+
+        logger.info("Avvio Playwright...")
+        self.playwright = sync_playwright().start()
+
+        logger.info(
+            f"Lancio browser con profilo persistente: {profile_path} "
+            f"(headless={browser_cfg.get('headless', False)})"
+        )
+
+        # launch_persistent_context salva TUTTI i dati di sessione su disco:
+        # cookie, localStorage, sessionStorage, IndexedDB, service workers.
+        # EA la usa per riconoscere il dispositivo come trusted (no 2FA).
+        self.context = self.playwright.chromium.launch_persistent_context(
+            user_data_dir=str(profile_path),
+            headless=browser_cfg.get("headless", False),
+            slow_mo=browser_cfg.get("slow_mo", 500),
+            viewport={
+                "width": viewport.get("width", 1280),
+                "height": viewport.get("height", 720),
+            },
+            args=["--no-sandbox"]
+        )
+
+        # Riusa la pagina già aperta oppure ne crea una nuova
+        self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
+
+        self._is_running = True
+        logger.info("Browser avviato con successo")
+        return self.page
+
+    def navigate_to_webapp(self) -> None:
+        if not self._is_running or not self.page:
+            raise RuntimeError("Browser non avviato. Usa start() prima.")
+
+        url = self.config.get(
+            "fifa_webapp_url", "https://www.ea.com/ea-sports-fc/ultimate-team/web-app/"
+        )
+
+        logger.info(f"Navigazione a: {url}")
+        self.page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        self.page.wait_for_timeout(3000)
+        logger.info(f"Pagina caricata: {self.page.title()}")
+
+
+    def stop(self) -> None:
+        logger.info("Chiusura browser...")
+
+        # Con launch_persistent_context non c'è un oggetto Browser separato:
+        # chiudere il context salva il profilo su disco e termina il processo.
         try:
-            cookies = await context.context.cookies()
-            storage = {
-                "cookies": cookies,
-                "localStorage": {},
-                "sessionStorage": {}
-            }
-            # Save cookies
-            for cookie in cookies:
-                if cookie["name"] == "sessionId":
-                    storage["sessionId"] = cookie["value"]
-            
-            # Save local/session storage for main frame
-            page = await context.new_page()
-            await page.goto("https://www.easports.com/fifa/ultimate-team/web-app")
-            
-            local_storage = await page.evaluate("() => Object.fromEntries(Object.entries(localStorage))")
-            session_storage = await page.evaluate("() => Object.fromEntries(Object.entries(sessionStorage))")
-            
-            storage["localStorage"] = local_storage
-            storage["sessionStorage"] = session_storage
-            
-            with open(self._session_state_path, "w", encoding="utf-8") as f:
-                json.dump(storage, f, indent=2)
-            
-            logger.info(f"Session state saved to {self._session_state_path}")
-            
+            if self.context:
+                # Evita crash se la connessione è già chiusa (es. crash browser o Ctrl+C)
+                self.context.close()
         except Exception as e:
-            logger.error(f"Failed to save session state: {e}")
-
-    async def _restore_session_state(self, context: BrowserContext):
-        """Restore session cookies and storage."""
-        try:
-            if not self._session_state_path.exists():
-                logger.info("No session state to restore")
-                return
-            
-            with open(self._session_state_path, "r", encoding="utf-8") as f:
-                storage = json.load(f)
-            
-            # Restore cookies
-            if "cookies" in storage:
-                await context.add_cookies(storage["cookies"])
-            
-            # Restore local/session storage
-            page = await context.new_page()
-            await page.goto("https://www.easports.com/fifa/ultimate-team/web-app")
-            
-            if "localStorage" in storage:
-                await page.evaluate("""(storage) => {
-                    Object.entries(storage).forEach(([key, value]) => {
-                        localStorage.setItem(key, value);
-                    });
-                }""", storage["localStorage"])
-            
-            if "sessionStorage" in storage:
-                await page.evaluate("""(storage) => {
-                    Object.entries(storage).forEach(([key, value]) => {
-                        sessionStorage.setItem(key, value);
-                    });
-                }""", storage["sessionStorage"])
-            
-            logger.info("Session state restored")
-            
-        except Exception as e:
-            logger.error(f"Failed to restore session state: {e}")
-            # If restore fails, continue without session
-
-    async def launch_browser(self) -> Tuple[async_playwright, BrowserContext]:
-        """Launch browser with persistent session."""
-        playwright = await async_playwright.start()
-        
-        try:
-            browser = await playwright.chromium.launch(
-                headless=self.config.get("browser", "headless", default=True),
-                user_data_dir=str(self._user_data_dir)
-            )
-            
-            context = await browser.new_context()
-            
-            # Try to restore session
-            await self._restore_session_state(context)
-            
-            return playwright, context
-            
-        except Exception as e:
-            logger.error(f"Failed to launch browser: {e}")
-            await playwright.stop()
-            raise
-
-    async def close_browser(self, playwright: async_playwright):
-        """Close browser and save session."""
-        try:
-            # Save session before closing
-            if self._browser:
-                context = await self._browser.new_context()
-                await self._save_session_state(context)
-                await context.close()
-            
+            logger.debug(f"Errore durante la chiusura del contesto: {e}")
         finally:
-            await playwright.stop()
+            self.context = None
 
-    async def new_context(self) -> BrowserContext:
-        """Create new browser context with session restoration."""
-        playwright, context = await self.launch_browser()
-        self._browser = playwright.chromium
-        return context
+        try:
+            if self.playwright:
+                self.playwright.stop()
+        except Exception:
+            pass
+        finally:
+            self.playwright = None
 
-    async def save_session(self, context: BrowserContext):
-        """Save current session state."""
-        await self._save_session_state(context)
+        self.page = None
+        self._is_running = False
+        logger.info("Browser chiuso")
 
-    async def restore_session(self, context: BrowserContext):
-        """Restore session state."""
-        await self._restore_session_state(context)
+    def is_running(self) -> bool:
+        return self._is_running
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()

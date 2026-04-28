@@ -142,9 +142,8 @@ def main() -> None:
                 keeper.ensure_session()
 
                 try:
-                    succeeded, failed, next_wait = engine.process_cycle(cycle, keeper)
+                    succeeded, failed, next_wait, scan_result = engine.process_cycle(cycle, keeper)
                     # stats are now updated inside engine.process_cycle to avoid race conditions with manual relist detection
-                    scan_result = detector.scan_listings()
                     batch.accumulate(scan_result, succeeded, failed)
 
                     if batch.is_ready_to_flush(next_wait):

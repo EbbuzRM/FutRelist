@@ -51,10 +51,10 @@ class RelistEngine:
         self.auth = auth
         self.bot_state = bot_state
 
-    def process_cycle(self, cycle_num: int, session_keeper) -> Tuple[int, int, int]:
+    def process_cycle(self, cycle_num: int, session_keeper) -> Tuple[int, int, int, ListingScanResult]:
         """
         Esegue un singolo ciclo di gestione rilist.
-        Ritorna (succeeded, failed, next_wait).
+        Ritorna (succeeded, failed, next_wait, scan_result).
         """
         # 0. Ban Prevention Hard-Lock
         if self.auth.is_console_session_active(self.page):
@@ -80,56 +80,53 @@ class RelistEngine:
                 if self.bot_state.wait_interruptible(wait_secs):
                     raise RebootRequestError("Reboot richiesto")
 
+
         # 2. Navigazione (avviene normalmente, o al minuto :09 durante golden period)
         if not self._navigate_with_retry():
-            return 0, 0, 60
+            return 0, 0, 60, ListingScanResult.empty()
 
-        # 3. Golden Sync: dopo la pre-nav al :09, attesa precisa fino alle :10:00
+        # 3. Scansione a :09 — avviene PRIMA del Golden Sync wait.
+        #    Il risultato viene usato direttamente per il relist a :10 senza ri-scansionare.
+        fifa_logger = logging.getLogger("fifa")
+        fifa_logger.info(f"--- [SCANSIONE] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
+        scan = self.detector.scan_listings()
+
+        # 4. Golden Sync: aspetta fino a :10:00 preciso DOPO la scansione.
+        #    In questo modo il relist avviene esattamente alle :10 usando i dati già raccolti.
         now = datetime.now()
         next_golden = get_next_golden_hour(now)
         if next_golden and is_in_golden_period(now) and now < next_golden:
             if is_in_golden_window(now) and now.minute == 9:
                 wait_secs = (next_golden - now).total_seconds()
-                logger.info(f"[Golden] Pre-nav ✅ Transfer List pronta. Attesa precisa: {int(wait_secs)}s per le {next_golden.strftime('%H:%M:%S')}.")
+                logger.info(f"[Golden] Pre-nav ✅ Scansione a :09 completata. Attesa precisa: {int(wait_secs)}s per le {next_golden.strftime('%H:%M:%S')}.")
                 if self.bot_state.wait_interruptible(wait_secs):
                     raise RebootRequestError("Reboot richiesto")
             elif is_in_golden_window(now):
                 logger.info(f"[Golden] Già nella finestra golden (:10-:11), procedo.")
 
-        fifa_logger = logging.getLogger("fifa")
-        fifa_logger.info(f"--- [SCANSIONE] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
-        scan = self.detector.scan_listings()
-
-        # 4. Heuristic Relist Manuale
+        # 5. Heuristic Relist Manuale
         now_scan = datetime.now()
         if (scan.active_count > 0 and scan.expired_count == 0 and is_in_golden_window(now_scan)):
             seconds_since_bot = self.bot_state.get_seconds_since_last_relist_by_bot()
             if seconds_since_bot is None or seconds_since_bot >= 180:
-                # Verifica timer coerenti
                 active_times = [l.time_remaining_seconds for l in scan.listings if l.state == ListingState.ACTIVE and l.time_remaining_seconds]
                 if active_times:
                     min_t, max_t = min(active_times), max(active_times)
                     if ((3400 <= min_t <= 3600) or (10600 <= min_t <= 10800) or (21400 <= min_t <= 21600)) and (max_t - min_t) <= 90:
                         fifa_logger.info(f"[⚠️ RELIST MANUALE RILEVATO] Bot si ritira. Prossimo check tra {min_t - 20}s.")
-                        return 0, 0, max(min_t - 20, 60)
+                        return 0, 0, max(min_t - 20, 60), scan
 
-        # 5. Decisione Relist
+        # 6. Decisione Relist
         if scan.expired_count > 0:
             now_relist = datetime.now()
             in_hold = is_in_hold_window(now_relist)
             force_relist = self.bot_state.consume_force_relist()
 
-            # Regola Ferrea: Minuto :09 posticipa a :10
-            if is_in_golden_window(now_relist) and now_relist.minute == 9:
-                seconds_to_10 = 60 - now_relist.second
-                fifa_logger.info(f"[Golden] Minuto 09, posticipo a :10:00 ({seconds_to_10}s).")
-                return 0, 0, seconds_to_10
-
             if in_hold and not force_relist:
                 next_g = get_next_golden_hour(datetime.now())
                 if next_g:
                     fifa_logger.info(f"[HOLD] {scan.expired_count} scaduti in HOLD. Prossima golden: {next_g.strftime('%H:%M')}.")
-                    return 0, 0, 60
+                    return 0, 0, 60, scan
                 # No more goldens -> override hold
                 in_hold = False
 
@@ -149,10 +146,10 @@ class RelistEngine:
                 succeeded += retry_s
                 failed += retry_f
 
-            return succeeded, failed, self._compute_next_wait(scan)
+            return succeeded, failed, self._compute_next_wait(scan), scan
         
         # Nessun scaduto
-        return 0, 0, self._compute_next_wait(scan)
+        return 0, 0, self._compute_next_wait(scan), scan
 
     def _execute_relist_with_verification(self, scan: ListingScanResult) -> Tuple[int, int]:
         """Esegue il rilist e verifica i risultati con due round."""
@@ -220,7 +217,7 @@ class RelistEngine:
             if self.bot_state.wait_interruptible(wait_secs):
                 return retry_s, retry_f, True
             
-            if not self._navigate_with_retry():
+            if not self._navigate_with_retry(force=True):
                 break
                 
             scan = self.detector.scan_listings()
@@ -256,8 +253,7 @@ class RelistEngine:
                 return max(30, secs_to_pre_nav - 90)
             return 3600 - 20
             
-        processing_count = sum(1 for l in scan.listings if l.state == ListingState.ACTIVE and l.time_remaining in ("Processing...", "Elaborazione..."))
-        if processing_count > 0:
+        if scan.processing_count > 0:
             return 30
             
         return self._cap_wait(3600 - 20, now)
@@ -272,14 +268,26 @@ class RelistEngine:
         secs_to_pre_nav = int((pre_nav - now).total_seconds())
         return secs_to_pre_nav if 0 < secs_to_pre_nav < wait else wait
 
-    def _navigate_with_retry(self) -> bool:
+    def _navigate_with_retry(self, force: bool = False) -> bool:
+        # Quick check: siamo già nella Transfer List? (solo se non force)
+        if not force:
+            try:
+                transfer_selectors = ['.ut-transfer-list-view', '.listFUTItem', '.no-items', '.empty-list', '.no-listings']
+                for sel in transfer_selectors:
+                    if self.page.locator(sel).count() > 0:
+                        logger.debug("Già nella Transfer List → skip navigazione")
+                        return True
+            except Exception as e:
+                logger.debug(f"Quick check Transfer List fallito: {e}")
+        
+        # Navigazione completa
         try:
-            return self.navigator.go_to_transfer_list()
+            return self.navigator.go_to_transfer_list(fast=force)
         except Exception:
             self.page.reload()
             self.page.wait_for_timeout(3000)
             try:
-                return self.navigator.go_to_transfer_list()
+                return self.navigator.go_to_transfer_list(fast=force)
             except Exception:
                 return False
 

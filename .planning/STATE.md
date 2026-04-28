@@ -1,240 +1,104 @@
----
-gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: — Enhanced Trading
 status: production
-last_updated: "2026-04-20T01:25:00.000Z"
-progress:
-  total_phases: 8
-  completed_phases: 7
-  total_plans: 21
-  completed_plans: 21
-  percent: 100
+last_updated: "2026-04-27T18:50:00.000Z"
 ---
 
-# Project State
-
-## Status: PRODUCTION / MAINTENANCE MODE
-
-All planned phases complete. The bot is running in production, relisting items successfully.
-
-### Today's Fixes (April 21, 2026) — Golden Stability & Session Heartbeat
-
-**Fix 1: Golden Hour Pre-Nav Timing (Bug Storico)**
-- Il bot eseguiva la navigazione alla Transfer List troppo presto (minuto :08), restando parcheggiato in attesa per 87s e sfasando il timing preciso del relist.
-- Fix in `process_cycle`: separata la "Pre-Nav Guard" (attesa *prima* della navigazione al :08) dalla "Precision Wait" (attesa *dopo* la navigazione al :09).
-- Ora il bot naviga esattamente alle `:09:00` e clicca Relist All esattamente alle `:10:00`.
-- Aggiornato `AGENTS.md` per blindare questa logica e prevenire future regressioni.
-
-**Fix 2: Comportamento Bot-Like durante HOLD**
-- Il metodo `_compute_next_wait` aveva un hard-cap di 60s durante la finestra di HOLD, costringendo il bot a eseguire uno scan al minuto (40 scan in un'ora).
-- Fix: rimosso il cap di 60s. Ora il bot aspetta calcolando i secondi effettivi rimanenti fino al successivo pre-nav (:09:00) meno un buffer di 90s, riducendo le scansioni a 1 l'ora durante l'HOLD.
-
-**Fix 3: Timeout 3000ms su Session Heartbeat**
-- Dopo aver sostituito "Clear Sold" con "Transfers" per il keepalive, l'heartbeat andava in Timeout Error se la sessione era parcheggiata nella Transfer List (presenza di modali invisibili o overlay).
-- Fix in `session_keeper.py`: aggiunto un preliminare tasto `Escape` per smaltire overlay e aggiunto flag `force=True` sul click del selettore CSS `.icon-transfer`, bypassando in sicurezza l'intercept pointer events di Playwright.
-
-### Today's Fixes (April 20, 2026) — Metrics & Reboot Stability
-
-**Refactoring: RebootRequestError & Metrics Decoupling**
-
-- Sostituito `InterruptedError` con `RebootRequestError` per i reboot asincroni: ora il bot non crasha più se riceve un `/reboot` durante un'operazione attiva.
-- Separazione tra statistiche dell'ultimo ciclo e totali storici della sessione:
-  - `total_relisted` / `total_failed` tracciano l'intera sessione.
-  - `last_relisted` / `last_failed` si resettano ad ogni nuovo ciclo (`cycle=1`).
-- Messaggio `/status` aggiornato con il nuovo dual-tracking.
-- Risolto bug di terminazione fatale su `ConsoleSessionError`: ora il bot esegue un cleanup e riparte silenziosamente.
-
-
-### Today's Fixes (April 18, 2026) — Post-Refactoring
-
-**Refactoring: main.py modularizzato (Phase 9)**
-
-- Estrazione logica Golden Hour in `logic/golden_hour.py` con TDD tests
-- Estrazione logging config in `config/log_config.py`
-- Estrazione NotificationBatch in `core/notification_batch.py`
-- Creazione SessionKeeper in `browser/session_keeper.py`
-- Creazione RelistEngine in `logic/relist_engine.py`
-- main.py ridotto a ~168 righe
-
-**Fix 1: Notification batch invia solo se ci sono risultati**
-
-- NotificationBatch.flush() ora controlla `if self.relisted == 0 and self.failed == 0: return False` prima di inviare
-- Evita notifiche vuote "0 relistati, 0 falliti"
-
-**Fix 2: Reboot implementation**
-
-- SessionKeeper.handle_reboot() implementa il loop di riavvio del browser
-- Chiamato in main.py quando `bot_state.is_reboot_requested()` restituisce True
-
-**Fix 3: BotState.clear_reboot_event()**
-
-- Aggiunto metodo `clear_reboot_event()` in BotState per resettare il reboot flag
-- Chiamato dopo `handle_reboot()` per permettere futuri reboot
-
-**Fix 4: Manual Relist Heuristic fix**
-
-- update_stats() spostato da main.py dentro RelistEngine.process_cycle()
-- Ora le statistiche si aggiornano immediatamente dopo il relist, non dopo
-- Previene false detection di relist manuali da parte dell'heuristic
-
-**Fix 5: /screenshot thread-safety**
-
-- Il comando /screenshot ora usa queue_command() come /del_sold
-- Playwright page.screenshot() eseguito nel main thread (non nel thread Telegram)
-- Evita errori thread-safety di Playwright
-- pattern: queue_command("screenshot", callback=self._execute_screenshot)
-
-### Today's Fixes (April 16, 2026)
-
-**Bug Fix 4: Two-Phase Post-Relist Verification with Auto-Relist**
-
-- After "Re-list All", the bot did a single verification scan. If Processing items hadn't completed yet on EA's side, they were counted as "failed"
-- Fix: two-phase verification:
-  1. **1st round**: Re-list All → wait 5s → scan → count `first_succeeded` and `truly_expired` (expired NOT in Processing)
-  2. **2nd round (conditional)**: If `truly_expired > 0` after 1st round → Re-list All immediately → wait 3s → final scan → total count (1st + 2nd round)
-- If 2nd relist fails → log warning, use only 1st round counts
-- Processing items are NEVER counted as failed — next cycle will pick them up
-- Same fix applied both in main loop and `_golden_retry_relist()`
-- Improved logs: `[Verifica 1°]`, `[Verifica 2°]` to distinguish rounds
-
-### Previous Fixes (April 14, 2026)
-
-**Bug Fix: Stale Processing Check (commit d63d342)**
-
-- After `relist_all()`, the code checked the STALE `scan` object for PROCESSING items, causing false "⚠️ 14 item ancora in Processing dopo relist" warnings and unnecessary 10-15s rapid polling.
-- Fix: Removed the stale scan check entirely. After relist, compute next_wait normally. The next cycle will verify naturally.
-- Also fixed: Misleading log message "46 scaduti, 14 in processing" → "46 scaduti (di cui 14 in processing)" to make clear Processing is a subset of expired, not additional.
-- Also cleaned up: Removed sync-conflict files and unnecessary scroll code.
-
-**Feature: Golden Processing Retry Loop (commits b9fc754 + 1f60c59)**
-
-- New function: `_golden_retry_relist()` in main.py
-- During golden window (:09-:11), after initial relist succeeds, if Processing items remain: wait 5-10s random (interruptible by Telegram) → navigate to Transfer List → fresh scan (NEVER stale data) → relist if expired_count > 0, accumulate stats → repeat until clear or golden window closes.
-- Only during golden hours — outside golden window, normal cycle handles it.
-- 10 new unit tests in tests/test_golden_retry.py covering: no retry outside golden, single retry, multiple retries, window closes mid-retry, reboot during wait, navigation failure, per_listing mode, session recovery, wait timing, fresh scan verification.
-
-### Tonight's Fixes (April 13, 2026)
-
-**Bug Fix: Golden Hour "Missed Target" due to millisecond delay**
-
-- At 16:10:01 the bot calculated the next golden as 17:10 instead of acting on 16:10, causing an unnecessary 1h HOLD.
-- Fixed: `get_next_golden_hour()` now considers a golden target still "current" as long as the time is within the `GOLDEN_RELIST_WINDOW` (:09-:11).
-- Updated: `tests/test_golden_timeline.py` now includes 7 new test cases for boundary conditions (16:10:00, 16:11:59, etc.) to ensure the fix is verified and permanent.
-
-**Stability & Logic Improvements**
-
-- **Manual Relist Heuristic**: Improved detection to look for timers near 1h/3h/6h, reducing false positives.
-- **Preventive Session Check**: Added an "aggressive" session check 3 minutes before any Golden Hour target to ensure the bot is logged in for the pre-nav.
-- **Telegram Responsiveness**: Modified `wait_interruptible` and heartbeat loops to break immediately when a Telegram command is queued, making the bot much more responsive to user interaction.
-- **Startup Blindness Fix**: The bot now always performs a full scan on the first cycle (Cycle 1) even during a Golden HOLD window. This ensures it captures the "ground truth" of the Transfer List (and detects manual relists) before entering efficient heartbeat-based HOLD.
-- **Precision Wait Guard**: Added `is_close_to_golden` guard to the precision wait logic. This prevents the bot from entering long blocking sleeps (e.g., 48 minutes at 17:21) before scanning the Transfer List.
-- **Async Precision Wait**: Replaced `time.sleep` with `wait_interruptible` in the precision wait block, ensuring the bot remains responsive to Telegram commands even during the final countdown to a Golden Hour.
-- **Processing Timer Optimization**: Reduced aggressive polling interval from 15s to 10s for items in `PROCESSING` state or near expiry, ensuring faster relisting during critical windows.
-- **Perfect Pre-Nav Sync**: Optimized the pre-nav loop to hit exactly `:09:00` by disabling heartbeats in the final 3 minutes and performing a guaranteed session check.
-
-### Shipped Milestones
-
-- v1.0 Auto-Relist MVP — SHIPPED 2026-03-23
-- v1.1 Telegram Commands & Sold Cleanup — SHIPPED 2026-04-06
-- v1.2 Protection & Stealth (Console Mode, Heartbeat, Reboot, Batch Notifications) — SHIPPED 2026-04-11
-- v1.3 Golden Hour Bug Fixes (3 critical fixes + 519 timeline tests) — SHIPPED 2026-04-12
-- v1.4 Wait All Expired & Telegram Reports — SHIPPED 2026-04-13
-- v1.5 PROCESSING State Fix — SHIPPED 2026-04-13
-- v1.6 Batch Report & Screenshot Fix — SHIPPED 2026-04-13
-- v1.7 Golden Processing Retry — SHIPPED 2026-04-14
-- v1.8 Two-Phase Post-Relist Verification — SHIPPED 2026-04-16
-
-### All Phases Complete (7/7)
-
-- [x] Phase 1: Browser Setup & Authentication (BROWSER-01, BROWSER-02, BROWSER-03)
-- [x] Phase 2: Transfer Market Navigation (BROWSER-04, DETECT-01~04)
-- [x] Phase 3: Auto-Relist Core (RELIST-01~04)
-- [x] Phase 4: Configuration System (CONFIG-01~04)
-- [x] Phase 5: Logging & Error Handling (LOG-01~04, ERROR-01~04)
-- [x] Phase 6: Telegram Bot Commands + Sold Items Cleanup (TELEGRAM-01~10)
-- [x] Phase 7: Bug Fixes & Stability (GOLDEN-FIX-01~03, POLLING-01)
-
-### Test Suite: 674 tests, all passing
-
-- 132 original unit/feature tests
-- 526 golden timeline simulation tests (tests/test_golden_timeline.py)
-- 16 new/updated tests for BotState and RelistEngine robustness
-
-
-### Production Verification
-
-- 53 items relisted, 0 failures
-- 61 expired items recovered after hold window fix
-- EA popup dismissal working with 3-attempt retry
-- Golden hour relist firing correctly at :10 with :09-:11 window
-- Relist batch notifications showing accurate count of active/expired items
-- Handling of "Processing" elements effectively waits before relist
-- Aggregated Telegram reports show consistent item counts (capped at total_count)
-- Golden Processing Retry: during golden window, automatically retries relist for Processing items with fresh scans
-
-### Tonight's Fixes (April 12, 2026)
-
-**Bug 1 (commit 20da86e): Golden Hour wait skips when already in window**
-
-- At 16:10 the bot waited 59 min until 17:10 instead of relisting immediately
-- Fixed: Added `is_in_golden_window(now)` check — if already in :09-:11 window, skip the sleep and relist right away
-
-**Bug 2 (commit aa52cb3): EA popup blocks Transfer List click**
-
-- `view-modal-container form-modal` intercepted pointer events for 30s causing timeout cascade
-- Fixed: Added `dismiss_popups()` + Escape between Transfers click and Transfer List click, plus 3-attempt retry loop
-
-**Bug 3 (commit 20da86e): Hold window too aggressive after last golden**
-
-- 61 expired items not relisted at 18:14 — hold window kept items waiting for a 19:10 golden that doesn't exist
-- Fixed: When `get_next_golden_hour() is None` (no more goldens today), override hold and relist immediately
-
-**Polling tweak (commit fe2c2ea): Golden ritardatari polling → 10s fixed**
-
-- Changed from 15-20s random interval to 10s fixed for more responsive ritardatari catch during golden windows
-
-### Current Activity
-
-[2026-04-16T12:00:00Z] v1.8 Two-Phase Post-Relist Verification: After "Re-list All", single verification scan miscounted Processing items as failures. Fix: two-phase verification — 1st round (relist → 5s → scan → separate truly expired from Processing), 2nd conditional round (if truly_expired > 0 → immediate re-relist → 3s → final scan). Processing items never counted as failed. Applied in both main loop and _golden_retry_relist(). Logs now show [Verifica 1°] / [Verifica 2°].
-
-[2026-04-14T16:30:00Z] v1.7 Golden Processing Retry: Fixed stale Processing check that caused false warnings and unnecessary rapid polling after relist_all(). Added _golden_retry_relist() function that, during golden window, automatically retries relist for items still in Processing state using fresh scans (never stale data). Includes 10 new unit tests. Total test count: 658.
-
-[2026-04-13T14:45:00Z] v1.6 Batch Report & Screenshot Fix: Corrected inconsistent numbers in aggregated Telegram notifications (49 active + 55 relisted on 51 total items). Now "Relistati" is capped at total_count and reflect batch progress, while "Totale oggetti" gives the overall context.
-
-[2026-04-13T11:30:00Z] PROCESSING state fix shipped. New ListingState.PROCESSING enum captures items in EA limbo (expired but still visible as "active" in DOM). Fixes in detector.py: added "processing"/"elaborazion" detection → returns PROCESSING instead of UNKNOWN. Main.py safety net: after relist, if PROCESSING items remain, force 15s wait instead of normal expiry wait. Notification accumulator now tracks expired_detected across all cycles in batch.
-
-[2026-04-13T11:00:00Z] v1.4 Wait All Expired & Telegram Reports shipped. Added the "wait for all active/processing to expire" logic to keep relist queue intact outside golden hours, and updated the telegram report to strictly count active listings with a timer.
-[2026-04-12T23:30:00Z] v1.3 Golden Hour Bug Fixes shipped. 3 critical bugs fixed, 519 timeline tests added. All 7 phases complete. Project in production/maintenance mode.
-[2026-04-12T10:42:00Z] Batch Telegram notifications: bot now accumulates relist events expiring within 120s and sends ONE notification with total count instead of 2-3 separate messages.
-[2026-04-11T17:01:00Z] Milestone v1.2 (Protection & Stealth) shipped: Console Mode, Heartbeat, Reboot, Batch Notifications
-[2026-04-06T14:12:00Z] Milestone v1.1 (Telegram Commands) shipped: 8 Telegram commands, SoldHandler, BotState
-[2026-03-23T07:39:00Z] Milestone v1.0 (Auto-Relist MVP) shipped: Full auto-relist with golden hours, pricing, logging, error recovery
-
-### Accumulated Context (from all milestones):
-
-- Python 3.13 + Playwright + python-dotenv + rich + tenacity
-- Browser controller with persistent profile (no 2FA repeats)
-- AuthManager: 2-step EA login (email→NEXT→password→Sign in), session persistence
-- Navigator: page object pattern, popup dismissal, retry loops
-- Detector: bulk DOM extraction via eval_on_selector_all, Italian/English keyword mapping
-- RelistExecutor: configurable price adjustment (percentage/fixed), FIFA bounds (200-15M)
-- ConfigManager: typed dataclasses, deep-merge migration, CLI subcommands
-- Golden Hour logic: 16:10/17:10/18:10 with :09-:11 window, pre-nav at :09:00, hold otherwise
-- Rate limiting: 2-5s random delays (anti-detection), 10s ritardatari polling
-- Error handling: session recovery, retry with exponential backoff, EA modal dismissal
-- Telegram: 8 commands (/status, /pause, /resume, /force_relist, /screenshot, /del_sold, /logs, /help)
-- BotState: thread-safe with threading.Lock, force_relist flag, pause/resume, reboot event
-- Console Mode: Deep Sleep via /console and /online commands
-- Heartbeat: dynamic click 'Clear Sold' every 2.5-5 min random
-- Aggregated reports: capped counts at total_count for logical consistency
-- Golden Processing Retry: _golden_retry_relist() retries Processing items during golden window with fresh scans, interruptible by Telegram
-- Two-Phase Post-Relist Verification: 1st round scans after relist, 2nd conditional round re-relists truly expired items; Processing never counted as failed
-- 519 timeline simulation tests covering every minute 14:00-20:59 + golden boundaries
-- Every relist block MUST have an `else` fallback for normal relist (AGENTS.md rule)
-
-\n\n## Decisions\n- [2026-04-18] Extracted Golden Hour logic to logic/golden_hour.py and implemented TDD tests.\n- [2026-04-18] Isolated logging configuration in config/log_config.py.\n- [2026-04-18] Created NotificationBatch class in core/notification_batch.py to handle aggregated Telegram reports.
-
-## Last Commit
-Hash: 3d983ea912325e51600a454c220645634600d073
-Message: "feat(09-01): implement ban-prevention hard-lock for console sessions"
+# Project State — FIFA 26 Auto-Relist Bot
+
+## 1. Project Identity & Status
+- **Status:** PRODUCTION / STABLE
+- **Mission:** Bot automatizzato per FIFA 26 WebApp specializzato nel relist sincronizzato durante le Golden Hours.
+- **Core Value:** Massima efficienza di vendita tramite timing preciso (:10 di ogni ora) combinata con logiche di ban-prevention (stealth).
+
+## 2. Core Architecture (AI-Optimized Map)
+Questa è la mappatura reale dei componenti dopo il refactoring della Fase 9.
+
+- **Orchestrator (`main.py`):** Entrypoint leggero (~200 righe). Gestisce il bootstrap, il loop principale e il coordinamento tra i moduli.
+- **Relist Engine (`logic/relist_engine.py`):** Il "cervello" decisionale. Implementa il ciclo di scansione e il protocollo di **Two-Phase Verification**.
+- **Golden Hour Logic (`logic/golden_hour.py`):** Unica fonte di verità per i timing.
+  - **Hours:** 16, 17, 18.
+  - **Protocol:** :09 (Pre-Nav) → :10 (Relist) → :11 (Ritardatari).
+- **Session Keeper (`browser/session_keeper.py`):** Gestisce la salute della sessione, il **Heartbeat** (click su tab 'Transfers') e le attese in Pausa/Console.
+- **Bot State (`bot_state.py`):** Gestore dello stato thread-safe (comandi Telegram, statistiche, reboot events).
+
+## 3. Control & Interaction (Telegram Commands)
+Il bot risponde a **11 comandi** reali via Telegram.
+
+| Comando | Descrizione | Nota Tecnica |
+|:--- |:--- |:--- |
+| `/status` | Stato, modalità e statistiche | Lettura diretta da `BotState` |
+| `/pause` | Sospende il loop di scansione | Mette il polling a 300s |
+| `/resume` | Riprende le operazioni | Sveglia immediata via Event |
+| `/console` | Deep Sleep (opz. ore) | Zero interazione WebApp |
+| `/online` | Disattiva Deep Sleep | Torna al loop normale |
+| `/force_relist` | Forza relist al prossimo ciclo | Bypass dei timer Golden |
+| `/screenshot` | Invia screen della WebApp | Eseguito asincrono nel main thread |
+| `/del_sold` | Cleanup venduti e crediti | Eseguito asincrono nel main thread |
+| `/logs [N]` | Ultime N righe di `app.log` | Lettura file sicura |
+| `/reboot` | Riavvio completo del bot | Segnala RebootRequestError |
+| `/help` | Elenco comandi | Generato dinamicamente |
+
+## 4. Critical Logic & Guardrails (DA NON MODIFICARE)
+Regole fondamentali verificate nel codice sorgente:
+- **Stealth Polling:** Durante Pausa o Console Mode, il bot aspetta **300s** (5 min). `wait_interruptible` garantisce che il bot risponda subito ai comandi nonostante il lungo sleep.
+- **Heartbeat:** Eseguito ogni 2.5-5 min tramite click sulla tab **'Transfers'** (icon-transfer). Non usare più 'Clear Sold' come heartbeat primario.
+- **Verification Protocol:**
+  1. Relist → 5s wait → Scan.
+  2. Se restano oggetti scaduti (non in "Processing") → Secondo Relist → 3s wait → Scan finale.
+- **Fallback Rule:** Ogni blocco decisionale di relist deve sempre prevedere un fallback `else` per la gestione standard.
+**Relist Protocol Golden Hour**
+:08:XX → Pre-Nav Guard: aspetta fino a :09:00 (nessuna interazione browser)
+:09:00 → Naviga verso Transfer List (~10-15s)
+:09:xx → [SCANSIONE] — raccoglie listing scaduti
+:09:xx → Golden Sync: aspetta fino a :10:00 (con dati già pronti)
+:10:00 → Relist diretto (senza ri-scansionare) ✓
+
+
+## 5. Current Activity & Known Issues
+- **Recent (28 Apr):** Fix "Flusso Golden Ristrutturato": scansione spostata a :09 (PRIMA del Golden Sync wait). Il bot ora naviga a :09, scansiona a :09, aspetta fino a :10:00, e rilista direttamente senza ri-scansionare.
+- **Recent (28 Apr):** Fix "Pre-Nav Tardiva": step 1b rimosso (era contraddittorio con il nuovo flusso scan-before-wait).
+- **Recent (28 Apr):** Fix "Console Heartbeat Spam": quando l'heartbeat rileva EA console attiva, ora attiva automaticamente `console_mode` con auto-resume a 30 min.
+- **Recent (27 Apr):** Fix critico "Processing Limbo": corretto un bug in `relist_engine.py` in cui oggetti in processing fuori dalla golden hour causavano un wait errato di 3600s invece di 30s.
+- **Recent (27 Apr):** Risolto log ridondante "Scansione completata": rimossa una doppia lettura DOM (`scan_listings()`) in `main.py` sfruttando i dati di ritorno diretti di `relist_engine.py`.
+- **Recent (27 Apr):** Introdotto **Quick Check** nella navigazione della Transfer List (se già in pagina, risparmia ~10s).
+- **Recent (27 Apr):** Ottimizzato polling Pausa/Console a 300s con wake-up istantaneo.
+- **Known Issue:** Inosservanza saltuaria dei conflitti 409 Telegram (gestita con backoff di 5s).
+
+---
+
+## 6. Historical Archive (Changelog)
+
+<details>
+<summary>Aprile 2026 — Rafforzamento Stabilità & Refactoring</summary>
+
+### Today's Fixes (April 27, 2026) — Navigazione & Polling
+- **Fix 3: Navigazione Transfer List — Quick Check**: Il bot ora verifica se è già nella pagina corretta prima di navigare.
+- **Fix 1 & 2: Polling Pausa/Console**: Ridotto a 300s per pulizia log, mantenendo reattività istantanea via Telegram.
+
+### Today's Fixes (April 21, 2026) — Golden Stability & Heartbeat
+- **Fix 1: Golden Hour Pre-Nav Timing**: Navigazione fissata esattamente alle :09:00.
+- **Fix 2: HOLD Window Behavior**: Rimosso cap di 60s, ora il bot aspetta i secondi effettivi fino alla prossima golden.
+- **Fix 3: Heartbeat via Transfers**: Sostituito 'Clear Sold' con click su sidebar 'Transfers' per maggiore stabilità.
+
+### Today's Fixes (April 20, 2026) — Metrics & Reboot
+- **Refactoring: RebootRequestError**: Gestione pulita dei riavvii asincroni.
+- **Metrics Decoupling**: Separazione tra `total_*` (sessione) e `last_*` (ciclo corrente).
+
+### Today's Fixes (April 18, 2026) — Phase 9 Completion
+- **Modularizzazione**: Estrazione logica in `logic/`, `core/`, `config/`. `main.py` ridotto a ~170 righe.
+- **Notification Batch**: Invio summary solo se ci sono risultati reali.
+</details>
+
+<details>
+<summary>Shipment History & Milestones</summary>
+
+- **v1.10** — Golden Stability & Session Heartbeat (2026-04-21)
+- **v1.8** — Two-Phase Post-Relist Verification (2026-04-16)
+- **v1.5** — PROCESSING State Fix (2026-04-13)
+- **v1.2** — Protection & Stealth (2026-04-11)
+- **v1.1** — Telegram Commands (2026-04-06)
+- **v1.0** — Auto-Relist MVP (2026-03-23)
+</details>
+
+### Test Suite Summary
+- **Total:** 674 tests passing.
+- **Coverage:** 132 unit tests + 526 golden timeline simulations.

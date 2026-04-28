@@ -50,8 +50,11 @@ class TransferMarketNavigator:
             except Exception:
                 continue  # Tenta il label successivo
 
-    def go_to_transfer_list(self) -> bool:
+    def go_to_transfer_list(self, fast: bool = False) -> bool:
         """Naviga dalla Home alla vista Transfer List.
+
+        Args:
+            fast: Se True, usa delay ridotti (1-2s invece di 2-5s) per golden retry.
 
         Ritorna True se la navigazione ha successo, False altrimenti.
         """
@@ -94,7 +97,7 @@ class TransferMarketNavigator:
             transfers_btn.first.click()
             logger.info("Clic su Transfers")
             self.page.wait_for_timeout(1500)
-            self.rate_limiter.wait()
+            self.rate_limiter.wait_fast() if fast else self.rate_limiter.wait()
 
             # Step 1b: Dismiss any popup that appeared after clicking Transfers
             # EA often shows popups (announcements, notifications) after navigation
@@ -141,7 +144,7 @@ class TransferMarketNavigator:
                 return False
 
             self.page.wait_for_timeout(1500)
-            self.rate_limiter.wait()
+            self.rate_limiter.wait_fast() if fast else self.rate_limiter.wait()
 
             # Step 3: Verifica che il contenuto della Transfer List sia effettivamente caricato.
             # Controllare di nuovo l'heading non basta (era già lì dal passo precedente).

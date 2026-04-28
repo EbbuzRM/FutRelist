@@ -47,15 +47,13 @@ class SessionKeeper:
             until_str = f" (auto-resume alle {until.strftime('%H:%M')})" if until else ""
             logger.info(f"[Console Mode] 🎮 Deep sleep{until_str} — zero interazione WebApp")
             status_console.print(self._make_status_table("🎮 Console Mode", 0, 0, 0))
-            import time
-            time.sleep(30)
+            self.bot_state.wait_interruptible(300)  # 5 minuti; si sveglia subito su /reboot
             return True
 
         if self.bot_state.is_paused():
             logger.info("[Telegram] Bot in pausa — skip scanning")
             status_console.print(self._make_status_table("⏸️ In Pausa (Telegram)", 0, 0, 0))
-            import time
-            time.sleep(10)
+            self.bot_state.wait_interruptible(300)  # 5 minuti; si sveglia subito su /resume o /reboot
             return True
             
         return False
@@ -68,15 +66,22 @@ class SessionKeeper:
         max_heartbeat_delay: int = 300
     ) -> bool:
         """
-        Attesa in chunk con Heartbeat (click 'Clear Sold') per mantenere la sessione.
+        Attesa in chunk con Heartbeat (click 'Transfers') per mantenere la sessione.
         Ritorna True se un reboot è stato richiesto.
         """
         import random
-        waited = 0
-        while waited < wait_seconds:
-            remaining = wait_seconds - waited
+        from datetime import datetime
+        
+        start_time = datetime.now()
+        
+        while True:
+            elapsed = (datetime.now() - start_time).total_seconds()
+            remaining = wait_seconds - elapsed
+            if remaining <= 0:
+                break
+                
             current_heartbeat_interval = random.randint(min_heartbeat_delay, max_heartbeat_delay)
-            current_wait = min(current_heartbeat_interval, remaining)
+            current_wait = min(float(current_heartbeat_interval), remaining)
             
             if self.bot_state.wait_interruptible(current_wait):
                 return True # Reboot richiesto
@@ -84,9 +89,8 @@ class SessionKeeper:
             if self.bot_state.has_commands():
                 return False # Interrotto per comandi
                 
-            waited += current_wait
-            
-            if waited < wait_seconds and not self.bot_state.is_paused() and not self.bot_state.is_console_mode():
+            elapsed_after_wait = (datetime.now() - start_time).total_seconds()
+            if wait_seconds - elapsed_after_wait > 0 and not self.bot_state.is_paused() and not self.bot_state.is_console_mode():
                 self._execute_heartbeat()
                 
         return False
@@ -129,6 +133,11 @@ class SessionKeeper:
             if self.auth.is_console_session_active(self.page):
                 logger.warning("Heartbeat ha rilevato la console in uso!")
                 self.bot_state.set_console_session_active(True)
+                # Attiva console_mode con auto-resume 30 min: supervise_state gestirà il long sleep
+                # ed eviterà che l'heartbeat continui a battere ogni 3-4 minuti per tutta la notte.
+                if not self.bot_state.is_console_mode():
+                    logger.warning("Heartbeat: attivazione auto Console Mode (30 min) per evitare spam.")
+                    self.bot_state.set_console_mode(True, hours=0.5)
 
             if not self.auth.is_logged_in(self.page, timeout_ms=3000):
                 logger.warning("Heartbeat ha rilevato sessione scaduta.")
