@@ -133,10 +133,20 @@ class RelistEngine:
             # RELIST NORMALE / FORCE / GOLDEN WINDOW
             if force_relist:
                 logger.info("[Telegram] Force relist — bypass hold window")
-            
-            fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti. Rilisto...")
-            
-            succeeded, failed = self._execute_relist_with_verification(scan)
+
+            # Se TUTTI gli expired sono in realtà PROCESSING, il bottone Re-list All
+            # non sarà visibile su EA. Saltiamo il tentativo inutile e lasciamo che
+            # il golden_retry_loop aspetti la transizione Processing → Expired.
+            truly_expired = scan.expired_count - scan.processing_count
+            if truly_expired <= 0 and scan.processing_count > 0 and is_in_golden_window(now_relist):
+                fifa_logger.info(
+                    f"[Golden] {scan.processing_count} item in Processing (non ancora Expired). "
+                    f"Attendo transizione nel retry loop..."
+                )
+                succeeded, failed = 0, 0
+            else:
+                fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti. Rilisto...")
+                succeeded, failed = self._execute_relist_with_verification(scan)
             
             # Golden Retry for Processing items
             if is_in_golden_window(datetime.now()):
@@ -146,7 +156,9 @@ class RelistEngine:
                 succeeded += retry_s
                 failed += retry_f
 
-            return succeeded, failed, self._compute_next_wait(scan), scan
+            # Dopo il relist, riscansiona per avere dati freschi per _compute_next_wait
+            post_relist_scan = self.detector.scan_listings()
+            return succeeded, failed, self._compute_next_wait(post_relist_scan), post_relist_scan
         
         # Nessun scaduto
         return 0, 0, self._compute_next_wait(scan), scan
@@ -212,8 +224,13 @@ class RelistEngine:
         if initial_f == 0 and processing_count == 0:
             return 0, 0, False
 
-        while is_in_golden_window(datetime.now()):
-            wait_secs = random.uniform(5, 10)
+        max_retries = 6  # Max tentativi per evitare loop infinito
+        attempt = 0
+        while is_in_golden_window(datetime.now()) and attempt < max_retries:
+            attempt += 1
+            # Attesa più lunga per dare tempo a EA di transitare Processing → Expired
+            wait_secs = random.uniform(8, 15)
+            fifa_logger.info(f"[Golden Retry] Attesa {wait_secs:.0f}s per transizione Processing → Expired (tentativo {attempt}/{max_retries})...")
             if self.bot_state.wait_interruptible(wait_secs):
                 return retry_s, retry_f, True
             
@@ -222,19 +239,33 @@ class RelistEngine:
                 
             scan = self.detector.scan_listings()
             if scan.expired_count == 0:
+                fifa_logger.info(f"[Golden Retry] Nessun expired rimasto. Uscita dal retry loop.")
                 break
+
+            # Se sono tutti ancora Processing, aspetta ancora
+            truly_expired = scan.expired_count - scan.processing_count
+            if truly_expired <= 0 and scan.processing_count > 0:
+                fifa_logger.info(f"[Golden Retry] Ancora {scan.processing_count} in Processing, attendiamo...")
+                continue
                 
             fifa_logger.info(f"[Golden Retry] Trovati {scan.expired_count} item. Rilisto...")
             s, f = self._execute_relist_with_verification(scan)
             retry_s += s
             retry_f += f
             
+            # Se il relist è riuscito e non ci sono più expired, esci
+            if f == 0:
+                break
+            
         return retry_s, retry_f, False
 
     def _compute_next_wait(self, scan: ListingScanResult) -> int:
         """Calcola il wait ottimale."""
         now = datetime.now()
-        if is_in_golden_window(now):
+        # In golden window, polling rapido SOLO se ci sono ancora item da relistare.
+        # Se expired_count == 0 dopo il relist, NON continuare a scansionare ogni 10s:
+        # calcola il wait normale verso la prossima golden pre-nav.
+        if is_in_golden_window(now) and (scan.expired_count > 0 or scan.processing_count > 0):
             return 10
         
         min_active = get_min_active_seconds(scan)
