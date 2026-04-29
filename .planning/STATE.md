@@ -46,11 +46,11 @@ Regole fondamentali verificate nel codice sorgente:
   2. Se restano oggetti scaduti (non in "Processing") → Secondo Relist → 3s wait → Scan finale.
 - **Fallback Rule:** Ogni blocco decisionale di relist deve sempre prevedere un fallback `else` per la gestione standard.
 **Relist Protocol Golden Hour**
-:08:XX → Pre-Nav Guard: aspetta fino a :09:00 (nessuna interazione browser)
-:09:00 → Naviga verso Transfer List (~10-15s)
-:09:xx → [SCANSIONE] — raccoglie listing scaduti
-:09:xx → Golden Sync: aspetta fino a :10:00 (con dati già pronti)
-:10:00 → Relist diretto (senza ri-scansionare) ✓
+:08:00 → Bot si sveglia. Pre-Nav Guard: aspetta fino a :09:00 (zero interazione browser)
+:09:00 → Naviga verso Transfer List (~10s)
+:09:10 → In posizione. Golden Sync: aspetta :10:00 (SENZA scansionare, item non ancora scaduti)
+:10:00 → SCANSIONE (item appena scaduti, già sulla pagina → zero navigazione)
+:10:01 → Relist immediato. Se Processing → retry loop (5-10s) → relist ASAP ✓
 
 
 ## 5. Current Activity & Known Issues

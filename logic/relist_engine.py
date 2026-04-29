@@ -69,7 +69,6 @@ class RelistEngine:
             raise ConsoleSessionError("Console session detected - aborting relist to prevent ban")
 
         # 1. Pre-Nav Guard: al minuto :08 NON navigare — aspetta :09:00 senza toccare il browser.
-        #    La navigazione avviene SOLO al :09, così il relist scatta esattamente alle :10.
         now_pre = datetime.now()
         if is_in_golden_period(now_pre) and not is_in_golden_window(now_pre):
             next_golden_pre = get_next_golden_hour(now_pre)
@@ -80,29 +79,30 @@ class RelistEngine:
                 if self.bot_state.wait_interruptible(wait_secs):
                     raise RebootRequestError("Reboot richiesto")
 
-
         # 2. Navigazione (avviene normalmente, o al minuto :09 durante golden period)
         if not self._navigate_with_retry():
             return 0, 0, 60, ListingScanResult.empty()
 
-        # 3. Scansione a :09 — avviene PRIMA del Golden Sync wait.
-        #    Il risultato viene usato direttamente per il relist a :10 senza ri-scansionare.
+        # 3. Golden Sync: se siamo a :09, il bot è GIÀ sulla Transfer List.
+        #    NON scansionare adesso — gli item non sono ancora scaduti.
+        #    Aspetta fino a :10:00 e poi scansiona con dati freschi.
         fifa_logger = logging.getLogger("fifa")
-        fifa_logger.info(f"--- [SCANSIONE] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
-        scan = self.detector.scan_listings()
-
-        # 4. Golden Sync: aspetta fino a :10:00 preciso DOPO la scansione.
-        #    In questo modo il relist avviene esattamente alle :10 usando i dati già raccolti.
         now = datetime.now()
         next_golden = get_next_golden_hour(now)
         if next_golden and is_in_golden_period(now) and now < next_golden:
             if is_in_golden_window(now) and now.minute == 9:
                 wait_secs = (next_golden - now).total_seconds()
-                logger.info(f"[Golden] Pre-nav ✅ Scansione a :09 completata. Attesa precisa: {int(wait_secs)}s per le {next_golden.strftime('%H:%M:%S')}.")
+                logger.info(
+                    f"[Golden] In posizione sulla Transfer List ✅ "
+                    f"Attendo :10:00 ({int(wait_secs)}s) per scansione + relist."
+                )
                 if self.bot_state.wait_interruptible(wait_secs):
                     raise RebootRequestError("Reboot richiesto")
-            elif is_in_golden_window(now):
-                logger.info(f"[Golden] Già nella finestra golden (:10-:11), procedo.")
+
+        # 4. Scansione — a :10 durante golden (item appena scaduti), subito altrimenti.
+        #    Il bot è già sulla Transfer List: scan diretta, ZERO navigazione.
+        fifa_logger.info(f"--- [SCANSIONE] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
+        scan = self.detector.scan_listings()
 
         # 5. Heuristic Relist Manuale
         now_scan = datetime.now()
@@ -217,29 +217,30 @@ class RelistEngine:
             return succeeded, failed
 
     def _golden_retry_loop(self, initial_s, initial_f, processing_count) -> Tuple[int, int, bool]:
-        """Retry loop per item in Processing durante Golden window."""
+        """Retry loop per item in Processing durante Golden window.
+        
+        Il bot è GIÀ sulla Transfer List — scan diretta senza navigazione.
+        Attesa 5-10s tra i tentativi per dare a EA tempo di transitare.
+        """
         fifa_logger = logging.getLogger("fifa")
         retry_s, retry_f = 0, 0
         
         if initial_f == 0 and processing_count == 0:
             return 0, 0, False
 
-        max_retries = 6  # Max tentativi per evitare loop infinito
+        max_retries = 6
         attempt = 0
         while is_in_golden_window(datetime.now()) and attempt < max_retries:
             attempt += 1
-            # Attesa più lunga per dare tempo a EA di transitare Processing → Expired
-            wait_secs = random.uniform(8, 15)
-            fifa_logger.info(f"[Golden Retry] Attesa {wait_secs:.0f}s per transizione Processing → Expired (tentativo {attempt}/{max_retries})...")
+            wait_secs = random.uniform(5, 10)
+            fifa_logger.info(f"[Golden Retry] Attesa {wait_secs:.0f}s (tentativo {attempt}/{max_retries})...")
             if self.bot_state.wait_interruptible(wait_secs):
                 return retry_s, retry_f, True
             
-            if not self._navigate_with_retry(force=True):
-                break
-                
+            # Scan diretta — siamo già sulla Transfer List, ZERO navigazione
             scan = self.detector.scan_listings()
             if scan.expired_count == 0:
-                fifa_logger.info(f"[Golden Retry] Nessun expired rimasto. Uscita dal retry loop.")
+                fifa_logger.info(f"[Golden Retry] Nessun expired rimasto. Fine.")
                 break
 
             # Se sono tutti ancora Processing, aspetta ancora
@@ -253,7 +254,6 @@ class RelistEngine:
             retry_s += s
             retry_f += f
             
-            # Se il relist è riuscito e non ci sono più expired, esci
             if f == 0:
                 break
             
@@ -276,12 +276,11 @@ class RelistEngine:
         if is_in_hold_window(now):
             ng = get_next_golden_hour(now)
             if ng:
-                pre_nav = ng.replace(minute=9, second=0, microsecond=0)
-                secs_to_pre_nav = int((pre_nav - now).total_seconds())
-                # Aspetta fino al pre-nav (:09) meno un buffer di 90s.
-                # Il Pre-Nav Guard in process_cycle gestisce il gate finale :08→:09.
-                # NON cappare a 60s: scansionare ogni minuto è palesemente bot-like.
-                return max(30, secs_to_pre_nav - 90)
+                # Mira al minuto :08 per dare tempo al Pre-Nav Guard di attivarsi.
+                # Il Guard aspetterà da :08 a :09, poi il bot naviga a :09.
+                wake_target = ng.replace(minute=8, second=0, microsecond=0)
+                secs_to_wake = int((wake_target - now).total_seconds())
+                return max(30, secs_to_wake)
             return 3600 - 20
             
         if scan.processing_count > 0:
@@ -290,14 +289,16 @@ class RelistEngine:
         return self._cap_wait(3600 - 20, now)
 
     def _cap_wait(self, wait: int, now: datetime) -> int:
+        """Limita il wait per non superare il prossimo slot :08 durante il golden period."""
         if not is_in_golden_period(now):
             return wait
         ng = get_next_golden_hour(now)
         if not ng:
             return wait
-        pre_nav = ng.replace(minute=9, second=0, microsecond=0)
-        secs_to_pre_nav = int((pre_nav - now).total_seconds())
-        return secs_to_pre_nav if 0 < secs_to_pre_nav < wait else wait
+        # Mira a :08:00 per dare al Pre-Nav Guard tempo di gestire :08→:09→nav→:10
+        wake_target = ng.replace(minute=8, second=0, microsecond=0)
+        secs_to_wake = int((wake_target - now).total_seconds())
+        return secs_to_wake if 0 < secs_to_wake < wait else wait
 
     def _navigate_with_retry(self, force: bool = False) -> bool:
         # Quick check: siamo già nella Transfer List? (solo se non force)
