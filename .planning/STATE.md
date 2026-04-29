@@ -54,11 +54,13 @@ Regole fondamentali verificate nel codice sorgente:
 
 
 ## 5. Current Activity & Known Issues
+- **Recent (29 Apr):** Fix "Scan-Spam Post-Relist": `_compute_next_wait` non ritorna più 10s ciecamente durante golden window. Polling rapido solo se ci sono ancora expired/processing. Dopo relist con 0 expired, calcola wait verso la prossima golden pre-nav.
+- **Recent (29 Apr):** Fix "Processing Items": se TUTTI gli expired sono in realtà PROCESSING, il bot salta il tentativo di relist (bottone non visibile) e delega al `_golden_retry_loop` con attesa 8-15s per la transizione EA.
+- **Recent (29 Apr):** Fix "Golden Retry Migliorato": loop con max 6 tentativi, attesa più lunga (8-15s vs 5-10s), skip relist se item ancora in Processing, exit immediata dopo successo.
+- **Recent (29 Apr):** `process_cycle` ora riscansiona DOPO il relist per dare a `_compute_next_wait` dati freschi (evita il loop 10s con expired_count stale).
 - **Recent (28 Apr):** Fix "Flusso Golden Ristrutturato": scansione spostata a :09 (PRIMA del Golden Sync wait). Il bot ora naviga a :09, scansiona a :09, aspetta fino a :10:00, e rilista direttamente senza ri-scansionare.
-- **Recent (28 Apr):** Fix "Pre-Nav Tardiva": step 1b rimosso (era contraddittorio con il nuovo flusso scan-before-wait).
 - **Recent (28 Apr):** Fix "Console Heartbeat Spam": quando l'heartbeat rileva EA console attiva, ora attiva automaticamente `console_mode` con auto-resume a 30 min.
 - **Recent (27 Apr):** Fix critico "Processing Limbo": corretto un bug in `relist_engine.py` in cui oggetti in processing fuori dalla golden hour causavano un wait errato di 3600s invece di 30s.
-- **Recent (27 Apr):** Risolto log ridondante "Scansione completata": rimossa una doppia lettura DOM (`scan_listings()`) in `main.py` sfruttando i dati di ritorno diretti di `relist_engine.py`.
 - **Recent (27 Apr):** Introdotto **Quick Check** nella navigazione della Transfer List (se già in pagina, risparmia ~10s).
 - **Recent (27 Apr):** Ottimizzato polling Pausa/Console a 300s con wake-up istantaneo.
 - **Known Issue:** Inosservanza saltuaria dei conflitti 409 Telegram (gestita con backoff di 5s).
