@@ -125,8 +125,12 @@ class RelistEngine:
             if in_hold and not force_relist:
                 next_g = get_next_golden_hour(datetime.now())
                 if next_g:
-                    fifa_logger.info(f"[HOLD] {scan.expired_count} scaduti in HOLD. Prossima golden: {next_g.strftime('%H:%M')}.")
-                    return 0, 0, 60, scan
+                    # Calcola il wait fino al minuto :08 della prossima golden
+                    # così il Pre-Nav Guard si attiva correttamente.
+                    wake_target = next_g.replace(minute=8, second=0, microsecond=0)
+                    hold_wait = max(30, int((wake_target - datetime.now()).total_seconds()))
+                    fifa_logger.info(f"[HOLD] {scan.expired_count} scaduti in HOLD. Prossima golden: {next_g.strftime('%H:%M')}. Attesa: {hold_wait}s.")
+                    return 0, 0, hold_wait, scan
                 # No more goldens -> override hold
                 in_hold = False
 
