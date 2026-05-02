@@ -33,22 +33,23 @@ class AuthManager:
         self.PROFILE_DIR.mkdir(parents=True, exist_ok=True)
 
     def wait_for_click_shield(self, page: Page, timeout_ms: int = 15000) -> bool:
-        """Aspetta che l'overlay ut-click-shield scompaia e la pagina sia stabile.
+        """Aspetta che l'overlay ut-click-shield di EA scompaia.
 
-        L'overlay EA può apparire/scomparire più volte durante il caricamento.
-        Questo metodo attende che sia hidden, poi verifica che rimanga hidden
-        dopo un periodo di stabilizzazione (catch re-appear race condition).
-
-        Ritorna True se lo shield è scomparso, False se ancora presente dopo il timeout.
+        Usa wait_for_function invece di wait_for_timeout per verificare
+        attivamente che lo shield non intercetti più i pointer events,
+        invece di un'attesa arbitraria (anti-pattern Playwright).
         """
         try:
             # Prima attesa: shield deve diventare hidden
             page.wait_for_selector(".ut-click-shield", state="hidden", timeout=timeout_ms)
             logger.debug("Click-shield scomparso (primo passaggio)")
 
-            # Periodo di stabilizzazione: EA può far riapparire lo shield
-            # brevemente (es. transizione loading → contenuto → nuovo loading).
-            page.wait_for_timeout(1500)
+            # Verifica attiva che lo shield sia realmente scomparso
+            # (non solo nascosto ma non intercetti eventi)
+            page.wait_for_function("""() => {
+                const shield = document.querySelector('.ut-click-shield.showing');
+                return !shield || getComputedStyle(shield).display === 'none';
+            }""", timeout=5000)
 
             # Verifica che lo shield sia ancora assente
             shield = page.query_selector(".ut-click-shield.showing")

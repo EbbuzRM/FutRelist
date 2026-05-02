@@ -1,5 +1,5 @@
 status: production
-last_updated: "2026-04-27T18:50:00.000Z"
+last_updated: "2026-05-02T18:00:00.000Z"
 ---
 
 # Project State — FIFA 26 Auto-Relist Bot
@@ -54,6 +54,14 @@ Regole fondamentali verificate nel codice sorgente:
 
 
 ## 5. Current Activity & Known Issues
+### Today's Fixes (May 02, 2026)
+- **Today (02 May):** Click-Shield Fix & Error Screenshots
+  - `browser/auth.py`: `wait_for_click_shield()` con `wait_for_function()` (best practice Playwright)
+  - `notifier.py`: `send_telegram_error_with_screenshot()` per diagnostica visiva errori
+  - `main.py` + `session_keeper.py`: Errori critici includono ora screenshot automatico
+  - Skill cleanup: 3 eliminate, 2 fuse, 4 description disambiguate (dei 19 skill → 16)
+
+- **Recent (01 May):** Test Suite Stabilization. Aggiornata l'intera suite di test (`test_golden_timeline.py`, `test_golden_retry.py`) per riflettere le nuove logiche di timing (:08 wake up) e il retry loop senza navigazione. Tutti i 535 test passano correttamente. ✓
 - **Recent (01 May):** Fix "HOLD Wait Bug": corretto `_compute_next_wait` nel caso `is_in_hold_window`. Ora calcola l'attesa precisa verso il minuto `:08` della prossima golden hour, invece di ritornare sempre 60s hardcoded. Questo elimina decine di scansioni inutili e permette al Pre-Nav Guard di scattare sempre.
 - **Recent (29 Apr):** Fix "Scan-Spam Post-Relist": `_compute_next_wait` non ritorna più 10s ciecamente durante golden window. Polling rapido solo se ci sono ancora expired/processing. Dopo relist con 0 expired, calcola wait verso la prossima golden pre-nav.
 - **Recent (29 Apr):** Fix "Processing Items": se TUTTI gli expired sono in realtà PROCESSING, il bot salta il tentativo di relist (bottone non visibile) e delega al `_golden_retry_loop` con attesa 5-10s per la transizione EA.
@@ -102,5 +110,5 @@ Regole fondamentali verificate nel codice sorgente:
 </details>
 
 ### Test Suite Summary
-- **Total:** 674 tests passing.
-- **Coverage:** 132 unit tests + 526 golden timeline simulations.
+- **Total:** 673 tests passing.
+- **Coverage:** 142 unit tests + 535 golden timeline simulations.
