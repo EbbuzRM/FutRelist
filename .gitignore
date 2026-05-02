@@ -36,3 +36,6 @@ coverage/
 tmp/
 
 .claude/
+package-lock.json
+package.json
+skills-lock.json
