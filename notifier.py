@@ -85,7 +85,6 @@ def send_telegram_photo(config, photo_path: str, caption: str) -> None:
     if not config or not config.telegram_token or not config.telegram_chat_id:
         return
 
-    import os
     import mimetypes
     from uuid import uuid4
 

@@ -65,22 +65,22 @@ def authenticate(controller, auth, page) -> None:
                         logger.warning(f"Click Login fallito in authenticate (tentativo {attempt}): {e}")
                         if "intercepts pointer events" in err_msg or "ut-click-shield" in err_msg:
                             auth.wait_for_click_shield(page, timeout_ms=10000)
-                        if attempt < 3:
-                            # Fallback: click via JavaScript
-                            try:
-                                page.evaluate("document.querySelector('.btn-standard.primary')?.click()")
-                                break
-                            except Exception:
-                                pass
-                            # Fallback: force click
-                            try:
-                                login_btn.first.click(timeout=5000, force=True)
-                                break
-                            except Exception:
+                        # Fallback: click via JavaScript (SEMPRE tentato)
+                        try:
+                            page.evaluate("document.querySelector('.btn-standard.primary')?.click()")
+                            break
+                        except Exception:
+                            pass
+                        # Fallback: force click (SEMPRE tentato)
+                        try:
+                            login_btn.first.click(timeout=5000, force=True)
+                            break
+                        except Exception:
+                            if attempt < 3:
                                 page.wait_for_timeout(3000)
                                 auth.wait_for_click_shield(page, timeout_ms=10000)
-                        else:
-                            logger.error("Impossibile cliccare Login dopo 3 tentativi in authenticate")
+                            else:
+                                logger.error("Impossibile cliccare Login dopo 3 tentativi in authenticate")
                 page.wait_for_timeout(5000)
         
         if auth.is_logged_in(page, timeout_ms=5000):
