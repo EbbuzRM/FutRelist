@@ -28,7 +28,7 @@ from config.log_config import setup_logging
 from browser.session_keeper import SessionKeeper
 from logic.relist_engine import RelistEngine, ConsoleSessionError
 from core.notification_batch import NotificationBatch
-from notifier import send_telegram_alert
+from notifier import send_telegram_alert, send_telegram_error_with_screenshot
 
 def get_credentials() -> tuple[str, str]:
     email = os.environ.get("FIFA_EMAIL")
@@ -49,9 +49,38 @@ def authenticate(controller, auth, page) -> None:
             time.sleep(1800)
             controller.navigate_to_webapp()
             page.wait_for_timeout(5000)
+            
+            # Attendi che il click-shield scompaia prima di cliccare Login
+            auth.wait_for_click_shield(page, timeout_ms=15000)
+            
             login_btn = page.get_by_role("button", name="Login")
             if login_btn.count():
-                login_btn.first.click(timeout=5000)
+                # Retry con gestione shield (come perform_login)
+                for attempt in range(1, 4):
+                    try:
+                        login_btn.first.click(timeout=10000)
+                        break
+                    except Exception as e:
+                        err_msg = str(e)
+                        logger.warning(f"Click Login fallito in authenticate (tentativo {attempt}): {e}")
+                        if "intercepts pointer events" in err_msg or "ut-click-shield" in err_msg:
+                            auth.wait_for_click_shield(page, timeout_ms=10000)
+                        if attempt < 3:
+                            # Fallback: click via JavaScript
+                            try:
+                                page.evaluate("document.querySelector('.btn-standard.primary')?.click()")
+                                break
+                            except Exception:
+                                pass
+                            # Fallback: force click
+                            try:
+                                login_btn.first.click(timeout=5000, force=True)
+                                break
+                            except Exception:
+                                page.wait_for_timeout(3000)
+                                auth.wait_for_click_shield(page, timeout_ms=10000)
+                        else:
+                            logger.error("Impossibile cliccare Login dopo 3 tentativi in authenticate")
                 page.wait_for_timeout(5000)
         
         if auth.is_logged_in(page, timeout_ms=5000):
@@ -182,7 +211,13 @@ def main() -> None:
                 keeper.handle_critical_error(e, app_config.notifications)
             else:
                 logger.exception(f"Errore critico prima dell'inizializzazione del keeper: {e}")
-                send_telegram_alert(app_config.notifications, f"🚨 Errore critico: {e}. Riavvio tra 30s...")
+                # Prova a catturare screenshot se il page è disponibile
+                page_ref = page if 'page' in locals() else None
+                send_telegram_error_with_screenshot(
+                    app_config.notifications, 
+                    f"🚨 Errore critico: {e}. Riavvio tra 30s...",
+                    page=page_ref
+                )
                 time.sleep(30)
             
             try:

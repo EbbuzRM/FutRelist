@@ -6,9 +6,7 @@ from browser.controller import BrowserController
 from browser.auth import AuthManager
 from browser.error_handler import ensure_session
 from bot_state import BotState
-from notifier import send_telegram_alert
-
-logger = logging.getLogger(__name__)
+from notifier import send_telegram_alert, send_telegram_error_with_screenshot
 
 logger = logging.getLogger(__name__)
 
@@ -254,7 +252,12 @@ class SessionKeeper:
     def handle_critical_error(self, error: Exception, notifications_config) -> None:
         """
         Gestisce l'errore critico all'avvio o durante l'esecuzione.
+        Include screenshot per diagnosticare visivamente il problema.
         """
         logger.exception(f"Errore critico: {error}")
-        send_telegram_alert(notifications_config, f"🚨 Errore critico: {error}. Riavvio tra 30s...")
+        send_telegram_error_with_screenshot(
+            notifications_config, 
+            f"🚨 Errore critico: {error}. Riavvio tra 30s...",
+            page=self.page
+        )
         time.sleep(30)

@@ -32,6 +32,37 @@ class AuthManager:
         self.config = config
         self.PROFILE_DIR.mkdir(parents=True, exist_ok=True)
 
+    def wait_for_click_shield(self, page: Page, timeout_ms: int = 15000) -> bool:
+        """Aspetta che l'overlay ut-click-shield scompaia e la pagina sia stabile.
+
+        L'overlay EA può apparire/scomparire più volte durante il caricamento.
+        Questo metodo attende che sia hidden, poi verifica che rimanga hidden
+        dopo un periodo di stabilizzazione (catch re-appear race condition).
+
+        Ritorna True se lo shield è scomparso, False se ancora presente dopo il timeout.
+        """
+        try:
+            # Prima attesa: shield deve diventare hidden
+            page.wait_for_selector(".ut-click-shield", state="hidden", timeout=timeout_ms)
+            logger.debug("Click-shield scomparso (primo passaggio)")
+
+            # Periodo di stabilizzazione: EA può far riapparire lo shield
+            # brevemente (es. transizione loading → contenuto → nuovo loading).
+            page.wait_for_timeout(1500)
+
+            # Verifica che lo shield sia ancora assente
+            shield = page.query_selector(".ut-click-shield.showing")
+            if shield and shield.is_visible():
+                logger.warning("Click-shield riapparso dopo stabilizzazione, attesa aggiuntiva...")
+                page.wait_for_selector(".ut-click-shield", state="hidden", timeout=10000)
+                page.wait_for_timeout(1000)
+
+            logger.info("Click-shield assente, pagina stabile per l'interazione")
+            return True
+        except Exception as e:
+            logger.debug(f"Click-shield ancora presente o timeout: {e}")
+            return False
+
     def has_saved_session(self) -> bool:
         """True se esiste un profilo browser salvato."""
         return self.PROFILE_DIR.exists() and any(self.PROFILE_DIR.iterdir())
@@ -224,12 +255,8 @@ class AuthManager:
                 logger.info("Già loggato — skip login.")
                 return True
 
-            # 1) Attendi che lo shield di caricamento scompaia
-            try:
-                page.wait_for_selector(".ut-click-shield", state="hidden", timeout=10000)
-                logger.info("Shield di caricamento scomparso")
-            except Exception:
-                logger.debug("Shield ancora presente o non trovato, procedo comunque")
+            # 1) Attendi che lo shield di caricamento scompaia (con stabilizzazione)
+            self.wait_for_click_shield(page, timeout_ms=15000)
 
             login_btn = page.get_by_role("button", name="Login")
             if login_btn.count():
@@ -239,19 +266,34 @@ class AuthManager:
                         # Prova click normale
                         login_btn.first.click(timeout=10000)
                     except Exception as e:
+                        err_msg = str(e)
                         logger.warning(f"Click normale fallito (tentativo {attempt}): {e}")
-                        # Fallback: click via JavaScript
+
+                        # Se lo shield sta intercettando i click, aspetta che scompaia
+                        if "intercepts pointer events" in err_msg or "ut-click-shield" in err_msg:
+                            logger.info("Click-shield rilevato durante click, attesa scomparsa...")
+                            self.wait_for_click_shield(page, timeout_ms=10000)
+
+                        # Fallback 1: click via JavaScript (bypassa overlay visivo)
                         try:
                             page.evaluate("document.querySelector('.btn-standard.primary')?.click()")
                             logger.info("Click via JavaScript eseguito")
                         except Exception as e2:
                             logger.warning(f"Anche click JS fallito: {e2}")
-                            if attempt < 3:
-                                page.wait_for_timeout(2000)
-                                continue
-                            else:
-                                logger.error("Impossibile cliccare Login dopo 3 tentativi")
-                                return False
+                            # Fallback 2: force click (ignora actionability checks)
+                            try:
+                                login_btn.first.click(timeout=5000, force=True)
+                                logger.info("Force click eseguito")
+                            except Exception as e3:
+                                logger.warning(f"Anche force click fallito: {e3}")
+                                if attempt < 3:
+                                    page.wait_for_timeout(3000)
+                                    # Ri-aspetta lo shield prima del prossimo tentativo
+                                    self.wait_for_click_shield(page, timeout_ms=10000)
+                                    continue
+                                else:
+                                    logger.error("Impossibile cliccare Login dopo 3 tentativi")
+                                    return False
 
                     page.wait_for_timeout(4000)
 
@@ -266,6 +308,8 @@ class AuthManager:
 
                     if attempt < 3:
                         logger.warning(f"Click su Login ignorato o fallito (siamo ancora su {curr_url}), riprovo...")
+                        # Ri-aspetta lo shield prima del prossimo tentativo
+                        self.wait_for_click_shield(page, timeout_ms=10000)
                     else:
                         logger.error("Impossibile procedere oltre la landing page dopo 3 tentativi di click.")
                         return False

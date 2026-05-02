@@ -1,6 +1,7 @@
 import urllib.request
 import json
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,48 @@ def send_telegram_alert(config, message: str) -> None:
                 logger.info("Notifica Telegram inviata con successo!")
     except Exception as e:
         logger.error(f"Errore durante l'invio notifica Telegram: {e}")
+
+
+def send_telegram_error_with_screenshot(config, message: str, page=None) -> None:
+    """Invia un messaggio di errore Telegram con screenshot allegato.
+    
+    Se page è disponibile, cattura uno screenshot e lo invia come foto con
+    il messaggio di errore come didascalia. Se lo screenshot fallisce, 
+    fallback a messaggio testuale semplice.
+    
+    Args:
+        config: NotificationsConfig con telegram_token e telegram_chat_id.
+        message: Messaggio di errore da inviare.
+        page: Oggetto Page di Playwright (opzionale). Se None, invia solo testo.
+    """
+    if not config or not config.telegram_token or not config.telegram_chat_id:
+        return
+
+    screenshot_path = None
+    try:
+        if page is not None:
+            import tempfile
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            temp_dir = tempfile.gettempdir()
+            screenshot_path = os.path.join(temp_dir, f"fifa_error_screenshot_{timestamp}.png")
+            page.screenshot(path=screenshot_path)
+            logger.info(f"Screenshot errore catturato: {screenshot_path}")
+            send_telegram_photo(config, screenshot_path, message)
+            return
+    except Exception as e:
+        logger.warning(f"Screenshot per errore fallito, fallback a testo: {e}")
+    finally:
+        # Cleanup: rimuovi il file screenshot temporaneo
+        if screenshot_path:
+            try:
+                if os.path.exists(screenshot_path):
+                    os.remove(screenshot_path)
+            except Exception:
+                pass
+
+    # Fallback: invia solo testo
+    send_telegram_alert(config, message)
 
 
 def send_telegram_photo(config, photo_path: str, caption: str) -> None:
