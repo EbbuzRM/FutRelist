@@ -38,8 +38,6 @@ def setup_logging() -> None:
         logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     )
 
-    console_handler = logging.StreamHandler(sys.stdout) if 'sys' in globals() else logging.StreamHandler()
-    # Note: sys.stdout is usually available in the main process
     import sys
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)

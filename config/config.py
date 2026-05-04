@@ -71,7 +71,7 @@ class RateLimitingConfig:
 
     def __post_init__(self):
         if self.min_delay_ms < 800:
-            logger.warning(f"Rate limiting min delay %sms è troppo basso. Sovrascritto a 800ms (limite minimo sicuro)", self.min_delay_ms)
+            logger.warning(f"Rate limiting min delay {self.min_delay_ms}ms è troppo basso. Sovrascritto a 800ms (limite minimo sicuro)")
             self.min_delay_ms = 800
         
         if self.min_delay_ms > self.max_delay_ms:

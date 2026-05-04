@@ -50,6 +50,7 @@ class RelistEngine:
         self.executor = executor
         self.auth = auth
         self.bot_state = bot_state
+        self._last_scan_result: Optional[ListingScanResult] = None
 
     def process_cycle(self, cycle_num: int, session_keeper) -> Tuple[int, int, int, ListingScanResult]:
         """
@@ -160,8 +161,9 @@ class RelistEngine:
                 succeeded += retry_s
                 failed += retry_f
 
-            # Dopo il relist, riscansiona per avere dati freschi per _compute_next_wait
-            post_relist_scan = self.detector.scan_listings()
+            # Usa l'ultimo risultato disponibile (aggiornato durante la verifica) 
+            # per calcolare il prossimo wait senza scansionare di nuovo il DOM.
+            post_relist_scan = self._last_scan_result or self.detector.scan_listings()
             return succeeded, failed, self._compute_next_wait(post_relist_scan), post_relist_scan
         
         # Nessun scaduto
@@ -181,6 +183,7 @@ class RelistEngine:
             
             self.page.wait_for_timeout(3000)
             post_scan = self.detector.scan_listings()
+            self._last_scan_result = post_scan
             
             first_succeeded = max(scan.expired_count - post_scan.expired_count, 0)
             truly_expired = max(post_scan.expired_count - post_scan.processing_count, 0)
@@ -193,6 +196,7 @@ class RelistEngine:
                 
                 self.page.wait_for_timeout(3000)
                 final_scan = self.detector.scan_listings()
+                self._last_scan_result = final_scan
                 second_succeeded = max(post_scan.expired_count - final_scan.expired_count, 0)
                 
                 # Update stats IMMEDIATELY after success
@@ -243,6 +247,7 @@ class RelistEngine:
             
             # Scan diretta — siamo già sulla Transfer List, ZERO navigazione
             scan = self.detector.scan_listings()
+            self._last_scan_result = scan
             if scan.expired_count == 0:
                 fifa_logger.info(f"[Golden Retry] Nessun expired rimasto. Fine.")
                 break

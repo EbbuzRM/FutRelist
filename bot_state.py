@@ -6,6 +6,7 @@ da thread diversi (es. thread principale del bot + thread Telegram polling).
 from __future__ import annotations
 
 import threading
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable
@@ -48,7 +49,7 @@ class BotState:
     _console_mode_until: datetime | None = field(default=None, repr=False)
 
     # Command queue for thread-safe operations
-    _pending_commands: list[dict] = field(default_factory=list, repr=False)
+    _pending_commands: deque = field(default_factory=deque, repr=False)
 
     def set_console_session_active(self, active: bool) -> None:
         """Imposta il flag di sessione console attiva (rischio ban)."""
@@ -151,7 +152,7 @@ class BotState:
         """Estrae il prossimo comando dalla coda (thread-safe)."""
         with self._lock:
             if self._pending_commands:
-                return self._pending_commands.pop(0)
+                return self._pending_commands.popleft()
             return None
 
     # --- Console Mode (deep sleep — zero WebApp) ---

@@ -4,6 +4,7 @@ import logging
 from playwright.sync_api import Page
 from models.relist_result import RelistResult, RelistBatchResult
 from browser.rate_limiter import RateLimiter
+from browser.auth import AuthManager
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,6 @@ class RelistExecutor:
 
     def _click_relist_button(self, listing_index: int) -> None:
         # Final Guard: Ban Prevention
-        from browser.auth import AuthManager
         auth = AuthManager(self.config)
         if auth.is_console_session_active(self.page):
             logger.error("Console session detected just before click - ABORTING")
@@ -101,7 +101,6 @@ class RelistExecutor:
     def relist_all(self, count: int = 1) -> RelistBatchResult:
         """Clicca 'Re-list All' e auto-accetta la modale di conferma HTML."""
         # Final Guard: Ban Prevention
-        from browser.auth import AuthManager
         auth = AuthManager(self.config)
         if auth.is_console_session_active(self.page):
             logger.error("Console session detected just before Re-list All - ABORTING")
@@ -194,7 +193,6 @@ class RelistExecutor:
     def check_session_valid(self) -> bool:
         """Verifica se la sessione è ancora valida dopo relist."""
         try:
-            from browser.auth import AuthManager
             auth = AuthManager(self.config)
             if not auth.is_logged_in(self.page, timeout_ms=5000):
                 logger.warning("Sessione non più valida rilevata post-relist")
