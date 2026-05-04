@@ -163,3 +163,57 @@ class TestBrowserConfig:
         assert browser.slow_mo == 500
         assert browser.viewport_width == 1280
         assert browser.viewport_height == 720
+
+
+class TestConfigWarningMessage:
+    """HI-01 fix: Verify warning messages use correct format."""
+
+    def test_config_warning_uses_correct_format(self):
+        """HI-01 fix: logger must use {self.min_delay_ms} in f-string, not %s."""
+        import ast
+        with open('config/config.py', 'r') as f:
+            content = f.read()
+        
+        # Check that config.py warning messages don't use %s with f-string
+        # The correct format is: logger.warning(f"...{var}...")
+        # The incorrect format would be: logger.warning(f"...%s...", var)
+        
+        # Parse the file to find logger.warning calls
+        tree = ast.parse(content)
+        
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                # Check if it's a logger.warning/error call
+                if isinstance(node.func, ast.Attribute) and node.func.attr in ('warning', 'error'):
+                    for arg in node.args:
+                        if isinstance(arg, ast.JoinedStr):  # f-string
+                            fstring_content = ast.unparse(arg) if hasattr(ast, 'unparse') else str(arg)
+                            # Check that it doesn't contain %s pattern (incorrect in f-string)
+                            if '%s' in fstring_content:
+                                assert False, \
+                                    f"Found %s in f-string warning message. Use {{}} format instead."
+        
+        # Also verify the file doesn't have the specific bug pattern
+        # Search for f"...{var}%s..." pattern
+        lines = content.split('\n')
+        for i, line in enumerate(lines):
+            if 'logger.warning' in line or 'logger.error' in line:
+                # Check if this line or next has f-string with %s
+                for j in range(i, min(i+3, len(lines))):  # Check current and next 2 lines
+                    if '%s' in lines[j] and '{' in lines[j] and '}' in lines[j]:
+                        # This might be the bug pattern
+                        assert False, \
+                            f"Line {j+1} may have incorrect format: mixes f-string {{}} with %s"
+
+    def test_rate_limiter_warning_format(self):
+        """Verify rate_limiter.py also uses correct warning format (HI-01 fix)."""
+        with open('browser/rate_limiter.py', 'r') as f:
+            content = f.read()
+        
+        # The bug was: f"[RateLimiter] Usa valori aggressivi: min_delay_ms=%sms..."
+        # The fix is: f"[RateLimiter] Usa valori aggressivi: min_delay_ms={self.min_delay_ms}ms..."
+        
+        # Verify the fix is in place
+        assert 'min_delay_ms={self.min_delay_ms}' in content or \
+               'min_delay_ms=%s' not in content, \
+            "rate_limiter.py should use {self.min_delay_ms} in f-string, not %s"

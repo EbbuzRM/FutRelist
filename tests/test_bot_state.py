@@ -2,6 +2,7 @@
 import threading
 import time
 from datetime import datetime
+from collections import deque
 from bot_state import BotState
 
 
@@ -224,3 +225,50 @@ class TestBotStateThreadSafety:
             t.join()
 
         assert len(errors) == 0
+
+
+class TestBotStatePendingCommandsDeque:
+    """ME-03 fix: _pending_commands must be deque and get_next_command uses popleft."""
+
+    def test_pending_commands_is_deque(self):
+        """ME-03 fix: _pending_commands must be a deque."""
+        bot_state = BotState()
+        assert isinstance(bot_state._pending_commands, deque)
+
+    def test_get_next_command_uses_popleft(self):
+        """Verify that get_next_command removes from left (FIFO)."""
+        bot_state = BotState()
+        bot_state.queue_command("force_relist")
+        bot_state.queue_command("screenshot")
+        
+        # First command should be the first one added (FIFO)
+        cmd1 = bot_state.get_next_command()
+        assert cmd1 is not None
+        assert cmd1["type"] == "force_relist"
+        
+        # Queue should have 1 item left
+        assert len(bot_state._pending_commands) == 1
+        
+        # Second command should be the second one added
+        cmd2 = bot_state.get_next_command()
+        assert cmd2 is not None
+        assert cmd2["type"] == "screenshot"
+        
+        # Queue should be empty now
+        assert len(bot_state._pending_commands) == 0
+
+    def test_get_next_command_returns_none_when_empty(self):
+        """get_next_command returns None when queue is empty."""
+        bot_state = BotState()
+        cmd = bot_state.get_next_command()
+        assert cmd is None
+
+    def test_queue_command_adds_to_deque(self):
+        """queue_command should add commands to the deque."""
+        bot_state = BotState()
+        assert len(bot_state._pending_commands) == 0
+        
+        bot_state.queue_command("test_command")
+        
+        assert len(bot_state._pending_commands) == 1
+        assert isinstance(bot_state._pending_commands, deque)

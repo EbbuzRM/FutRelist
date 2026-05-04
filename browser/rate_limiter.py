@@ -26,7 +26,7 @@ class RateLimiter:
     def wait(self) -> None:
         """Attendi un ritardo casuale tra min e max."""
         if self.min_delay_ms < 1200 and not self._warning_logged:
-            logger.warning(f"[RateLimiter] Usa valori aggressivi: min_delay_ms=%sms. Rischio di rilevamento aumentato.", self.min_delay_ms)
+            logger.warning(f"[RateLimiter] Usa valori aggressivi: min_delay_ms={self.min_delay_ms}ms. Rischio di rilevamento aumentato.")
             self._warning_logged = True
             
         delay_ms = random.randint(self.min_delay_ms, self.max_delay_ms)

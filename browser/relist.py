@@ -24,14 +24,18 @@ SELECTORS = {
 class RelistExecutor:
     """Esegue rilist automatici sui listing scaduti."""
 
-    def __init__(self, page: Page, config: dict):
+    def __init__(self, page: Page, config: dict, rate_limiter: RateLimiter | None = None):
         self.page = page
         self.config = config
-        rate_limiting = config.get("rate_limiting", {})
-        self.rate_limiter = RateLimiter(
-            min_delay_ms=rate_limiting.get("min_delay_ms", 2000),
-            max_delay_ms=rate_limiting.get("max_delay_ms", 5000),
-        )
+        if rate_limiter:
+            self.rate_limiter = rate_limiter
+        else:
+            # Backward compatibility: create internal instance if not provided
+            rate_limiting = config.get("rate_limiting", {})
+            self.rate_limiter = RateLimiter(
+                min_delay_ms=rate_limiting.get("min_delay_ms", 2000),
+                max_delay_ms=rate_limiting.get("max_delay_ms", 5000),
+            )
         defaults = config.get("listing_defaults", {})
         self.relist_mode = defaults.get("relist_mode", "per_listing")
         self.duration = defaults.get("duration", "3h").upper()

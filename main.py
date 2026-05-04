@@ -118,13 +118,14 @@ def main() -> None:
             controller.navigate_to_webapp()
             authenticate(controller, auth, page)
 
-            navigator = TransferMarketNavigator(page, config)
-            detector = ListingDetector(page)
-            executor = RelistExecutor(page, config)
+            # Create a single RateLimiter instance to be shared across modules
             rate_limiter = RateLimiter(
                 min_delay_ms=app_config.rate_limiting.min_delay_ms,
                 max_delay_ms=app_config.rate_limiting.max_delay_ms,
             )
+            navigator = TransferMarketNavigator(page, config, rate_limiter)
+            detector = ListingDetector(page)
+            executor = RelistExecutor(page, config, rate_limiter)
 
             keeper = SessionKeeper(controller, auth, bot_state, page, get_credentials)
             engine = RelistEngine(page, config, navigator, detector, executor, auth, bot_state)
@@ -138,7 +139,7 @@ def main() -> None:
                     page=page,
                     log_dir=Path(__file__).parent / "logs",
                 )
-                telegram.set_sold_handler(SoldHandler(page, config))
+                telegram.set_sold_handler(SoldHandler(page, config, rate_limiter))
                 telegram.start()
             else:
                 telegram = None

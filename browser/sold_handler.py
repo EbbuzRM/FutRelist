@@ -33,17 +33,22 @@ class SoldHandler:
 
     Args:
         page: Playwright page object.
-        config: Config dict con rate_limiting settings.
+        config: Config dict with rate_limiting settings.
+        rate_limiter: Optional RateLimiter instance. If not provided, creates internal instance.
     """
 
-    def __init__(self, page: Page, config: dict[str, Any]):
+    def __init__(self, page: Page, config: dict[str, Any], rate_limiter: RateLimiter | None = None):
         self.page = page
         self.config = config
-        rate_limiting = config.get("rate_limiting", {})
-        self.rate_limiter = RateLimiter(
-            min_delay_ms=rate_limiting.get("min_delay_ms", 2000),
-            max_delay_ms=rate_limiting.get("max_delay_ms", 5000),
-        )
+        if rate_limiter:
+            self.rate_limiter = rate_limiter
+        else:
+            # Backward compatibility: create internal instance if not provided
+            rate_limiting = config.get("rate_limiting", {})
+            self.rate_limiter = RateLimiter(
+                min_delay_ms=rate_limiting.get("min_delay_ms", 2000),
+                max_delay_ms=rate_limiting.get("max_delay_ms", 5000),
+            )
 
     def process_sold_items(self) -> SoldCreditsResult:
         """Flusso completo: naviga, raccogli crediti, cancella venduti.

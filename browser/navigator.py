@@ -12,14 +12,18 @@ logger = logging.getLogger(__name__)
 class TransferMarketNavigator:
     """Naviga dalla Home alla vista Transfer List (My Listings) nel WebApp FIFA 26."""
 
-    def __init__(self, page: Page, config: dict):
+    def __init__(self, page: Page, config: dict, rate_limiter: RateLimiter | None = None):
         self.page = page
         self.config = config
-        rate_limiting = config.get("rate_limiting", {})
-        self.rate_limiter = RateLimiter(
-            min_delay_ms=rate_limiting.get("min_delay_ms", 2000),
-            max_delay_ms=rate_limiting.get("max_delay_ms", 5000),
-        )
+        if rate_limiter:
+            self.rate_limiter = rate_limiter
+        else:
+            # Backward compatibility: create internal instance if not provided
+            rate_limiting = config.get("rate_limiting", {})
+            self.rate_limiter = RateLimiter(
+                min_delay_ms=rate_limiting.get("min_delay_ms", 2000),
+                max_delay_ms=rate_limiting.get("max_delay_ms", 5000),
+            )
 
     def dismiss_popups(self) -> None:
         """Chiude eventuali popup/modale EA (es. 'Message from the FC Team') cliccando Continue.
