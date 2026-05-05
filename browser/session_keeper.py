@@ -99,6 +99,12 @@ class SessionKeeper:
             if self.bot_state.wait_interruptible(chunk):
                 return True # Reboot richiesto
                 
+            # ⚠️ CONTROLLO DEADLINE: dopo il chunk sleep, controlla se siamo alla deadline
+            if deadline:
+                if datetime.now() >= deadline:
+                    logger_instance.info(f"Deadline {deadline.strftime('%H:%M:%S')} raggiunta, esco dal wait per Pre-Nav Guard")
+                    break  # Esce dal while, ritorna al chiamante
+                
             if self.bot_state.has_commands():
                 return False # Interrotto per comandi
                 
