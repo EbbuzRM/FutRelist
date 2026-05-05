@@ -60,12 +60,17 @@ class SessionKeeper:
         self, 
         wait_seconds: int, 
         logger_instance: logging.Logger, 
+        deadline: datetime = None,
         min_heartbeat_delay: int = 150, 
         max_heartbeat_delay: int = 300
     ) -> bool:
         """
         Attesa in chunk con Heartbeat (click 'Transfers') per mantenere la sessione.
         Ritorna True se un reboot è stato richiesto.
+        
+        Args:
+            deadline: Se specificato, cappa i chunk per svegliarsi entro 5s dalla deadline.
+                     Usato per il Pre-Nav Guard (sveglia entro :08:05).
         """
         import random
         from datetime import datetime
@@ -73,15 +78,26 @@ class SessionKeeper:
         start_time = datetime.now()
         
         while True:
-            elapsed = (datetime.now() - start_time).total_seconds()
+            # ⚠️ datetime.now() all'inizio di ogni iterazione per precisione temporale
+            now = datetime.now()
+            
+            elapsed = (now - start_time).total_seconds()
             remaining = wait_seconds - elapsed
             if remaining <= 0:
                 break
                 
             current_heartbeat_interval = random.randint(min_heartbeat_delay, max_heartbeat_delay)
-            current_wait = min(float(current_heartbeat_interval), remaining)
+            chunk = min(float(current_heartbeat_interval), remaining)
             
-            if self.bot_state.wait_interruptible(current_wait):
+            # ⚠️ DEADLINE CHECK: se c'è una deadline (es. prossima :08:00), 
+            # cappa il chunk per svegliarsi in tempo
+            if deadline:
+                secs_to_deadline = int((deadline - now).total_seconds())
+                if 0 < secs_to_deadline < chunk:
+                    chunk = secs_to_deadline + 5  # 5s buffer
+                    logger_instance.debug(f"Deadline vicina ({secs_to_deadline}s), cappo chunk a {chunk}s")
+            
+            if self.bot_state.wait_interruptible(chunk):
                 return True # Reboot richiesto
                 
             if self.bot_state.has_commands():

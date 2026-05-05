@@ -172,7 +172,7 @@ def main() -> None:
                 keeper.ensure_session()
 
                 try:
-                    succeeded, failed, next_wait, scan_result = engine.process_cycle(cycle, keeper)
+                    succeeded, failed, next_wait, scan_result, deadline = engine.process_cycle(cycle, keeper)
                     # stats are now updated inside engine.process_cycle to avoid race conditions with manual relist detection
                     batch.accumulate(scan_result, succeeded, failed)
 
@@ -180,7 +180,7 @@ def main() -> None:
                         batch.flush(app_config, page, logger, scan_result)
 
                     rate_limiter.wait()
-                    if keeper.wait_with_heartbeat(next_wait, logger):
+                    if keeper.wait_with_heartbeat(next_wait, logger, deadline=deadline):
                         break # Reboot
 
                 except RebootRequestError:

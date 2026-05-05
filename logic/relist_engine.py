@@ -15,7 +15,8 @@ from logic.golden_hour import (
     is_in_hold_window,
     get_next_golden_hour,
     is_close_to_golden,
-    get_min_active_seconds
+    get_min_active_seconds,
+    GOLDEN_HOURS
 )
 
 logger = logging.getLogger(__name__)
@@ -52,11 +53,14 @@ class RelistEngine:
         self.bot_state = bot_state
         self._last_scan_result: Optional[ListingScanResult] = None
 
-    def process_cycle(self, cycle_num: int, session_keeper) -> Tuple[int, int, int, ListingScanResult]:
+    def process_cycle(self, cycle_num: int, session_keeper) -> Tuple[int, int, int, ListingScanResult, Optional[datetime]]:
         """
         Esegue un singolo ciclo di gestione rilist.
-        Ritorna (succeeded, failed, next_wait, scan_result).
+        Ritorna (succeeded, failed, next_wait, scan_result, deadline).
+        
+        La deadline è la prossima :08:00 durante il golden period (per il Pre-Nav Guard).
         """
+        deadline = None
         # 0. Ban Prevention Hard-Lock
         if self.auth.is_console_session_active(self.page):
             fifa_logger = logging.getLogger("fifa")
@@ -82,7 +86,8 @@ class RelistEngine:
 
         # 2. Navigazione (avviene normalmente, o al minuto :09 durante golden period)
         if not self._navigate_with_retry():
-            return 0, 0, 60, ListingScanResult.empty()
+            deadline = self._compute_deadline(datetime.now())
+            return 0, 0, 60, ListingScanResult.empty(), deadline
 
         # 3. Golden Sync: se siamo a :09, il bot è GIÀ sulla Transfer List.
         #    NON scansionare adesso — gli item non sono ancora scaduti.
@@ -115,7 +120,8 @@ class RelistEngine:
                     min_t, max_t = min(active_times), max(active_times)
                     if ((3400 <= min_t <= 3600) or (10600 <= min_t <= 10800) or (21400 <= min_t <= 21600)) and (max_t - min_t) <= 90:
                         fifa_logger.info(f"[⚠️ RELIST MANUALE RILEVATO] Bot si ritira. Prossimo check tra {min_t - 20}s.")
-                        return 0, 0, max(min_t - 20, 60), scan
+                        deadline = self._compute_deadline(datetime.now())
+                        return 0, 0, max(min_t - 20, 60), scan, deadline
 
         # 6. Decisione Relist
         if scan.expired_count > 0:
@@ -131,7 +137,8 @@ class RelistEngine:
                     wake_target = next_g.replace(minute=8, second=0, microsecond=0)
                     hold_wait = max(30, int((wake_target - datetime.now()).total_seconds()))
                     fifa_logger.info(f"[HOLD] {scan.expired_count} scaduti in HOLD. Prossima golden: {next_g.strftime('%H:%M')}. Attesa: {hold_wait}s.")
-                    return 0, 0, hold_wait, scan
+                    deadline = self._compute_deadline(datetime.now())
+                    return 0, 0, hold_wait, scan, deadline
                 # No more goldens -> override hold
                 in_hold = False
 
@@ -164,10 +171,12 @@ class RelistEngine:
             # Usa l'ultimo risultato disponibile (aggiornato durante la verifica) 
             # per calcolare il prossimo wait senza scansionare di nuovo il DOM.
             post_relist_scan = self._last_scan_result or self.detector.scan_listings()
-            return succeeded, failed, self._compute_next_wait(post_relist_scan), post_relist_scan
+            deadline = self._compute_deadline(datetime.now())
+            return succeeded, failed, self._compute_next_wait(post_relist_scan), post_relist_scan, deadline
         
         # Nessun scaduto
-        return 0, 0, self._compute_next_wait(scan), scan
+        deadline = self._compute_deadline(datetime.now())
+        return 0, 0, self._compute_next_wait(scan), scan, deadline
 
     def _execute_relist_with_verification(self, scan: ListingScanResult) -> Tuple[int, int]:
         """Esegue il rilist e verifica i risultati con due round."""
@@ -308,6 +317,33 @@ class RelistEngine:
         wake_target = ng.replace(minute=8, second=0, microsecond=0)
         secs_to_wake = int((wake_target - now).total_seconds())
         return secs_to_wake if 0 < secs_to_wake < wait else wait
+
+    def _compute_deadline(self, now: datetime) -> Optional[datetime]:
+        """
+        Calcola la deadline per il Pre-Nav Guard (prossima :08:00).
+        
+        La deadline è usata da wait_with_heartbeat per cappere il chunk
+        e svegliarsi in tempo per il Pre-Nav Guard.
+        """
+        if not is_in_golden_period(now):
+            return None
+        
+        ng = get_next_golden_hour(now)
+        if not ng:
+            return None
+        
+        deadline = ng.replace(minute=8, second=0, microsecond=0)
+        
+        # Se deadline è nel passato, prendi la prossima golden hour
+        if deadline <= now:
+            next_hours = [h for h in sorted(GOLDEN_HOURS) if h > ng.hour]
+            if next_hours:
+                next_gh = now.replace(hour=next_hours[0], minute=10, second=0, microsecond=0)
+                deadline = next_gh.replace(minute=8, second=0, microsecond=0)
+            else:
+                return None
+        
+        return deadline
 
     def _navigate_with_retry(self, force: bool = False) -> bool:
         # Quick check: siamo già nella Transfer List? (solo se non force)
