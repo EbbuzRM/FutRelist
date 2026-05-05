@@ -19,6 +19,7 @@ Assicurati che il login sia attivo e che sia sicuro fare test.
 
 import sys
 import time
+import threading
 from datetime import datetime, timedelta
 
 # Speed factor: 1 secondo reale = 60 secondi simulati
@@ -168,6 +169,21 @@ def simulated_main():
     time.sleep = fast_sleep
     print(f"[SIM] time.sleep patchato con fast_sleep")
 
+    # Patch anche threading.Event.wait per avanzare il clock simulato
+    original_event_wait = threading.Event.wait
+
+    def fake_event_wait(self, timeout=None):
+        """Override di threading.Event.wait per avanzare il clock simulato"""
+        if timeout is not None and timeout > 0:
+            clock.advance(timeout)
+            # Sleep molto breve per non bloccare
+            original_sleep(0.001)
+        return True  # Assume sempre che il timeout sia scaduto
+
+    # Patch threading.Event.wait
+    threading.Event.wait = fake_event_wait
+    print(f"[SIM] threading.Event.wait patchato")
+
     # Ora importa e lancia il main
     # NOTA: dobbiamo importare main DOPO aver fatto i patch
     try:
@@ -204,6 +220,7 @@ def simulated_main():
         # Ripristina tutto
         print(f"\n[SIM] Ripristino riferimenti originali...")
         time.sleep = original_sleep
+        threading.Event.wait = original_event_wait
         for module_path, original_dt in original_refs.items():
             if module_path == 'logic.golden_hour':
                 logic.golden_hour.datetime = original_dt
