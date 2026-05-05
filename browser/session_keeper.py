@@ -1,7 +1,9 @@
 from __future__ import annotations
 from typing import Optional
 import logging
+import random
 import time
+from datetime import datetime
 from browser.controller import BrowserController
 from browser.auth import AuthManager
 from browser.error_handler import ensure_session
@@ -60,7 +62,7 @@ class SessionKeeper:
         self, 
         wait_seconds: int, 
         logger_instance: logging.Logger, 
-        deadline: datetime = None,
+        deadline: Optional[datetime] = None,
         min_heartbeat_delay: int = 150, 
         max_heartbeat_delay: int = 300
     ) -> bool:
@@ -72,9 +74,6 @@ class SessionKeeper:
             deadline: Se specificato, cappa i chunk per svegliarsi entro 5s dalla deadline.
                      Usato per il Pre-Nav Guard (sveglia entro :08:05).
         """
-        import random
-        from datetime import datetime
-        
         start_time = datetime.now()
         
         while True:
@@ -92,10 +91,10 @@ class SessionKeeper:
             # ⚠️ DEADLINE CHECK: se c'è una deadline (es. prossima :08:00), 
             # cappa il chunk per svegliarsi in tempo
             if deadline:
-                secs_to_deadline = int((deadline - now).total_seconds())
-                if 0 < secs_to_deadline < chunk:
-                    chunk = secs_to_deadline + 5  # 5s buffer
-                    logger_instance.debug(f"Deadline vicina ({secs_to_deadline}s), cappo chunk a {chunk}s")
+                secs_to_deadline = (deadline - now).total_seconds()
+                if secs_to_deadline > 0 and secs_to_deadline < chunk:
+                    chunk = max(1, secs_to_deadline)  # Sveglia entro la deadline (1s safety)
+                    logger_instance.debug(f"Deadline {deadline.strftime('%H:%M:%S')} tra {secs_to_deadline:.1f}s, cappo chunk a {chunk}s")
             
             if self.bot_state.wait_interruptible(chunk):
                 return True # Reboot richiesto
