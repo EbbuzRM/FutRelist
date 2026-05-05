@@ -1,5 +1,5 @@
 status: production
-last_updated: "2026-05-02T18:00:00.000Z"
+last_updated: "2026-05-04T22:40:39.352Z"
 ---
 
 # Project State — FIFA 26 Auto-Relist Bot
@@ -54,6 +54,18 @@ Regole fondamentali verificate nel codice sorgente:
 
 
 ## 5. Current Activity & Known Issues
+
+### Today's Fixes (May 04, 2026)
+- **Today (04 May):** Code Review Fixes & Test Coverage
+  - **CR-02:** Fix `_golden_retry_loop` return values (3 not 4, remove undef `last_scan`)
+  - **HI-01:** Fix logger warning format in `config.py` and `rate_limiter.py` (`%s` → `{var}`)
+  - **ME-02:** Fix `sys` import order in `log_config.py`
+  - **ME-03:** Use `deque` for `BotState` pending commands (O(1) `popleft` vs O(n) `pop(0)`)
+  - **ME-01:** Move `AuthManager` imports to module level in `relist.py`)
+  - **LO-01:** Centralize `RateLimiter` via dependency injection (navigator, relist, sold_handler)
+  - **Tests:** Added `test_relist_engine.py`, `test_relist_imports.py` and updated existing test files
+  - **Test Results:** 686 tests passing ✓
+
 ### Today's Fixes (May 02, 2026)
 - **Today (02 May):** Click-Shield Fix & Error Screenshots
   - `browser/auth.py`: `wait_for_click_shield()` con `wait_for_function()` (best practice Playwright)
@@ -66,12 +78,48 @@ Regole fondamentali verificate nel codice sorgente:
 - **Recent (29 Apr):** Fix "Scan-Spam Post-Relist": `_compute_next_wait` non ritorna più 10s ciecamente durante golden window. Polling rapido solo se ci sono ancora expired/processing. Dopo relist con 0 expired, calcola wait verso la prossima golden pre-nav.
 - **Recent (29 Apr):** Fix "Processing Items": se TUTTI gli expired sono in realtà PROCESSING, il bot salta il tentativo di relist (bottone non visibile) e delega al `_golden_retry_loop` con attesa 5-10s per la transizione EA.
 - **Recent (29 Apr):** `process_cycle` ora riscansiona DOPO il relist per dare a `_compute_next_wait` dati freschi (evita il loop 10s con expired_count stale).
+- **Recent (04 May):** Risolto log ridondante "Scansione completata" post-relist: le funzioni di rilist ora restituiscono l'ultima scansione di verifica, eliminando la scansione superflua alla fine di `process_cycle`.
 - **Recent (29 Apr):** Fix "Flusso Golden Ristrutturato": wake up a `:08`, navigazione a `:09`, scansione e relist immediato a `:10`. Eliminata la navigazione superflua dal golden retry loop.
 - **Recent (28 Apr):** Fix "Console Heartbeat Spam": quando l'heartbeat rileva EA console attiva, ora attiva automaticamente `console_mode` con auto-resume a 30 min.
 - **Recent (27 Apr):** Fix critico "Processing Limbo": corretto un bug in `relist_engine.py` in cui oggetti in processing fuori dalla golden hour causavano un wait errato di 3600s invece di 30s.
 - **Recent (27 Apr):** Introdotto **Quick Check** nella navigazione della Transfer List (se già in pagina, risparmia ~10s).
 - **Recent (27 Apr):** Ottimizzato polling Pausa/Console a 300s con wake-up istantaneo.
 - **Known Issue:** Inosservanza saltuaria dei conflitti 409 Telegram (gestita con backoff di 5s).
+
+---
+
+## 5b. Fix Implementati (DA VERIFICARE — 05 Maggio 2026)
+
+### Root Cause Fix: `get_next_golden_hour()`
+- **Problema**: La funzione restituiva la golden hour **corrente** se siamo nella sua finestra (:09-:11), invece della **prossima futura**
+- **Fix**: Modificato `logic/golden_hour.py` → `get_next_golden_hour()` usa confronto stretto `target > now`
+- **Impatto**: Tutti i chiamanti ottengono sempre la prossima golden hour futura
+- **Commit**: `fix: get_next_golden_hour always returns future (root cause fix)`
+
+### Semplificazione `_compute_deadline()`
+- **Problema**: Codice difensivo per gestire `deadline <= now` (non serve più)
+- **Fix**: Rimossa logica difensiva in `logic/relist_engine.py::_compute_deadline()`
+- **Impatto**: Codice più pulito e manutenibile
+
+### Deadline Check in `wait_with_heartbeat()`
+- **Problema**: Durante i wait lunghi, il bot poteva oversleepare la :08:00
+- **Fix**: In `browser/session_keeper.py`:
+  - Calcola `secs_to_deadline` prima di ogni chunk
+  - Cappa `chunk` alla deadline (con 1s safety)
+  - **Uscita immediata** quando `now >= deadline` (prima dell'heartbeat)
+  - Gestione caso `secs_to_deadline <= 0` (deadline già passata)
+- **Commit**: `fix: cap wait_with_heartbeat a deadline :08:00 per Pre-Nav Guard`
+- **Commit**: `fix: immediate exit at deadline for Pre-Nav Guard`
+- **Commit**: `fix: immediate exit if deadline already reached before sleep`
+
+### Risultato Atteso
+Domani, dopo la golden hour delle 18:10, l'utente verificherà:
+1. **Alle 18:08:00** → Pre-Nav Guard scatta puntuale ✅
+2. **Alle 18:09:00** → Navigazione Transfer List ✅
+3. **Alle 18:10:00** → Relist eseguito con Pre-Nav completo ✅
+4. **Sessione morta durante il wait** → Rilevata dall'heartbeat PRIMA delle 18:08 ✅
+
+**Stato**: ⏳ IN ATTESA VERIFICA (dopo 18:10 di domani)
 
 ---
 
@@ -110,5 +158,5 @@ Regole fondamentali verificate nel codice sorgente:
 </details>
 
 ### Test Suite Summary
-- **Total:** 673 tests passing.
-- **Coverage:** 142 unit tests + 535 golden timeline simulations.
+- **Total:** 686 tests passing.
+- **Coverage:** 155 unit tests + 531 golden timeline simulations (added test_relist_engine.py, test_relist_imports.py)
