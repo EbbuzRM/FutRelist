@@ -88,10 +88,16 @@ class SessionKeeper:
             current_heartbeat_interval = random.randint(min_heartbeat_delay, max_heartbeat_delay)
             chunk = min(float(current_heartbeat_interval), remaining)
             
-            # ⚠️ DEADLINE CHECK: se c'è una deadline (es. prossima :08:00), 
+            # ⚠️ DEADLINE CHECK: se c'è una deadline (es. prossima :08:00),
             # cappa il chunk per svegliarsi in tempo
             if deadline:
                 secs_to_deadline = (deadline - now).total_seconds()
+                
+                # ⚠️ CHECK IMMEDIATO: se deadline già raggiunta, esci subito
+                if secs_to_deadline <= 0:
+                    logger_instance.info(f"Deadline {deadline.strftime('%H:%M:%S')} già raggiunta, esco subito dal wait per Pre-Nav Guard")
+                    break
+                
                 if secs_to_deadline > 0 and secs_to_deadline < chunk:
                     chunk = max(1, secs_to_deadline)  # Sveglia entro la deadline (1s safety)
                     logger_instance.debug(f"Deadline {deadline.strftime('%H:%M:%S')} tra {secs_to_deadline:.1f}s, cappo chunk a {chunk}s")
