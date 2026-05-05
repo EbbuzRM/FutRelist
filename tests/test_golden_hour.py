@@ -61,15 +61,15 @@ def test_get_next_golden_hour():
     target = get_next_golden_hour(now)
     assert target.hour == 16 and target.minute == 10
 
-    # 16:10:30 -> 16:10 (still current because window ends at :11:59)
+    # 16:10:30 -> 17:10 (next future, not current)
     now = datetime(2026, 4, 18, 16, 10, 30)
     target = get_next_golden_hour(now)
-    assert target.hour == 16 and target.minute == 10
+    assert target.hour == 17 and target.minute == 10
 
-    # 16:11:59 -> 16:10 (still current)
+    # 16:11:59 -> 17:10 (next future)
     now = datetime(2026, 4, 18, 16, 11, 59)
     target = get_next_golden_hour(now)
-    assert target.hour == 16 and target.minute == 10
+    assert target.hour == 17 and target.minute == 10
 
     # 16:12:00 -> 17:10
     now = datetime(2026, 4, 18, 16, 12, 0)

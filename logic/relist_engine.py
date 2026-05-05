@@ -319,30 +319,16 @@ class RelistEngine:
         return secs_to_wake if 0 < secs_to_wake < wait else wait
 
     def _compute_deadline(self, now: datetime) -> Optional[datetime]:
-        """
-        Calcola la deadline per il Pre-Nav Guard (prossima :08:00).
-        
-        La deadline è usata da wait_with_heartbeat per cappere il chunk
-        e svegliarsi in tempo per il Pre-Nav Guard.
-        """
+        """Calcola la deadline per il Pre-Nav Guard (prossima :08:00)."""
         if not is_in_golden_period(now):
             return None
         
-        ng = get_next_golden_hour(now)
+        ng = get_next_golden_hour(now)  # Ora restituisce SEMPRE la futura
         if not ng:
             return None
         
+        # ng è sempre futura, quindi deadline è sempre futura
         deadline = ng.replace(minute=8, second=0, microsecond=0)
-        
-        # Se deadline è nel passato, prendi la prossima golden hour
-        if deadline <= now:
-            next_hours = [h for h in sorted(GOLDEN_HOURS) if h > ng.hour]
-            if next_hours:
-                next_gh = now.replace(hour=next_hours[0], minute=10, second=0, microsecond=0)
-                deadline = next_gh.replace(minute=8, second=0, microsecond=0)
-            else:
-                return None
-        
         return deadline
 
     def _navigate_with_retry(self, force: bool = False) -> bool:

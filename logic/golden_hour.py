@@ -37,24 +37,20 @@ def get_active_with_timer_count(scan: ListingScanResult) -> int:
     )
 
 def get_next_golden_hour(now: datetime) -> datetime | None:
-    """Restituisce il prossimo target :10 (16:10, 17:10, 18:10) come datetime.
-
-    La golden è considerata ancora 'corrente' finché siamo nella sua finestra di rilist
-    (:09-:11). Questo evita che un ritardo di pochi secondi alle :10:01 faccia saltare
-    il rilist spostando l'obiettivo all'ora successiva.
+    """Restituisce la PROSSIMA golden hour futura (16:10, 17:10, 18:10) come datetime.
+    
+    La funzione restituisce SEMPRE una golden hour nel futuro, mai quella corrente
+    anche se siamo nella sua finestra di rilist (:09-:11).
+    Se non ci sono più golden hours oggi, restituisce None.
     """
-    golden_targets = [
-        now.replace(hour=h, minute=GOLDEN_MINUTE, second=0, microsecond=0)
-        for h in GOLDEN_HOURS
-    ]
-    for target in golden_targets:
-        # La golden è ancora valida finché siamo nella finestra (fino a :11:59)
-        window_end_min = max(GOLDEN_RELIST_WINDOW)
-        window_end = target.replace(minute=window_end_min, second=59, microsecond=0)
+    for target_hour in sorted(GOLDEN_HOURS):
+        target = now.replace(hour=target_hour, minute=GOLDEN_MINUTE, second=0, microsecond=0)
         
-        if now <= window_end:
+        # MUST be strictly in the future
+        if target > now:
             return target
-    return None
+    
+    return None  # No more golden hours today
 
 def is_in_golden_period(now: datetime) -> bool:
     """True se siamo nella fascia 15:10 → 18:15.
