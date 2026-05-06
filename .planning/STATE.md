@@ -88,7 +88,7 @@ Regole fondamentali verificate nel codice sorgente:
 
 ---
 
-## 5b. Fix Implementati (DA VERIFICARE — 05 Maggio 2026)
+## 5b. Fix Implementati (✅ VERIFICATO — 06 Maggio 2026)
 
 ### Root Cause Fix: `get_next_golden_hour()`
 - **Problema**: La funzione restituiva la golden hour **corrente** se siamo nella sua finestra (:09-:11), invece della **prossima futura**
@@ -119,7 +119,23 @@ Domani, dopo la golden hour delle 18:10, l'utente verificherà:
 3. **Alle 18:10:00** → Relist eseguito con Pre-Nav completo ✅
 4. **Sessione morta durante il wait** → Rilevata dall'heartbeat PRIMA delle 18:08 ✅
 
-**Stato**: ⏳ IN ATTESA VERIFICA (dopo 18:10 di domani)
+**Stato**: ✅ VERIFICATO (06 Maggio 2026)
+
+### ✅ Verifica del 06 Maggio 2026
+
+| Orario | Azione | Risultato nei Log | Stato |
+|--------|--------|-------------------|-------|
+| **16:08:00** | Pre-Nav Guard scatta | `Minuto :08 — attendo pre-nav slot :09:00` | ✅ |
+| **16:09:00** | Navigazione Transfer List | `Transfer List caricata con successo` | ✅ |
+| **16:10:00** | SCANSIONE + Relist (4 item) | `4 rilistati, 0 falliti` | ✅ |
+| **17:08:00** | Pre-Nav Guard scatta | `Minuto :08 — attendo pre-nav slot :09:00` | ✅ |
+| **17:09:00** | Navigazione Transfer List | `Transfer List caricata con successo` | ✅ |
+| **17:10:00** | SCANSIONE + Relist (4 item) | `4 rilistati, 0 falliti` | ✅ |
+| **18:07:55** | Deadline check | `Deadline 18:08:00 tra 4.1s, cappo chunk a 4.1s` | ✅ |
+| **18:08:00** | **Immediate exit** dal wait | `Deadline 18:08:00 raggiunta, esco dal wait` | ✅ |
+| **18:08:00** | Pre-Nav Guard scatta | `Minuto :08 — attendo pre-nav slot :09:00` | ✅ |
+| **18:09:00** | Navigazione Transfer List | `Transfer List caricata con successo` | ✅ |
+| **18:10:00** | SCANSIONE + Relist (4 item) | `4 rilistati, 0 falliti` | ✅ |
 
 ---
 
