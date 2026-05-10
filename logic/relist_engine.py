@@ -52,6 +52,7 @@ class RelistEngine:
         self.auth = auth
         self.bot_state = bot_state
         self._last_scan_result: Optional[ListingScanResult] = None
+        self._fast_idle_cycles: int = 0  # Contatore per stale page detection
 
     def process_cycle(self, cycle_num: int, session_keeper) -> Tuple[int, int, int, ListingScanResult, Optional[datetime]]:
         """
@@ -61,6 +62,7 @@ class RelistEngine:
         La deadline è la prossima :08:00 durante il golden period (per il Pre-Nav Guard).
         """
         deadline = None
+        self._last_scan_result = None  # Reset per evitare dati stale da cicli precedenti
         # 0. Ban Prevention Hard-Lock
         if self.auth.is_console_session_active(self.page):
             fifa_logger = logging.getLogger("fifa")
@@ -125,6 +127,7 @@ class RelistEngine:
 
         # 6. Decisione Relist
         if scan.expired_count > 0:
+            self._fast_idle_cycles = 0  # Reset: ci sono expired, la pagina è viva
             now_relist = datetime.now()
             in_hold = is_in_hold_window(now_relist)
             force_relist = self.bot_state.consume_force_relist()
@@ -142,22 +145,31 @@ class RelistEngine:
                 # No more goldens -> override hold
                 in_hold = False
 
-            # RELIST NORMALE / FORCE / GOLDEN WINDOW
+# RELIST NORMALE / FORCE / GOLDEN WINDOW
             if force_relist:
                 logger.info("[Telegram] Force relist — bypass hold window")
 
-            # Se TUTTI gli expired sono in realtà PROCESSING, il bottone Re-list All
-            # non sarà visibile su EA. Saltiamo il tentativo inutile e lasciamo che
-            # il golden_retry_loop aspetti la transizione Processing → Expired.
+            # Calcola quanti sono veramente "expired" (non processing)
             truly_expired = scan.expired_count - scan.processing_count
-            if truly_expired <= 0 and scan.processing_count > 0 and is_in_golden_window(now_relist):
-                fifa_logger.info(
-                    f"[Golden] {scan.processing_count} item in Processing (non ancora Expired). "
-                    f"Attendo transizione nel retry loop..."
-                )
+
+            # Caso 1: Solo processing items (truly_expired <= 0)
+            # Il bottone "Re-list All" NON è visibile su EA finché gli item sono in
+            # stato Processing (limbo EA post-scadenza). Aspettiamo il retry loop.
+            if truly_expired <= 0 and scan.processing_count > 0:
+                if is_in_golden_window(now_relist):
+                    fifa_logger.info(
+                        f"[Golden] {scan.processing_count} item in Processing (non ancora Expired). "
+                        f"Attendo transizione nel retry loop..."
+                    )
+                else:
+                    fifa_logger.info(
+                        f"[Processing] {scan.processing_count} item in Processing (limbo EA). "
+                        f"Il bottone 'Re-list All' non è ancora disponibile. Attesa..."
+                    )
                 succeeded, failed = 0, 0
             else:
-                fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti. Rilisto...")
+                # Caso 2: Ci sono veri expired item - procedi con il relist
+                fifa_logger.info(f"Trovati {scan.expired_count} oggetti scaduti ({truly_expired} veri expired). Rilisto...")
                 succeeded, failed = self._execute_relist_with_verification(scan)
             
             # Golden Retry for Processing items
@@ -167,6 +179,19 @@ class RelistEngine:
                     raise RebootRequestError("Reboot richiesto dall'utente via Telegram")
                 succeeded += retry_s
                 failed += retry_f
+            # Processing wait loop - handles processing items outside golden window.
+            # Usa self._last_scan_result (post-relist) per catturare sia il Caso 1
+            # (solo processing) sia il Caso 2 con residui processing dopo un relist parziale.
+            else:
+                interim_scan = self._last_scan_result or scan
+                if interim_scan.processing_count > 0:
+                    fifa_logger.info(
+                        f"[Processing] {interim_scan.processing_count} item ancora in limbo EA "
+                        f"— attendo transizione prima di tornare al ciclo principale..."
+                    )
+                    proc_s, proc_f = self._processing_wait_loop(interim_scan.processing_count)
+                    succeeded += proc_s
+                    failed += proc_f
 
             # Usa l'ultimo risultato disponibile (aggiornato durante la verifica) 
             # per calcolare il prossimo wait senza scansionare di nuovo il DOM.
@@ -175,8 +200,29 @@ class RelistEngine:
             return succeeded, failed, self._compute_next_wait(post_relist_scan), post_relist_scan, deadline
         
         # Nessun scaduto
+        next_wait = self._compute_next_wait(scan)
+
+        # Stale Page Detection: se il bot fa cicli rapidi (≤30s) consecutivi
+        # senza trovare mai expired, la pagina è probabilmente congelata
+        # (sessione EA scaduta, timer DOM bloccati su valori bassi).
+        if next_wait <= 30 and scan.active_count > 0:
+            self._fast_idle_cycles += 1
+            if self._fast_idle_cycles >= 10:
+                fifa_logger.warning(
+                    f"[Stale Detection] {self._fast_idle_cycles} cicli rapidi senza expired "
+                    f"— pagina probabilmente congelata. Forzo reload..."
+                )
+                self._fast_idle_cycles = 0
+                self.page.reload()
+                self.page.wait_for_timeout(5000)
+                # Riscansioniamo con dati freschi
+                scan = self.detector.scan_listings()
+                next_wait = self._compute_next_wait(scan)
+        else:
+            self._fast_idle_cycles = 0
+
         deadline = self._compute_deadline(datetime.now())
-        return 0, 0, self._compute_next_wait(scan), scan, deadline
+        return 0, 0, next_wait, scan, deadline
 
     def _execute_relist_with_verification(self, scan: ListingScanResult) -> Tuple[int, int]:
         """Esegue il rilist e verifica i risultati con due round."""
@@ -276,6 +322,37 @@ class RelistEngine:
                 break
             
         return retry_s, retry_f, False
+
+    def _processing_wait_loop(self, processing_count: int) -> Tuple[int, int]:
+        """Wait loop for processing items outside golden window.
+        
+        Items in 'Processing' state (EA limbo after expiration) transition
+        to 'Expired' automatically. This loop waits with periodic scans
+        and relists immediately when items are ready.
+        """
+        fifa_logger = logging.getLogger("fifa")
+        max_attempts = 3
+        attempt = 0
+        
+        while attempt < max_attempts:
+            attempt += 1
+            fifa_logger.info(f"[Processing] Attesa {attempt}/{max_attempts} — {processing_count} item in limbo EA...")
+            
+            # Wait 15-30s for EA to transition items
+            wait_secs = random.uniform(15, 30)
+            if self.bot_state.wait_interruptible(int(wait_secs)):
+                return 0, 0
+            
+            # Scan to check if items transitioned
+            scan = self.detector.scan_listings()
+            self._last_scan_result = scan
+            
+            new_truly_expired = scan.expired_count - scan.processing_count
+            if new_truly_expired > 0:
+                fifa_logger.info(f"[Processing] Transizione completata! {new_truly_expired} item ora Expired. Rilisto subito...")
+                return self._execute_relist_with_verification(scan)
+        
+        return 0, 0
 
     def _compute_next_wait(self, scan: ListingScanResult) -> int:
         """Calcola il wait ottimale."""

@@ -272,11 +272,14 @@ class ListingDetector:
             # ma non è un listing attivo — è in limbo post-scadenza lato EA.
             # Il testo del timer ha priorità sulla sezione in questo caso specifico.
             state_text_lower = state_text.lower()
+            is_expired = any(kw in state_text_lower for kw in ("expired", "scadut", "expir"))
             is_processing = any(kw in state_text_lower for kw in ("processing", "elaborazion"))
 
             if section == "sold":
                 state = ListingState.SOLD
             elif section == "expired":
+                state = ListingState.EXPIRED
+            elif section == "active" and is_expired:
                 state = ListingState.EXPIRED
             elif section == "active" and is_processing:
                 # Override: EA mette i Processing... in sezione active, ma vanno trattati

@@ -115,8 +115,13 @@ class RelistExecutor:
             relist_all_btn = self.page.locator(SELECTORS["relist_all_button"]).first
             
             if not relist_all_btn.is_visible():
-                logger.info("Bottone 'Re-list All' non visibile (nessun listing scaduto?)")
-                return RelistBatchResult.from_results([])
+                logger.warning(
+                    f"Bottone 'Re-list All' non visibile per {count} oggetti. "
+                    f"Probabilmente tutti in stato Processing (limbo EA post-scadenza)."
+                )
+                batch_result = RelistBatchResult.from_results([])
+                batch_result.relist_error = None
+                return batch_result
 
             # Il click su locator ha auto-retry se l'elemento si distacca o è coperto momentaneamente
             relist_all_btn.click()

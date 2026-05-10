@@ -4,6 +4,7 @@ NOTE: These tests will fail until T03 creates browser/detector.py.
 That's expected for Wave 0 — tests define the contract before implementation.
 """
 import pytest
+from unittest.mock import MagicMock
 
 
 class TestParsePrice:
@@ -103,3 +104,35 @@ class TestDetermineState:
         from browser.detector import determine_state
         from models.listing import ListingState
         assert determine_state("???") == ListingState.UNKNOWN
+
+
+class TestListingDetector:
+    """Tests for full scan state classification."""
+
+    def test_expired_timer_in_active_section_counts_as_expired(self):
+        """EA can briefly leave newly expired items in the active DOM section."""
+        from browser.detector import ListingDetector
+        from models.listing import ListingState
+
+        page = MagicMock()
+        page.query_selector.return_value = None
+        page.query_selector_all.return_value = [object()]
+        page.evaluate.return_value = ["active"]
+        page.eval_on_selector_all.return_value = [
+            {
+                "name": "Cristiano Ronaldo",
+                "rating": "",
+                "position": "",
+                "state": "Expired",
+                "price": "",
+                "startPrice": "",
+                "time": "Expired",
+            }
+        ]
+
+        result = ListingDetector(page).scan_listings()
+
+        assert result.total_count == 1
+        assert result.active_count == 0
+        assert result.expired_count == 1
+        assert result.listings[0].state == ListingState.EXPIRED

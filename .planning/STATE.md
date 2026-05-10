@@ -1,5 +1,5 @@
 status: production
-last_updated: "2026-05-04T22:40:39.352Z"
+last_updated: "2026-05-07T17:55:00.000Z"
 ---
 
 # Project State — FIFA 26 Auto-Relist Bot
@@ -46,14 +46,64 @@ Regole fondamentali verificate nel codice sorgente:
   2. Se restano oggetti scaduti (non in "Processing") → Secondo Relist → 3s wait → Scan finale.
 - **Fallback Rule:** Ogni blocco decisionale di relist deve sempre prevedere un fallback `else` per la gestione standard.
 **Relist Protocol Golden Hour**
-:08:00 → Bot si sveglia. Pre-Nav Guard: aspetta fino a :09:00 (zero interazione browser)
-:09:00 → Naviga verso Transfer List (~10s)
-:09:10 → In posizione. Golden Sync: aspetta :10:00 (SENZA scansionare, item non ancora scaduti)
-:10:00 → SCANSIONE (item appena scaduti, già sulla pagina → zero navigazione)
-:10:01 → Relist immediato. Se Processing → retry loop (5-10s) → relist ASAP ✓
+| Orario | Azione | Risultato nei Log |
+|--------|--------|-------------------|
+| **16:08:00** | Pre-Nav Guard scatta | `Minuto :08 — attendo pre-nav slot :09:00` 
+| **16:09:00** | Navigazione Transfer List | `Transfer List caricata con successo` 
+| **16:10:00** | SCANSIONE + Relist (4 item) | `4 rilistati, 0 falliti` | ✅ |
+| **17:08:00** | Pre-Nav Guard scatta | `Minuto :08 — attendo pre-nav slot :09:00` 
+| **17:09:00** | Navigazione Transfer List | `Transfer List caricata con successo` 
+| **17:10:00** | SCANSIONE + Relist (4 item) | `4 rilistati, 0 falliti` | ✅ |
+| **18:07:55** | Deadline check | `Deadline 18:08:00 tra 4.1s, cappo chunk a 4.1s` 
+| **18:08:00** | **Immediate exit** dal wait | `Deadline 18:08:00 raggiunta, esco dal wait` 
+| **18:08:00** | Pre-Nav Guard scatta | `Minuto :08 — attendo pre-nav slot :09:00`
+| **18:09:00** | Navigazione Transfer List | `Transfer List caricata con successo` 
+| **18:10:00** | SCANSIONE + Relist (4 item) | `4 rilistati, 0 falliti` se processing Golden Retry 
 
 
 ## 5. Current Activity & Known Issues
+
+### Today's Fixes (May 07, 2026)
+### Root Cause Fix: Telegram Relist Overcount (`17` invece di `16`)
+- **Problema**: Durante la Golden Hour, EA puo lasciare per pochi secondi un item appena scaduto nella sezione DOM `active` con timer/testo `Expired`.
+- **Sintomo osservato**: Dopo `Re-list All` di 16 oggetti, il post-scan contava falsamente `0 scaduti`; il bot calcolava quindi `16` successi invece dei reali `15`. Il Golden Retry rilistava poi l'ultimo item rimasto e la notifica Telegram riportava `17 rilistati`.
+- **Root cause**: `browser/detector.py` classificava qualsiasi item in `section == "active"` come `ACTIVE`, salvo il caso `Processing...`. Mancava l'override per `Expired`/`Scaduto` dentro la sezione active.
+- **Fix (Detector)**: Gli item in sezione `active` con testo `Expired`, `Scaduto` o varianti `expir` vengono ora classificati come `ListingState.EXPIRED`.
+- **Test**: Aggiunto test di regressione in `tests/test_detector.py` per il caso `state='Expired'` + `section='active'`.
+- **Verifica**: `python -m pytest` -> 687 test passano. Nessuna modifica alla Golden Hour logic. ✅
+
+### Root Cause Fix: "Processing" Limbo & Double Notifications
+- **Problema 1**: Gli item in stato "Processing" fuori dalla Golden Window venivano rilevati, ma il bot aspettava il ciclo successivo per relistarli, causando latenza inutile.
+- **Problema 2**: Doppia notifica Telegram in caso di "mix" (alcuni item scaduti, altri in processing). Il primo relist triggerava un report, e il secondo relist (al ciclo dopo) ne triggerava un altro.
+- **Fix (Relist Engine)**: 
+  - `_processing_wait_loop` ora esegue il relist **immediatamente** dopo aver rilevato la transizione da Processing a Expired, tutto nello stesso ciclo.
+  - La logica di decisione in `process_cycle` ora cattura i processing residui post-relist, garantendo che l'intera "ondata" venga gestita in un unico ciclo (e quindi un'unica notifica batch).
+- **Fix (Stale Scan Reset)**: `self._last_scan_result` viene resettato a `None` all'inizio di ogni `process_cycle`. Evita che un valore stale da un ciclo precedente causi il bypass del `_processing_wait_loop` nel Caso 1 (solo processing items).
+
+### Fix: Stale Page Detection (Polling Frenetico su Sessione Scaduta)
+- **Problema**: Quando la sessione EA scade di notte, la pagina si congela. I timer JavaScript si bloccano su valori bassi (es. "< 15 Seconds"). Il bot interpreta i timer come "item in scadenza" e polla ogni ~10s per ore senza trovare mai expired.
+- **Root cause**: `get_min_active_seconds` legge timer congelati → `_compute_next_wait` calcola `max(15 - 20, 10) = 10` → loop infinito di scansioni vuote.
+- **Fix**: Aggiunto **stale page detector** in `process_cycle`: se il bot fa ≥10 cicli rapidi (wait ≤ 30s) consecutivi senza mai trovare expired, forza un `page.reload()` per ottenere dati freschi dal server EA.
+- **Verifica**: Sintassi Python verificata, tutti i 686 test passano. ✅
+
+### Today's Fixes (May 06, 2026)
+### Root Cause Fix: `get_next_golden_hour()`
+- **Problema**: La funzione restituiva la golden hour **corrente** se siamo nella sua finestra (:09-:11), invece della **prossima futura**
+- **Fix**: Modificato `logic/golden_hour.py` → `get_next_golden_hour()` usa confronto stretto `target > now`
+- **Impatto**: Tutti i chiamanti ottengono sempre la prossima golden hour futura
+
+### Semplificazione `_compute_deadline()`
+- **Problema**: Codice difensivo per gestire `deadline <= now` (non serve più)
+- **Fix**: Rimossa logica difensiva in `logic/relist_engine.py::_compute_deadline()`
+- **Impatto**: Codice più pulito e manutenibile
+
+### Deadline Check in `wait_with_heartbeat()`
+- **Problema**: Durante i wait lunghi, il bot poteva oversleepare la :08:00
+- **Fix**: In `browser/session_keeper.py`:
+  - Calcola `secs_to_deadline` prima di ogni chunk
+  - Cappa `chunk` alla deadline (con 1s safety)
+  - **Uscita immediata** quando `now >= deadline` (prima dell'heartbeat)
+  - Gestione caso `secs_to_deadline <= 0` (deadline già passata)
 
 ### Today's Fixes (May 04, 2026)
 - **Today (04 May):** Code Review Fixes & Test Coverage
@@ -87,58 +137,6 @@ Regole fondamentali verificate nel codice sorgente:
 - **Known Issue:** Inosservanza saltuaria dei conflitti 409 Telegram (gestita con backoff di 5s).
 
 ---
-
-## 5b. Fix Implementati (✅ VERIFICATO — 06 Maggio 2026)
-
-### Root Cause Fix: `get_next_golden_hour()`
-- **Problema**: La funzione restituiva la golden hour **corrente** se siamo nella sua finestra (:09-:11), invece della **prossima futura**
-- **Fix**: Modificato `logic/golden_hour.py` → `get_next_golden_hour()` usa confronto stretto `target > now`
-- **Impatto**: Tutti i chiamanti ottengono sempre la prossima golden hour futura
-- **Commit**: `fix: get_next_golden_hour always returns future (root cause fix)`
-
-### Semplificazione `_compute_deadline()`
-- **Problema**: Codice difensivo per gestire `deadline <= now` (non serve più)
-- **Fix**: Rimossa logica difensiva in `logic/relist_engine.py::_compute_deadline()`
-- **Impatto**: Codice più pulito e manutenibile
-
-### Deadline Check in `wait_with_heartbeat()`
-- **Problema**: Durante i wait lunghi, il bot poteva oversleepare la :08:00
-- **Fix**: In `browser/session_keeper.py`:
-  - Calcola `secs_to_deadline` prima di ogni chunk
-  - Cappa `chunk` alla deadline (con 1s safety)
-  - **Uscita immediata** quando `now >= deadline` (prima dell'heartbeat)
-  - Gestione caso `secs_to_deadline <= 0` (deadline già passata)
-- **Commit**: `fix: cap wait_with_heartbeat a deadline :08:00 per Pre-Nav Guard`
-- **Commit**: `fix: immediate exit at deadline for Pre-Nav Guard`
-- **Commit**: `fix: immediate exit if deadline already reached before sleep`
-
-### Risultato Atteso
-Domani, dopo la golden hour delle 18:10, l'utente verificherà:
-1. **Alle 18:08:00** → Pre-Nav Guard scatta puntuale ✅
-2. **Alle 18:09:00** → Navigazione Transfer List ✅
-3. **Alle 18:10:00** → Relist eseguito con Pre-Nav completo ✅
-4. **Sessione morta durante il wait** → Rilevata dall'heartbeat PRIMA delle 18:08 ✅
-
-**Stato**: ✅ VERIFICATO (06 Maggio 2026)
-
-### ✅ Verifica del 06 Maggio 2026
-
-| Orario | Azione | Risultato nei Log | Stato |
-|--------|--------|-------------------|-------|
-| **16:08:00** | Pre-Nav Guard scatta | `Minuto :08 — attendo pre-nav slot :09:00` | ✅ |
-| **16:09:00** | Navigazione Transfer List | `Transfer List caricata con successo` | ✅ |
-| **16:10:00** | SCANSIONE + Relist (4 item) | `4 rilistati, 0 falliti` | ✅ |
-| **17:08:00** | Pre-Nav Guard scatta | `Minuto :08 — attendo pre-nav slot :09:00` | ✅ |
-| **17:09:00** | Navigazione Transfer List | `Transfer List caricata con successo` | ✅ |
-| **17:10:00** | SCANSIONE + Relist (4 item) | `4 rilistati, 0 falliti` | ✅ |
-| **18:07:55** | Deadline check | `Deadline 18:08:00 tra 4.1s, cappo chunk a 4.1s` | ✅ |
-| **18:08:00** | **Immediate exit** dal wait | `Deadline 18:08:00 raggiunta, esco dal wait` | ✅ |
-| **18:08:00** | Pre-Nav Guard scatta | `Minuto :08 — attendo pre-nav slot :09:00` | ✅ |
-| **18:09:00** | Navigazione Transfer List | `Transfer List caricata con successo` | ✅ |
-| **18:10:00** | SCANSIONE + Relist (4 item) | `4 rilistati, 0 falliti` | ✅ |
-
----
-
 ## 6. Historical Archive (Changelog)
 
 <details>
@@ -174,5 +172,5 @@ Domani, dopo la golden hour delle 18:10, l'utente verificherà:
 </details>
 
 ### Test Suite Summary
-- **Total:** 686 tests passing.
+- **Total:** 687 tests passing.
 - **Coverage:** 155 unit tests + 531 golden timeline simulations (added test_relist_engine.py, test_relist_imports.py)
