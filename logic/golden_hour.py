@@ -14,6 +14,14 @@ GOLDEN_CLOSE_WINDOW: range = range(8, 13)    # :08 → :12 "vicino alla golden"
 GOLDEN_PERIOD_START: tuple[int, int] = (15, 10)  # 15:10
 GOLDEN_PERIOD_END: tuple[int, int] = (18, 15)    # 18:15
 
+# ---------------------------------------------------------------------------
+# Costanti Processing Items Fuori Golden Window
+# ---------------------------------------------------------------------------
+PROCESSING_MAX_ATTEMPTS: int = 15           # Tentativi massimi per processing items
+PROCESSING_MIN_WAIT: int = 30               # Attesa minima in secondi
+PROCESSING_MAX_WAIT: int = 60               # Attesa massima in secondi
+PROCESSING_MAX_TOTAL_TIME: int = 300        # Timeout massimo totale (5 minuti)
+
 logger = logging.getLogger(__name__)
 
 def get_min_active_seconds(scan: ListingScanResult) -> int | None:

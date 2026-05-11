@@ -16,7 +16,11 @@ from logic.golden_hour import (
     get_next_golden_hour,
     is_close_to_golden,
     get_min_active_seconds,
-    GOLDEN_HOURS
+    GOLDEN_HOURS,
+    PROCESSING_MAX_ATTEMPTS,
+    PROCESSING_MIN_WAIT,
+    PROCESSING_MAX_WAIT,
+    PROCESSING_MAX_TOTAL_TIME
 )
 
 logger = logging.getLogger(__name__)
@@ -329,19 +333,32 @@ class RelistEngine:
         Items in 'Processing' state (EA limbo after expiration) transition
         to 'Expired' automatically. This loop waits with periodic scans
         and relists immediately when items are ready.
+        
+        Enhanced with:
+        - More attempts (15 instead of 3)
+        - Longer wait times (30-60s instead of 15-30s)
+        - Total timeout fallback (5 minutes)
         """
         fifa_logger = logging.getLogger("fifa")
-        max_attempts = 3
+        max_attempts = PROCESSING_MAX_ATTEMPTS
         attempt = 0
+        total_time_elapsed = 0
         
-        while attempt < max_attempts:
+        while attempt < max_attempts and total_time_elapsed < PROCESSING_MAX_TOTAL_TIME:
             attempt += 1
-            fifa_logger.info(f"[Processing] Attesa {attempt}/{max_attempts} — {processing_count} item in limbo EA...")
+            fifa_logger.info(
+                f"[Processing] Attesa {attempt}/{max_attempts} ({total_time_elapsed}s/{PROCESSING_MAX_TOTAL_TIME}s) — "
+                f"{processing_count} item in limbo EA..."
+            )
             
-            # Wait 15-30s for EA to transition items
-            wait_secs = random.uniform(15, 30)
+            # Calculate remaining time to not exceed total timeout
+            remaining_timeout = PROCESSING_MAX_TOTAL_TIME - total_time_elapsed
+            wait_secs = min(random.uniform(PROCESSING_MIN_WAIT, PROCESSING_MAX_WAIT), remaining_timeout)
+            
             if self.bot_state.wait_interruptible(int(wait_secs)):
                 return 0, 0
+            
+            total_time_elapsed += int(wait_secs)
             
             # Scan to check if items transitioned
             scan = self.detector.scan_listings()
@@ -349,8 +366,25 @@ class RelistEngine:
             
             new_truly_expired = scan.expired_count - scan.processing_count
             if new_truly_expired > 0:
-                fifa_logger.info(f"[Processing] Transizione completata! {new_truly_expired} item ora Expired. Rilisto subito...")
+                fifa_logger.info(
+                    f"[Processing] Transizione completata! {new_truly_expired} item ora Expired dopo {total_time_elapsed}s. "
+                    f"Rilisto subito..."
+                )
                 return self._execute_relist_with_verification(scan)
+        
+        # Fallback strategy: if we exhausted all attempts or hit total timeout
+        if total_time_elapsed >= PROCESSING_MAX_TOTAL_TIME:
+            fifa_logger.warning(
+                f"[Processing] Timeout massimo raggiunto ({PROCESSING_MAX_TOTAL_TIME}s). "
+                f"{scan.processing_count} item rimangono in limbo EA. "
+                f"Item verranno processati al prossimo ciclo."
+            )
+        else:
+            fifa_logger.warning(
+                f"[Processing] Tentativi massimi raggiunti ({max_attempts}). "
+                f"{scan.processing_count} item rimangono in limbo EA. "
+                f"Item verranno processati al prossimo ciclo."
+            )
         
         return 0, 0
 
