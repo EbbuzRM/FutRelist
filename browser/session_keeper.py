@@ -7,7 +7,7 @@ from datetime import datetime
 from browser.controller import BrowserController
 from browser.auth import AuthManager
 from browser.error_handler import ensure_session
-from bot_state import BotState
+from bot_state import BotState, RebootRequestError
 from notifier import send_telegram_alert, send_telegram_error_with_screenshot
 
 logger = logging.getLogger(__name__)
@@ -25,13 +25,15 @@ class SessionKeeper:
         auth: AuthManager, 
         bot_state: BotState, 
         page, 
-        get_credentials_fn
+        get_credentials_fn,
+        notifications_config
     ):
         self.controller = controller
         self.auth = auth
         self.bot_state = bot_state
         self.page = page
         self.get_credentials = get_credentials_fn
+        self.notifications_config = notifications_config
 
     def ensure_session(self, timeout_ms: int = 10000) -> None:
         """Verifica e ripristina la sessione se necessaria."""
@@ -51,8 +53,10 @@ class SessionKeeper:
             return True
 
         if self.bot_state.is_paused():
-            logger.info("[Telegram] Bot in pausa — skip scanning")
-            status_console.print(self._make_status_table("⏸️ In Pausa (Telegram)", 0, 0, 0))
+            until = self.bot_state.get_pause_until()
+            until_str = f" (auto-resume alle {until.strftime('%H:%M')})" if until else ""
+            logger.info(f"[Telegram] Bot in pausa{until_str} — skip scanning")
+            status_console.print(self._make_status_table(f"⏸️ In Pausa (Telegram){until_str}", 0, 0, 0))
             self.bot_state.wait_interruptible(300)  # 5 minuti; si sveglia subito su /resume o /reboot
             return True
             
@@ -166,6 +170,30 @@ class SessionKeeper:
 
             if not self.auth.is_logged_in(self.page, timeout_ms=3000):
                 logger.warning("Heartbeat ha rilevato sessione scaduta.")
+                
+                try:
+                    # 1. Avvia recupero sessione
+                    logger.info("Tentativo di recupero sessione...")
+                    self.ensure_session(timeout_ms=10000)
+                    
+                    # 2. Verifica se il recupero ha avuto successo
+                    if self.auth.is_logged_in(self.page, timeout_ms=3000):
+                        logger.info("Recupero sessione riuscito!")
+                    else:
+                        raise Exception("Recupero sessione fallito - utente non ancora autenticato")
+                        
+                except Exception as recovery_error:
+                    logger.error(f"Recupero sessione fallito: {recovery_error}")
+                    
+                    # 3. Invia notifica Telegram con screenshot
+                    send_telegram_error_with_screenshot(
+                        self.notifications_config, 
+                        f"❌ Recupero sessione fallito: {recovery_error}. Riavio il bot...",
+                        page=self.page
+                    )
+                    
+                    # 4. Solleva RebootRequestError per riavviare il bot
+                    raise RebootRequestError(f"Impossibile recuperare la sessione: {recovery_error}")
 
         except Exception as e:
             logger.debug(f"Errore heartbeat: {e}")

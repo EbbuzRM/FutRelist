@@ -127,7 +127,7 @@ def main() -> None:
             detector = ListingDetector(page)
             executor = RelistExecutor(page, config, rate_limiter)
 
-            keeper = SessionKeeper(controller, auth, bot_state, page, get_credentials)
+            keeper = SessionKeeper(controller, auth, bot_state, page, get_credentials, app_config.notifications)
             engine = RelistEngine(page, config, navigator, detector, executor, auth, bot_state)
             batch = NotificationBatch()
 
