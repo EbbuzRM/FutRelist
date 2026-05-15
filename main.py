@@ -9,6 +9,7 @@ import logging
 import os
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -189,7 +190,7 @@ def main() -> None:
                 keeper.ensure_session()
 
                 try:
-                    succeeded, failed, next_wait, scan_result, deadline = engine.process_cycle()
+                    succeeded, failed, next_wait, scan_result, deadline, _pre_expired_count = engine.process_cycle()
                     batch.accumulate(scan_result, succeeded, failed)
 
                     # Flush solo se le condizioni di batch sono soddisfatte
@@ -229,7 +230,7 @@ def main() -> None:
                 if telegram:
                     telegram.stop()
                 controller.stop()
-            except:
+            except Exception:
                 pass
             continue
 
@@ -259,10 +260,8 @@ def main() -> None:
             )
             time.sleep(10)
 
-            try:
+            with suppress(Exception):
                 batch.flush_if_any(app_config, page_ref, logger, scan_ref, force=True)
-            except Exception:
-                pass
 
             try:
                 if telegram:
@@ -272,10 +271,8 @@ def main() -> None:
                 pass
 
             # Forza kill Chrome orfano + attendi unlock profilo prima di os.execv
-            try:
+            with suppress(Exception):
                 controller.force_kill_chrome()
-            except Exception:
-                pass
             time.sleep(3)
 
             # os.execv per garantire reload completo dei moduli (evita moduli stale in memoria)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
+from contextlib import suppress
 from datetime import datetime
 
 from bot_state import RebootRequestError
@@ -69,11 +70,11 @@ class RelistEngine:
     def process_cycle(
         self,
     ) -> tuple[
-        int, int, int, ListingScanResult, datetime | None
+        int, int, int, ListingScanResult, datetime | None, int
     ]:  # ME-12: rimossi cycle_num e session_keeper (non utilizzati)
         """
         Esegue un singolo ciclo di gestione rilist.
-        Ritorna (succeeded, failed, next_wait, scan_result, deadline).
+        Ritorna (succeeded, failed, next_wait, scan_result, deadline, pre_relist_expired_count).
 
         La deadline è la prossima :08:00 durante il golden period (per il Pre-Nav Guard).
         """
@@ -102,27 +103,33 @@ class RelistEngine:
         # 2. Navigazione (avviene normalmente, o al minuto :09 durante golden period)
         if not self._navigate_with_retry():
             deadline = self._compute_deadline(datetime.now())
-            return 0, 0, 60, ListingScanResult.empty(), deadline
+            return 0, 0, 60, ListingScanResult.empty(), deadline, 0
 
         # 3. Golden Sync: se siamo a :09, il bot è GIÀ sulla Transfer List.
         #    NON scansionare adesso — gli item non sono ancora scaduti.
         #    Aspetta fino a :10:00 e poi scansiona con dati freschi.
         now = datetime.now()
         next_golden = get_next_golden_hour(now)
-        if next_golden and is_in_golden_period(now) and now < next_golden:
-            if is_in_golden_window(now) and now.minute == 9:
-                wait_secs = (next_golden - now).total_seconds()
-                logger.info(
-                    f"[Golden] In posizione sulla Transfer List ✅ "
-                    f"Attendo :10:00 ({int(wait_secs)}s) per scansione + relist."
-                )
-                if self.bot_state.wait_interruptible(wait_secs):
-                    raise RebootRequestError("Reboot richiesto")
+        if (
+            next_golden
+            and is_in_golden_period(now)
+            and is_in_golden_window(now)
+            and now.minute == 9
+            and now < next_golden
+        ):
+            wait_secs = (next_golden - now).total_seconds()
+            logger.info(
+                f"[Golden] In posizione sulla Transfer List ✅ "
+                f"Attendo :10:00 ({int(wait_secs)}s) per scansione + relist."
+            )
+            if self.bot_state.wait_interruptible(wait_secs):
+                raise RebootRequestError("Reboot richiesto")
 
         # 4. Scansione — a :10 durante golden (item appena scaduti), subito altrimenti.
         #    Il bot è già sulla Transfer List: scan diretta, ZERO navigazione.
         self._fifa_logger.info(f"--- [SCANSIONE] Minuto {datetime.now().minute}:{datetime.now().second:02d} ---")
         scan = self.detector.scan_listings()
+        pre_expired_count = scan.expired_count  # Salva il conteggio pre-relist per il return
 
         # 5. Heuristic Relist Manuale
         #    Rileva quando l'utente ha effettuato un relist manuale (batch di item listati insieme).
@@ -140,9 +147,9 @@ class RelistEngine:
             seconds_since_bot = self.bot_state.get_seconds_since_last_relist_by_bot()
             if seconds_since_bot is None or seconds_since_bot >= 180:
                 active_times = [
-                    l.time_remaining_seconds
-                    for l in scan.listings
-                    if l.state == ListingState.ACTIVE and l.time_remaining_seconds
+                    listing.time_remaining_seconds
+                    for listing in scan.listings
+                    if listing.state == ListingState.ACTIVE and listing.time_remaining_seconds
                 ]
                 if active_times:
                     min_t, max_t = min(active_times), max(active_times)
@@ -155,7 +162,7 @@ class RelistEngine:
                             f"[⚠️ RELIST MANUALE RILEVATO] Bot si ritira. Prossimo check tra {min_t - 20}s."
                         )
                         deadline = self._compute_deadline(datetime.now())
-                        return 0, 0, max(min_t - 20, 60), scan, deadline
+                        return 0, 0, max(min_t - 20, 60), scan, deadline, pre_expired_count
 
         # 6. Decisione Relist
         if scan.expired_count > 0:
@@ -176,7 +183,7 @@ class RelistEngine:
                         f"[HOLD] {scan.expired_count} scaduti in HOLD. Prossima golden: {next_g.strftime('%H:%M')}. Attesa: {hold_wait}s."
                     )
                     deadline = self._compute_deadline(now_relist)
-                    return 0, 0, hold_wait, scan, deadline
+                    return 0, 0, hold_wait, scan, deadline, pre_expired_count
                 # No more goldens -> override hold
                 in_hold = False
 
@@ -240,7 +247,7 @@ class RelistEngine:
             # per calcolare il prossimo wait senza scansionare di nuovo il DOM.
             post_relist_scan = self._last_scan_result or self.detector.scan_listings()
             deadline = self._compute_deadline(datetime.now())
-            return succeeded, failed, self._compute_next_wait(post_relist_scan), post_relist_scan, deadline
+            return succeeded, failed, self._compute_next_wait(post_relist_scan), post_relist_scan, deadline, pre_expired_count
 
         # Nessun scaduto
         next_wait = self._compute_next_wait(scan)
@@ -267,7 +274,7 @@ class RelistEngine:
             self._fast_idle_cycles = 0
 
         deadline = self._compute_deadline(datetime.now())
-        return 0, 0, next_wait, scan, deadline
+        return 0, 0, next_wait, scan, deadline, pre_expired_count
 
     def _execute_relist_with_verification(self, scan: ListingScanResult) -> tuple[int, int]:
         """Esegue il rilist e verifica i risultati con due round."""
@@ -338,11 +345,11 @@ class RelistEngine:
             )
             return first_succeeded, 0
         else:
-            expired = [l for l in scan.listings if l.needs_relist]
+            expired = [listing for listing in scan.listings if listing.needs_relist]
             succeeded = 0
             failed = 0
-            for l in expired:
-                res = self.executor.relist_single(l)
+            for listing in expired:
+                res = self.executor.relist_single(listing)
                 if res.success:
                     succeeded += 1
                     action_logger.info(
@@ -600,7 +607,5 @@ class RelistEngine:
         screenshot_dir = Path(self.config.get("screenshot_dir", "logs/screenshots"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         path = screenshot_dir / f"relist_error_{ts}.png"
-        try:
+        with suppress(Exception):
             self.page.screenshot(path=path)
-        except Exception:
-            pass
