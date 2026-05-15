@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 from pathlib import Path
 import logging.handlers
 
@@ -12,20 +13,23 @@ def setup_logging() -> None:
     log_dir.mkdir(exist_ok=True)
 
     class CustomDailyRotatingHandler(logging.handlers.TimedRotatingFileHandler):
+        _rollover_lock = threading.Lock()
+
         def doRollover(self):
-            super().doRollover()
-            log_dir_str = os.path.dirname(self.baseFilename)
-            old_log_file = os.path.join(log_dir_str, "old-log.txt")
-            for f in os.listdir(log_dir_str):
-                if f.startswith("app.log."):
-                    file_path = os.path.join(log_dir_str, f)
-                    try:
-                        with open(file_path, "r", encoding="utf-8") as src, \
-                             open(old_log_file, "a", encoding="utf-8") as dst:
-                            dst.write(src.read())
-                        os.remove(file_path)
-                    except Exception:
-                        pass
+            with self._rollover_lock:
+                super().doRollover()
+                log_dir_str = os.path.dirname(self.baseFilename)
+                old_log_file = os.path.join(log_dir_str, "old-log.txt")
+                for f in os.listdir(log_dir_str):
+                    if f.startswith("app.log."):
+                        file_path = os.path.join(log_dir_str, f)
+                        try:
+                            with open(file_path, "r", encoding="utf-8") as src, \
+                                 open(old_log_file, "a", encoding="utf-8") as dst:
+                                dst.write(src.read())
+                            os.remove(file_path)
+                        except Exception:
+                            pass
 
     file_handler = CustomDailyRotatingHandler(
         filename=log_dir / "app.log",
