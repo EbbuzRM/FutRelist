@@ -3,11 +3,15 @@ from datetime import datetime
 from typing import Optional
 from models.listing import ListingScanResult
 from notifier import send_telegram_photo
+import tempfile
+import os
 
 class NotificationBatch:
     """
     Aggrega le statistiche di rilist per inviare notifiche Telegram batch,
     evitando di spammare l'utente a ogni singolo ciclo.
+    Il flush è determinato da `is_ready_to_flush(current_wait)`: quando il
+    prossimo wait è lungo (> batch_window), significa che l'ondata e' finita.
     """
     def __init__(self, batch_window_seconds: int = 120, max_cycles: int = 5):
         self.batch_window_seconds = batch_window_seconds
@@ -19,72 +23,117 @@ class NotificationBatch:
         self.last_flush_time: Optional[datetime] = None
 
     def accumulate(self, scan: ListingScanResult, succeeded: int, failed: int):
-        """Aggiunge i risultati di un ciclo all'accumulatore."""
+        """Aggiunge i risultati di un ciclo all'accumulatore.
+
+        expired_detected usa succeeded+failed come proxy degli scaduti trovati:
+        la scan_result arriva post-relist, quando gli item sono gia' tornati ACTIVE,
+        quindi scan.expired_count sarebbe sempre 0 dopo un relist riuscito.
+        """
         self.relisted += succeeded
         self.failed += failed
         self.cycles += 1
-        self.expired_detected += scan.expired_count
+        self.expired_detected += succeeded + failed  # proxy: scaduti trovati = item tentati
 
     def is_ready_to_flush(self, current_wait: int) -> bool:
         """
-        Determina se è il momento di inviare la notifica.
+        Determina se e' il momento di inviare la notifica.
         Flush se:
-        1. C'è stata attività (rilist riusciti o fallimenti)
+        1. C'e' stata attivita' (rilist riusciti o fallimenti)
         2. E si verifica una delle condizioni di flush:
-           - Il prossimo wait è lungo (> batch_window), quindi abbiamo finito una 'ondata'
+           - Il prossimo wait e' lungo (> batch_window), quindi abbiamo finito una 'ondata'
            - Abbiamo raggiunto il numero massimo di cicli
+           - E' trascorso piu' di batch_window_seconds dall'ultimo flush
         """
         if self.cycles == 0:
             return False
-        
-        # Evita notifiche se non è successo nulla (nessun rilist e nessun fallimento)
+
+        # Evita notifiche se non e' successo nulla (nessun rilist e nessun fallimento)
         if self.relisted == 0 and self.failed == 0:
             return False
-        
+
         # Se il bot sta per dormire a lungo, invia subito il report dell'ondata appena conclusa
         if current_wait > self.batch_window_seconds:
             return True
-        
+
         # Se abbiamo fatto troppi cicli rapidi, flush per dare feedback
         if self.cycles >= self.max_cycles:
             return True
-            
+
+        # Flush se e' gia' passato batch_window_seconds dall'ultimo report,
+        # cosi' l'utente riceve aggiornamenti anche durante ondate lunghe a cicli rapidi.
+        if self.last_flush_time is not None:
+            elapsed = (datetime.now() - self.last_flush_time).total_seconds()
+            if elapsed >= self.batch_window_seconds:
+                return True
+
         return False
 
-    def flush(self, app_config, page, logger, scan: Optional[ListingScanResult] = None, last_relist_error: Optional[str] = None):
-        """Invia il report aggregato a Telegram e resetta i contatori."""
-        if not app_config.notifications.telegram_token:
+    def flush_if_any(self, app_config, page, logger, scan: Optional[ListingScanResult] = None, last_relist_error: Optional[str] = None, force: bool = False):
+        """Invia il report se c'e' stata attivita' e le condizioni di flush sono soddisfatte.
+
+        Args:
+            force: Se True, forza il flush indipendentemente dalle condizioni (usato per shutdown/reboot).
+        """
+        if self.cycles == 0:
             return
 
-        screenshot_path = "relist_report.png"
+        if not force and not self.is_ready_to_flush(0):
+            return
+
+        if not app_config.notifications.telegram_token or not app_config.notifications.telegram_chat_id:
+            logger.warning("Skip notifica: token o chat_id mancante")
+            self.reset()
+            return
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            screenshot_path = tmp.name
+
         try:
-            # Report the actual accumulated count since last flush, not capped to current scan
             rilistati = self.relisted
             totale_oggetti = scan.total_count if scan else 0
-            
-            page.screenshot(path=screenshot_path)
-            error_msg = f" ⚠️ Error: {last_relist_error}" if last_relist_error else ""
-            
+
+            screenshot_taken = False
+            if page:
+                try:
+                    if "signin.ea.com" in page.url.lower():
+                        logger.warning("Skip screenshot: pagina di login (sicurezza credenziali)")
+                    else:
+                        page.screenshot(path=screenshot_path)
+                        screenshot_taken = True
+                except Exception as screenshot_err:
+                    logger.warning(f"Screenshot fallito: {screenshot_err}")
+
+            error_msg = f" \u26a0\ufe0f Error: {last_relist_error}" if last_relist_error else ""
+
             msg = (
-                f"🔔 Report Aggregato\n"
+                f"\U0001f514 Report Relist\n"
                 f"-------------------\n"
-                f"📦 Cicli: {self.cycles}\n"
-                f"📋 Totale oggetti: {totale_oggetti}\n"
-                f"🚀 Relistati: {rilistati}\n"
-                f"❌ Falliti: {self.failed}{error_msg}\n"
-                f"🕒 Modalità: ⚽ Drift Ibrido"
+                f"\U0001f4e6 Cicli totali: {self.cycles}\n"
+                f"\U0001f4cb Totale oggetti: {totale_oggetti}\n"
+                f"\u23f0 Scaduti rilevati: {self.expired_detected}\n"
+                f"\U0001f680 Relistati: {rilistati}\n"
+                f"\u274c Falliti: {self.failed}{error_msg}\n"
+                f"\U0001f552 Modalita': \u26bd Relist Ibrido"
             )
-            
-            send_telegram_photo(app_config.notifications, screenshot_path, msg)
-            logger.info(f"Notifica batch inviata: {self.relisted} rilistati, {self.failed} falliti.")
-            
+
+            if screenshot_taken:
+                send_telegram_photo(app_config.notifications, screenshot_path, msg)
+            else:
+                from notifier import send_telegram_alert
+                send_telegram_alert(app_config.notifications, msg)
+            logger.info(f"Notifica inviata: {self.relisted} rilistati, {self.failed} falliti.")
+
         except Exception as e:
-            logger.error(f"Errore invio notifica batch: {e}")
+            logger.error(f"Errore invio notifica: {e}")
         finally:
-            import os
             if os.path.exists(screenshot_path):
                 os.remove(screenshot_path)
             self.reset()
+
+    # Alias per compatibilita'
+    def flush(self, app_config, page, logger, scan: Optional[ListingScanResult] = None, last_relist_error: Optional[str] = None, force: bool = False):
+        """Flush standard — ora chiama flush_if_any per compatibilita'."""
+        self.flush_if_any(app_config, page, logger, scan, last_relist_error, force=force)
 
     def reset(self):
         """Resetta i contatori del batch."""

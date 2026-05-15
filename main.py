@@ -3,7 +3,6 @@ FIFA 26 Auto-Relist Tool
 Refactored Entrypoint
 """
 from __future__ import annotations
-import argparse
 import logging
 import os
 import sys
@@ -67,8 +66,9 @@ def authenticate(controller, auth, page) -> None:
                             auth.wait_for_click_shield(page, timeout_ms=10000)
                         # Fallback: click via JavaScript (SEMPRE tentato)
                         try:
-                            page.evaluate("document.querySelector('.btn-standard.primary')?.click()")
-                            break
+                            clicked = page.evaluate("el = document.querySelector('.btn-standard.primary'); if (el) { el.click(); return true; } return false;")
+                            if clicked:
+                                break
                         except Exception:
                             pass
                         # Fallback: force click (SEMPRE tentato)
@@ -99,7 +99,6 @@ def main() -> None:
     load_dotenv()
     setup_logging()
     logger = logging.getLogger(__name__)
-    fifa_logger = logging.getLogger("fifa")
     status_console = Console()
 
     cm = ConfigManager()
@@ -125,7 +124,7 @@ def main() -> None:
             )
             navigator = TransferMarketNavigator(page, config, rate_limiter)
             detector = ListingDetector(page)
-            executor = RelistExecutor(page, config, rate_limiter)
+            executor = RelistExecutor(page, config, rate_limiter, auth)
 
             keeper = SessionKeeper(controller, auth, bot_state, page, get_credentials, app_config.notifications)
             engine = RelistEngine(page, config, navigator, detector, executor, auth, bot_state)
@@ -139,13 +138,14 @@ def main() -> None:
                     page=page,
                     log_dir=Path(__file__).parent / "logs",
                 )
-                telegram.set_sold_handler(SoldHandler(page, config, rate_limiter))
+                telegram.set_sold_handler(SoldHandler(page, config, rate_limiter, navigator=navigator))
                 telegram.start()
             else:
                 telegram = None
 
-            # Conferma avvio sessione (sia all'inizio che dopo reboot)
-            send_telegram_alert(app_config.notifications, "✅ Bot avviato e pronto!")
+            # Nota: nessuna notifica di avvio qui — l'utente riceve solo il
+            # report batch al termine del relist (batch.flush). Evita spam
+            # ad ogni reboot automatico.
 
             cycle = 0
             while True:
@@ -162,22 +162,33 @@ def main() -> None:
                     cmd = bot_state.get_next_command()
                     if not cmd:
                         continue
-                        
-                    if cmd.get("type") == "del_sold":
-                        res = cmd.get("callback")()
-                        send_telegram_alert(app_config.notifications, f"🧹 Pulizia: {res.items_cleared} oggetti")
-                    elif cmd.get("type") == "screenshot":
-                        cmd.get("callback")()
+                    cmd_type = cmd.get("type")
+                    callback = cmd.get("callback")
+                    if not callable(callback):
+                        logger.warning(f"Comando con callback non valido ignorato: {cmd}")
+                        continue
+                    try:
+                        if cmd_type == "del_sold":
+                            res = callback()
+                            send_telegram_alert(app_config.notifications, f"🧹 Pulizia: {res.items_cleared} oggetti")
+                        elif cmd_type == "screenshot":
+                            callback()
+                        else:
+                            logger.warning(f"Tipo di comando sconosciuto: {cmd_type}")
+                    except Exception as e:
+                        logger.error(f"Errore nel processing del comando Telegram {cmd_type}: {e}")
+                        send_telegram_alert(app_config.notifications, f"❌ Comando /{cmd_type} fallito: {e}")
 
                 keeper.ensure_session()
 
                 try:
-                    succeeded, failed, next_wait, scan_result, deadline = engine.process_cycle(cycle, keeper)
-                    # stats are now updated inside engine.process_cycle to avoid race conditions with manual relist detection
+                    succeeded, failed, next_wait, scan_result, deadline = engine.process_cycle()
                     batch.accumulate(scan_result, succeeded, failed)
 
+                    # Flush solo se le condizioni di batch sono soddisfatte
+                    # (ondata finita, max cicli, o timeout dall'ultimo flush)
                     if batch.is_ready_to_flush(next_wait):
-                        batch.flush(app_config, page, logger, scan_result)
+                        batch.flush_if_any(app_config, page, logger, scan_result)
 
                     rate_limiter.wait()
                     if keeper.wait_with_heartbeat(next_wait, logger, deadline=deadline):
@@ -186,19 +197,24 @@ def main() -> None:
                 except RebootRequestError:
                     # Inviato dal golden loop o dal supervisor per forzare un riavvio dolce
                     logger.info("Ricevuta richiesta di Reboot interno asincrono.")
+                    batch.flush_if_any(app_config, page, logger, locals().get('scan_result'), force=True)
                     break
                 except InterruptedError:
                     # This normally means Ctrl+C or a fatal signal to stop the whole app
                     controller.stop()
+                    batch.flush_if_any(app_config, page, logger, None, force=True)
                     return
 
             # Inner loop broke (Reboot requested or heartbeat reboot)
             if telegram:
                 telegram.stop()
-            keeper.handle_reboot(controller, app_config.notifications)
+            batch.flush_if_any(app_config, page, logger, locals().get('scan_result'), force=True)
+            keeper.handle_reboot()
         
         except ConsoleSessionError:
             logger.warning("Terminazione forzata del ciclo per Console attiva. Preparazione riavvio silente...")
+            from notifier import send_telegram_emergency_alert
+            send_telegram_emergency_alert(app_config.notifications, "🎮 Console session rilevata — bot in pausa per prevenire ban risk.")
             try:
                 if telegram:
                     telegram.stop()
@@ -207,26 +223,56 @@ def main() -> None:
                 pass
             continue
             
-        except Exception as e:
-            if 'keeper' in locals():
-                keeper.handle_critical_error(e, app_config.notifications)
-            else:
-                logger.exception(f"Errore critico prima dell'inizializzazione del keeper: {e}")
-                # Prova a catturare screenshot se il page è disponibile
-                page_ref = page if 'page' in locals() else None
-                send_telegram_error_with_screenshot(
-                    app_config.notifications, 
-                    f"🚨 Errore critico: {e}. Riavvio tra 30s...",
-                    page=page_ref
-                )
-                time.sleep(30)
-            
+        except (MemoryError, RecursionError) as e:
+            # Errori fatali: reboot inutile, termina il processo
+            err_msg = f"🚨 ERRORE FATALE ({type(e).__name__}): {e}. Processo terminato."
+            logger.critical(err_msg)
+            try:
+                batch.flush_if_any(app_config, page, logger, None, force=True)
+                send_telegram_alert(app_config.notifications, err_msg)
+            except Exception:
+                pass
             try:
                 if telegram:
                     telegram.stop()
                 controller.stop()
-            except:
+            except Exception:
                 pass
+            sys.exit(1)
+
+        except Exception as e:
+            logger.exception(f"Errore critico: {e}")
+            page_ref = page if 'page' in locals() else None
+            scan_ref = locals().get('scan_result')
+            send_telegram_error_with_screenshot(
+                app_config.notifications, 
+                f"🚨 Errore critico: {e}. Riavvio in corso...",
+                page=page_ref
+            )
+            time.sleep(10)
+
+            try:
+                batch.flush_if_any(app_config, page_ref, logger, scan_ref, force=True)
+            except Exception:
+                pass
+
+            try:
+                if telegram:
+                    telegram.stop()
+                controller.stop()
+            except Exception:
+                pass
+
+            # Forza kill Chrome orfano + attendi unlock profilo prima di os.execv
+            try:
+                controller.force_kill_chrome()
+            except Exception:
+                pass
+            time.sleep(3)
+
+            # os.execv per garantire reload completo dei moduli (evita moduli stale in memoria)
+            logger.info("Riavvio processo via os.execv dopo errore critico...")
+            os.execv(sys.executable, [sys.executable, sys.argv[0]])
 
 
 if __name__ == "__main__":
