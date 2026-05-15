@@ -1,8 +1,10 @@
 """Test per BotState — dataclass thread-safe per stato condiviso del bot."""
+
 import threading
 import time
-from datetime import datetime
 from collections import deque
+from datetime import datetime, timedelta
+
 from bot_state import BotState
 
 
@@ -58,6 +60,80 @@ class TestBotStatePaused:
         assert state.is_paused() is False
         state.set_paused(True)
         assert state.is_paused() is True
+
+    def test_timed_pause_auto_resumes_after_deadline(self):
+        """set_paused(True, hours=N) auto-resume dopo la scadenza."""
+        state = BotState()
+        state.set_paused(True, hours=0.001)
+        state._pause_until = datetime.now() - timedelta(seconds=1)
+
+        assert state.is_paused() is False
+        assert state.get_pause_until() is None
+
+    def test_resume_clears_timed_pause_deadline(self):
+        """set_paused(False) cancella anche la scadenza di auto-resume."""
+        state = BotState()
+        state.set_paused(True, hours=4)
+
+        assert state.get_pause_until() is not None
+
+        state.set_paused(False)
+
+        assert state.is_paused() is False
+        assert state.get_pause_until() is None
+
+    def test_status_applies_timed_pause_auto_resume(self):
+        """get_status() non deve mostrare una pausa temporizzata già scaduta."""
+        state = BotState()
+        state.set_paused(True, hours=0.001)
+        state._pause_until = datetime.now() - timedelta(seconds=1)
+
+        status = state.get_status()
+
+        assert status["paused"] is False
+        assert status["pause_until"] is None
+
+    def test_set_paused_wakes_interruptible_wait_immediately(self):
+        """set_paused() deve svegliare wait_interruptible senza attendere il polling chunk."""
+        state = BotState()
+        result = {}
+
+        def waiter():
+            start = time.monotonic()
+            result["reboot"] = state.wait_interruptible(5)
+            result["elapsed"] = time.monotonic() - start
+
+        thread = threading.Thread(target=waiter)
+        thread.start()
+        time.sleep(0.1)
+
+        state.set_paused(True)
+        thread.join(timeout=1)
+
+        assert thread.is_alive() is False
+        assert result["reboot"] is False
+        assert result["elapsed"] < 1
+
+    def test_set_force_relist_wakes_interruptible_wait_immediately(self):
+        """set_force_relist() deve svegliare wait_interruptible come i comandi accodati."""
+        state = BotState()
+        result = {}
+
+        def waiter():
+            start = time.monotonic()
+            result["reboot"] = state.wait_interruptible(5)
+            result["elapsed"] = time.monotonic() - start
+
+        thread = threading.Thread(target=waiter)
+        thread.start()
+        time.sleep(0.1)
+
+        state.set_force_relist(True)
+        thread.join(timeout=1)
+
+        assert thread.is_alive() is False
+        assert result["reboot"] is False
+        assert result["elapsed"] < 1
 
 
 class TestBotStateForceRelist:
@@ -136,12 +212,12 @@ class TestBotStateUpdateStats:
         assert state.last_relisted == 5
         assert state.last_failed == 1
         assert state.total_relisted == 5
-        
+
         # Nuovo ciclo 2
         state.update_stats(cycle=1, relisted=1, failed=1)
         assert state.cycle_count == 2
         assert state.last_relisted == 1  # Resettato
-        assert state.total_relisted == 6 # Accumulato storicamente
+        assert state.total_relisted == 6  # Accumulato storicamente
 
 
 class TestBotStateThreadSafety:
@@ -240,20 +316,20 @@ class TestBotStatePendingCommandsDeque:
         bot_state = BotState()
         bot_state.queue_command("force_relist")
         bot_state.queue_command("screenshot")
-        
+
         # First command should be the first one added (FIFO)
         cmd1 = bot_state.get_next_command()
         assert cmd1 is not None
         assert cmd1["type"] == "force_relist"
-        
+
         # Queue should have 1 item left
         assert len(bot_state._pending_commands) == 1
-        
+
         # Second command should be the second one added
         cmd2 = bot_state.get_next_command()
         assert cmd2 is not None
         assert cmd2["type"] == "screenshot"
-        
+
         # Queue should be empty now
         assert len(bot_state._pending_commands) == 0
 
@@ -267,8 +343,8 @@ class TestBotStatePendingCommandsDeque:
         """queue_command should add commands to the deque."""
         bot_state = BotState()
         assert len(bot_state._pending_commands) == 0
-        
+
         bot_state.queue_command("test_command")
-        
+
         assert len(bot_state._pending_commands) == 1
         assert isinstance(bot_state._pending_commands, deque)

@@ -1,9 +1,11 @@
-import urllib.request
 import json
 import logging
 import os
+import time
+import urllib.request
 
 logger = logging.getLogger(__name__)
+
 
 def send_telegram_emergency_alert(config, message: str) -> None:
     """Invia un messaggio di allerta ad alta priorità (Ban Risk)."""
@@ -16,35 +18,36 @@ def send_telegram_alert(config, message: str) -> None:
     """Invia un messaggio Telegram usando la configurazione NotificationsConfig."""
     if not config or not config.telegram_token or not config.telegram_chat_id:
         return
-    
+
     url = f"https://api.telegram.org/bot{config.telegram_token}/sendMessage"
-    payload = {
-        "chat_id": config.telegram_chat_id,
-        "text": message
-    }
-    data = json.dumps(payload).encode('utf-8')
-    req = urllib.request.Request(
-        url, 
-        data=data, 
-        headers={"Content-Type": "application/json"}, 
-        method="POST"
-    )
-    
-    try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            if response.status == 200:
-                logger.info("Notifica Telegram inviata con successo!")
-    except Exception as e:
-        logger.error(f"Errore durante l'invio notifica Telegram: {e}")
+    payload = {"chat_id": config.telegram_chat_id, "text": message}
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+
+    _max_retries = 3
+    _base_delay = 2
+    for attempt in range(_max_retries):
+        try:
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status == 200:
+                    logger.info("Notifica Telegram inviata con successo!")
+            break
+        except Exception as e:
+            if attempt < _max_retries - 1:
+                delay = _base_delay * (2**attempt)
+                logger.warning(f"Telegram API retry {attempt + 1}/{_max_retries} dopo {delay}s: {e}")
+                time.sleep(delay)
+            else:
+                logger.error(f"Errore durante l'invio notifica Telegram: {e}")
 
 
 def send_telegram_error_with_screenshot(config, message: str, page=None) -> None:
     """Invia un messaggio di errore Telegram con screenshot allegato.
-    
+
     Se page è disponibile, cattura uno screenshot e lo invia come foto con
-    il messaggio di errore come didascalia. Se lo screenshot fallisce, 
+    il messaggio di errore come didascalia. Se lo screenshot fallisce,
     fallback a messaggio testuale semplice.
-    
+
     Args:
         config: NotificationsConfig con telegram_token e telegram_chat_id.
         message: Messaggio di errore da inviare.
@@ -56,8 +59,14 @@ def send_telegram_error_with_screenshot(config, message: str, page=None) -> None
     screenshot_path = None
     try:
         if page is not None:
+            # Verifica se la pagina è di login EA
+            if "signin.ea.com" in page.url:
+                logger.warning("Screenshot bloccato: pagina di login EA rilevata.")
+                send_telegram_alert(config, message)
+                return
             import tempfile
             from datetime import datetime
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             temp_dir = tempfile.gettempdir()
             screenshot_path = os.path.join(temp_dir, f"fifa_error_screenshot_{timestamp}.png")
@@ -91,53 +100,65 @@ def send_telegram_photo(config, photo_path: str, caption: str) -> None:
     boundary = f"----TelegramBoundary{uuid4().hex}"
     url = f"https://api.telegram.org/bot{config.telegram_token}/sendPhoto"
 
-    try:
-        with open(photo_path, "rb") as f:
-            file_data = f.read()
+    with open(photo_path, "rb") as f:
+        file_data = f.read()
 
-        filename = os.path.basename(photo_path)
-        mimetype = mimetypes.guess_type(photo_path)[0] or "application/octet-stream"
+    filename = os.path.basename(photo_path)
+    mimetype = mimetypes.guess_type(photo_path)[0] or "application/octet-stream"
 
-        # Costruzione manuale multipart
-        body = []
-        # Campo chat_id
-        body.extend([
+    # Costruzione manuale multipart
+    body = []
+    # Campo chat_id
+    body.extend(
+        [
             f"--{boundary}".encode(),
             b'Content-Disposition: form-data; name="chat_id"',
-            b'',
+            b"",
             str(config.telegram_chat_id).encode(),
-        ])
-        # Campo caption
-        body.extend([
+        ]
+    )
+    # Campo caption
+    body.extend(
+        [
             f"--{boundary}".encode(),
             b'Content-Disposition: form-data; name="caption"',
-            b'',
+            b"",
             caption.encode(),
-        ])
-        # Campo photo
-        body.extend([
+        ]
+    )
+    # Campo photo
+    body.extend(
+        [
             f"--{boundary}".encode(),
             f'Content-Disposition: form-data; name="photo"; filename="{filename}"'.encode(),
-            f'Content-Type: {mimetype}'.encode(),
-            b'',
+            f"Content-Type: {mimetype}".encode(),
+            b"",
             file_data,
-        ])
-        body.append(f"--{boundary}--".encode())
-        
-        full_body = b"\r\n".join(body)
+        ]
+    )
+    body.append(f"--{boundary}--".encode())
 
-        req = urllib.request.Request(
-            url,
-            data=full_body,
-            headers={
-                "Content-Type": f"multipart/form-data; boundary={boundary}",
-                "Content-Length": str(len(full_body))
-            },
-            method="POST"
-        )
+    full_body = b"\r\n".join(body)
 
-        with urllib.request.urlopen(req, timeout=20) as response:
-            if response.status == 200:
-                logger.info("Screenshot Telegram inviato con successo!")
-    except Exception as e:
-        logger.error(f"Errore invio screenshot Telegram: {e}")
+    req = urllib.request.Request(
+        url,
+        data=full_body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}", "Content-Length": str(len(full_body))},
+        method="POST",
+    )
+
+    _max_retries = 3
+    _base_delay = 2
+    for attempt in range(_max_retries):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as response:
+                if response.status == 200:
+                    logger.info("Screenshot Telegram inviato con successo!")
+            break
+        except Exception as e:
+            if attempt < _max_retries - 1:
+                delay = _base_delay * (2**attempt)
+                logger.warning(f"Telegram API retry {attempt + 1}/{_max_retries} dopo {delay}s: {e}")
+                time.sleep(delay)
+            else:
+                logger.error(f"Errore invio screenshot Telegram: {e}")

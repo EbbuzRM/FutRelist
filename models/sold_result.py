@@ -1,4 +1,5 @@
 """Data model for sold items cleanup results."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

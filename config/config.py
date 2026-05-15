@@ -43,21 +43,13 @@ class ListingDefaults:
 
     def __post_init__(self):
         if self.relist_mode not in VALID_RELIST_MODES:
-            raise ValueError(
-                f"relist_mode must be one of {VALID_RELIST_MODES}, got '{self.relist_mode}'"
-            )
+            raise ValueError(f"relist_mode must be one of {VALID_RELIST_MODES}, got '{self.relist_mode}'")
         if self.duration not in VALID_DURATIONS:
-            raise ValueError(
-                f"duration must be one of {VALID_DURATIONS}, got '{self.duration}'"
-            )
+            raise ValueError(f"duration must be one of {VALID_DURATIONS}, got '{self.duration}'")
         if self.price_adjustment_type not in ("percentage", "fixed"):
-            raise ValueError(
-                "price_adjustment_type must be 'percentage' or 'fixed'"
-            )
+            raise ValueError("price_adjustment_type must be 'percentage' or 'fixed'")
         if not (200 <= self.min_price <= self.max_price <= 15_000_000):
-            raise ValueError(
-                f"Invalid price range: {self.min_price}–{self.max_price}"
-            )
+            raise ValueError(f"Invalid price range: {self.min_price}–{self.max_price}")
         if self.sync_minute_offset is not None and not (0 <= self.sync_minute_offset <= 59):
             raise ValueError("sync_minute_offset must be between 0 and 59")
 
@@ -71,18 +63,19 @@ class RateLimitingConfig:
 
     def __post_init__(self):
         if self.min_delay_ms < 800:
-            logger.warning(f"Rate limiting min delay {self.min_delay_ms}ms è troppo basso. Sovrascritto a 800ms (limite minimo sicuro)")
-            self.min_delay_ms = 800
-        
-        if self.min_delay_ms > self.max_delay_ms:
-            raise ValueError(
-                "rate_limiting min_delay_ms must be <= max_delay_ms"
+            logger.warning(
+                f"Rate limiting min delay {self.min_delay_ms}ms è troppo basso. Sovrascritto a 800ms (limite minimo sicuro)"
             )
+            self.min_delay_ms = 800
+
+        if self.min_delay_ms > self.max_delay_ms:
+            raise ValueError("rate_limiting min_delay_ms must be <= max_delay_ms")
 
 
 @dataclass
 class NotificationsConfig:
     """Configurazione globale per sistemi di alert esterni."""
+
     telegram_token: str = ""
     telegram_chat_id: str = ""
 
@@ -105,9 +98,7 @@ class AppConfig:
 
     def __post_init__(self):
         if not (10 <= self.scan_interval_seconds <= 3600):
-            raise ValueError(
-                f"scan_interval_seconds must be 10–3600, got {self.scan_interval_seconds}"
-            )
+            raise ValueError(f"scan_interval_seconds must be 10–3600, got {self.scan_interval_seconds}")
 
     @classmethod
     def from_dict(cls, data: dict) -> AppConfig:
@@ -162,20 +153,20 @@ class AppConfig:
 # --- Field mapping for type coercion ---
 
 _FIELD_CASTS: dict[str, tuple[str, str, type]] = {
-    "browser.headless":             ("browser", "headless", bool),
-    "browser.slow_mo":              ("browser", "slow_mo", int),
-    "browser.viewport_width":       ("browser", "viewport_width", int),
-    "browser.viewport_height":      ("browser", "viewport_height", int),
-    "listing_defaults.relist_mode":                 ("listing_defaults", "relist_mode", str),
-    "listing_defaults.duration":                ("listing_defaults", "duration", str),
-    "listing_defaults.price_adjustment_type":   ("listing_defaults", "price_adjustment_type", str),
-    "listing_defaults.price_adjustment_value":  ("listing_defaults", "price_adjustment_value", float),
-    "listing_defaults.min_price":               ("listing_defaults", "min_price", int),
-    "listing_defaults.max_price":               ("listing_defaults", "max_price", int),
-    "listing_defaults.sync_minute_offset":      ("listing_defaults", "sync_minute_offset", int),
-    "scan_interval_seconds":        ("", "scan_interval_seconds", int),
-    "rate_limiting.min_delay_ms":   ("rate_limiting", "min_delay_ms", int),
-    "rate_limiting.max_delay_ms":   ("rate_limiting", "max_delay_ms", int),
+    "browser.headless": ("browser", "headless", bool),
+    "browser.slow_mo": ("browser", "slow_mo", int),
+    "browser.viewport_width": ("browser", "viewport_width", int),
+    "browser.viewport_height": ("browser", "viewport_height", int),
+    "listing_defaults.relist_mode": ("listing_defaults", "relist_mode", str),
+    "listing_defaults.duration": ("listing_defaults", "duration", str),
+    "listing_defaults.price_adjustment_type": ("listing_defaults", "price_adjustment_type", str),
+    "listing_defaults.price_adjustment_value": ("listing_defaults", "price_adjustment_value", float),
+    "listing_defaults.min_price": ("listing_defaults", "min_price", int),
+    "listing_defaults.max_price": ("listing_defaults", "max_price", int),
+    "listing_defaults.sync_minute_offset": ("listing_defaults", "sync_minute_offset", int),
+    "scan_interval_seconds": ("", "scan_interval_seconds", int),
+    "rate_limiting.min_delay_ms": ("rate_limiting", "min_delay_ms", int),
+    "rate_limiting.max_delay_ms": ("rate_limiting", "max_delay_ms", int),
     "notifications.telegram_token": ("notifications", "telegram_token", str),
     "notifications.telegram_chat_id": ("notifications", "telegram_chat_id", str),
 }
@@ -203,6 +194,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 # --- ConfigManager ---
 
+
 class ConfigManager:
     """Manages loading, validating, modifying, and saving AppConfig."""
 
@@ -218,8 +210,15 @@ class ConfigManager:
         Missing keys are filled with defaults (migration).
         """
         if self.path.exists():
-            with open(self.path, "r", encoding="utf-8") as f:
-                self._raw = json.load(f)
+            try:
+                with open(self.path, encoding="utf-8") as f:
+                    self._raw = json.load(f)
+            except json.JSONDecodeError as e:
+                logger.error(f"File di configurazione corrotto ({self.path}), ripristino dei default: {e}")
+                self._config = AppConfig()
+                self._raw = self._config.to_dict()
+                self.save()
+                return self._config
             defaults = AppConfig().to_dict()
             merged = _deep_merge(defaults, self._raw)
             self._config = AppConfig.from_dict(merged)
@@ -266,8 +265,7 @@ class ConfigManager:
             coerced = _coerce_value(value, target_type)
         except (ValueError, TypeError) as exc:
             raise ValueError(
-                f"Invalid value for '{dotted_key}': "
-                f"expected {target_type.__name__}, got '{value}'"
+                f"Invalid value for '{dotted_key}': expected {target_type.__name__}, got '{value}'"
             ) from exc
 
         old_config = self._config

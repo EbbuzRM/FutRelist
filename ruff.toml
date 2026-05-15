@@ -1,0 +1,9 @@
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # line length gestito da formatter
+
+[lint.isort]
+known-first-party = ["config", "core", "browser", "logic", "models", "notifier", "telegram_handler", "bot_state"]

@@ -3,23 +3,26 @@
 Reads listing state from the page after navigator reaches Transfer List view.
 Handles empty state, player data extraction, state mapping, price/rating parsing.
 """
-import re
+
 import logging
+import re
+
 from playwright.sync_api import Page
-from models.listing import ListingState, PlayerListing, ListingScanResult
+
+from models.listing import ListingScanResult, ListingState, PlayerListing
 
 logger = logging.getLogger(__name__)
 
 SELECTORS = {
-    "listing_items": '.listFUTItem',
-    "player_name": '.player-name, .name, .ut-item-player-name',
-    "player_rating": '.rating, .player-rating, .ut-item-player-rating',
-    "player_position": '.position',
-    "auction_state": '.time, .auction-state-value, .auction-state',
-    "auction_price": '.auctionValue, .auction-value',
-    "auction_start_price": '.auctionStartPrice',
-    "empty_state": '.no-items, .empty-list, .no-listings',
-    "time_remaining": '.time-remaining, .auction-time, .time',
+    "listing_items": ".listFUTItem",
+    "player_name": ".player-name, .name, .ut-item-player-name",
+    "player_rating": ".rating, .player-rating, .ut-item-player-rating",
+    "player_position": ".position",
+    "auction_state": ".time, .auction-state-value, .auction-state",
+    "auction_price": ".auctionValue, .auction-value",
+    "auction_start_price": ".auctionStartPrice",
+    "empty_state": ".no-items, .empty-list, .no-listings",
+    "time_remaining": ".time-remaining, .auction-time, .time",
 }
 
 
@@ -33,7 +36,7 @@ def parse_price(text: str | None) -> int | None:
     """
     if not text:
         return None
-    digits = re.sub(r'[^\d]', '', text)
+    digits = re.sub(r"[^\d]", "", text)
     if digits:
         return int(digits)
     return None
@@ -49,7 +52,7 @@ def parse_rating(text: str | None) -> int | None:
     """
     if not text:
         return None
-    match = re.search(r'\d+', text)
+    match = re.search(r"\d+", text)
     if match:
         return int(match.group())
     return None
@@ -71,50 +74,50 @@ def parse_time_remaining(text: str | None) -> int | None:
 
     # --- Formato EA '<N Seconds', '<N Minutes', '<N Hours' ---
     # Es: '<15 Seconds' → 15s, '<5 Seconds' → 5s, '<1 Minutes' → 60s
-    lt_match = re.match(r'<\s*(\d+)\s*(second|sec|minut|min|hour|h)', t)
+    lt_match = re.match(r"<\s*(\d+)\s*(second|sec|minut|min|hour|h)", t)
     if lt_match:
         n = int(lt_match.group(1))
         unit = lt_match.group(2)
-        if unit.startswith('second') or unit == 'sec':
+        if unit.startswith("second") or unit == "sec":
             return n
-        elif unit.startswith('minut') or unit == 'min':
+        elif unit.startswith("minut") or unit == "min":
             return n * 60
-        elif unit.startswith('hour') or unit == 'h':
+        elif unit.startswith("hour") or unit == "h":
             return n * 3600
 
     # --- Formato H:MM:SS o MM:SS (usato dalla EA WebApp) ---
-    colon_match = re.fullmatch(r'(\d+):(\d{2}):(\d{2})', t)
+    colon_match = re.fullmatch(r"(\d+):(\d{2}):(\d{2})", t)
     if colon_match:
         h, m, s = int(colon_match.group(1)), int(colon_match.group(2)), int(colon_match.group(3))
         return h * 3600 + m * 60 + s
 
-    colon_match2 = re.fullmatch(r'(\d+):(\d{2})', t)
+    colon_match2 = re.fullmatch(r"(\d+):(\d{2})", t)
     if colon_match2:
         m, s = int(colon_match2.group(1)), int(colon_match2.group(2))
         return m * 60 + s
 
     # --- Formato EA a parola intera: '59 Minutes', '5 Seconds', '2 Hours' ---
     # (distinto dal suffisso compatto '45m' che non ha spazio)
-    word_match = re.match(r'(\d+)\s+(second|minut|hour)\w*', t)
+    word_match = re.match(r"(\d+)\s+(second|minut|hour)\w*", t)
     if word_match:
         n = int(word_match.group(1))
         unit = word_match.group(2)
-        if unit.startswith('second'):
+        if unit.startswith("second"):
             return n
-        elif unit.startswith('minut'):
+        elif unit.startswith("minut"):
             return n * 60
-        elif unit.startswith('hour'):
+        elif unit.startswith("hour"):
             return n * 3600
 
     # --- Formato con suffisso compatto: '1h 5m', '45m', '30s' ---
     total_seconds = 0
-    h_match = re.search(r'(\d+)h', t)
+    h_match = re.search(r"(\d+)h", t)
     if h_match:
         total_seconds += int(h_match.group(1)) * 3600
-    m_match = re.search(r'(\d+)m', t)
+    m_match = re.search(r"(\d+)m", t)
     if m_match:
         total_seconds += int(m_match.group(1)) * 60
-    s_match = re.search(r'(\d+)s', t)
+    s_match = re.search(r"(\d+)s", t)
     if s_match:
         total_seconds += int(s_match.group(1))
 
@@ -139,7 +142,14 @@ def determine_state(state_text: str) -> ListingState:
     # EA li lascia temporaneamente nella sezione "active" del DOM con questo testo.
     if any(kw in text for kw in ("processing", "elaborazion")):
         return ListingState.PROCESSING
-    if any(kw in text for kw in ("active", "attiv", "selling", "vendita", "minut", "hour", "ora", "second", "<", "m ", "h ", "s ")):
+    if any(
+        kw in text
+        for kw in ("active", "attiv", "selling", "vendita", "minut", "hour", "ora", "second", "m ", "h ", "s ")
+    ):
+        return ListingState.ACTIVE
+
+    # Il pattern "<N" (es. "<15 Seconds") è ACTIVE ma richiede re.search per il controllo regex
+    if re.search(r"<\d", text):
         return ListingState.ACTIVE
 
     logger.warning(f"Stato listing non riconosciuto: '{state_text}'")
@@ -242,7 +252,7 @@ class ListingDetector:
                         startPrice: startPriceEl ? startPriceEl.textContent.trim() : '',
                         time: timeEl ? timeEl.textContent.trim() : '',
                     };
-                })"""
+                })""",
             )
         except Exception as e:
             logger.warning(f"Fallita estrazione bulk, uso fallback per-elemento: {e}")
@@ -277,9 +287,7 @@ class ListingDetector:
 
             if section == "sold":
                 state = ListingState.SOLD
-            elif section == "expired":
-                state = ListingState.EXPIRED
-            elif section == "active" and is_expired:
+            elif section == "expired" or section == "active" and is_expired:
                 state = ListingState.EXPIRED
             elif section == "active" and is_processing:
                 # Override: EA mette i Processing... in sezione active, ma vanno trattati
@@ -306,10 +314,7 @@ class ListingDetector:
 
         # Step 5: build scan result
         active_count = sum(1 for l in listings if l.state == ListingState.ACTIVE)
-        expired_count = sum(
-            1 for l in listings
-            if l.state in (ListingState.EXPIRED, ListingState.PROCESSING)
-        )
+        expired_count = sum(1 for l in listings if l.state in (ListingState.EXPIRED, ListingState.PROCESSING))
         sold_count = sum(1 for l in listings if l.state == ListingState.SOLD)
         processing_count = sum(1 for l in listings if l.state == ListingState.PROCESSING)
 
@@ -331,6 +336,7 @@ class ListingDetector:
     def _extract_single_listing(self, element) -> dict | None:
         """Fallback: estrae un singolo listing per-elemento quando bulk fallisce."""
         try:
+
             def _text(sel: str) -> str:
                 el = element.query_selector(sel)
                 # text_content() è il metodo Python corretto (non el.textContent che è JS)

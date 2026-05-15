@@ -5,16 +5,16 @@ All tests should FAIL with ModuleNotFoundError initially.
 """
 
 import json
+
 import pytest
 
 from config.config import (
+    VALID_DURATIONS,
     AppConfig,
     BrowserConfig,
     ListingDefaults,
     RateLimitingConfig,
-    VALID_DURATIONS,
 )
-
 
 # ── ListingDefaults tests ──────────────────────────────────────────
 
@@ -94,11 +94,7 @@ class TestAppConfig:
     def test_rate_limiting_invalid_order(self):
         """min_delay > max_delay raises ValueError."""
         with pytest.raises(ValueError, match="min_delay_ms"):
-            AppConfig(
-                rate_limiting=RateLimitingConfig(
-                    min_delay_ms=5000, max_delay_ms=2000
-                )
-            )
+            AppConfig(rate_limiting=RateLimitingConfig(min_delay_ms=5000, max_delay_ms=2000))
 
 
 # ── Round-trip tests ───────────────────────────────────────────────
@@ -119,9 +115,7 @@ class TestConfigRoundTrip:
                 max_price=50_000,
             ),
             scan_interval_seconds=120,
-            rate_limiting=RateLimitingConfig(
-                min_delay_ms=1000, max_delay_ms=3000
-            ),
+            rate_limiting=RateLimitingConfig(min_delay_ms=1000, max_delay_ms=3000),
         )
 
         json_str = json.dumps(original.to_dict())
@@ -131,9 +125,7 @@ class TestConfigRoundTrip:
 
     def test_round_trip_preserves_prices(self):
         """Custom min_price/max_price survive to_dict → from_dict."""
-        original = AppConfig(
-            listing_defaults=ListingDefaults(min_price=500, max_price=50_000)
-        )
+        original = AppConfig(listing_defaults=ListingDefaults(min_price=500, max_price=50_000))
 
         data = original.to_dict()
         loaded = AppConfig.from_dict(data)
@@ -171,49 +163,48 @@ class TestConfigWarningMessage:
     def test_config_warning_uses_correct_format(self):
         """HI-01 fix: logger must use {self.min_delay_ms} in f-string, not %s."""
         import ast
-        with open('config/config.py', 'r') as f:
+
+        with open("config/config.py") as f:
             content = f.read()
-        
+
         # Check that config.py warning messages don't use %s with f-string
         # The correct format is: logger.warning(f"...{var}...")
         # The incorrect format would be: logger.warning(f"...%s...", var)
-        
+
         # Parse the file to find logger.warning calls
         tree = ast.parse(content)
-        
+
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 # Check if it's a logger.warning/error call
-                if isinstance(node.func, ast.Attribute) and node.func.attr in ('warning', 'error'):
+                if isinstance(node.func, ast.Attribute) and node.func.attr in ("warning", "error"):
                     for arg in node.args:
                         if isinstance(arg, ast.JoinedStr):  # f-string
-                            fstring_content = ast.unparse(arg) if hasattr(ast, 'unparse') else str(arg)
+                            fstring_content = ast.unparse(arg) if hasattr(ast, "unparse") else str(arg)
                             # Check that it doesn't contain %s pattern (incorrect in f-string)
-                            if '%s' in fstring_content:
-                                assert False, \
-                                    f"Found %s in f-string warning message. Use {{}} format instead."
-        
+                            if "%s" in fstring_content:
+                                assert False, "Found %s in f-string warning message. Use {} format instead."
+
         # Also verify the file doesn't have the specific bug pattern
         # Search for f"...{var}%s..." pattern
-        lines = content.split('\n')
+        lines = content.split("\n")
         for i, line in enumerate(lines):
-            if 'logger.warning' in line or 'logger.error' in line:
+            if "logger.warning" in line or "logger.error" in line:
                 # Check if this line or next has f-string with %s
-                for j in range(i, min(i+3, len(lines))):  # Check current and next 2 lines
-                    if '%s' in lines[j] and '{' in lines[j] and '}' in lines[j]:
+                for j in range(i, min(i + 3, len(lines))):  # Check current and next 2 lines
+                    if "%s" in lines[j] and "{" in lines[j] and "}" in lines[j]:
                         # This might be the bug pattern
-                        assert False, \
-                            f"Line {j+1} may have incorrect format: mixes f-string {{}} with %s"
+                        assert False, f"Line {j + 1} may have incorrect format: mixes f-string {{}} with %s"
 
     def test_rate_limiter_warning_format(self):
         """Verify rate_limiter.py also uses correct warning format (HI-01 fix)."""
-        with open('browser/rate_limiter.py', 'r') as f:
+        with open("browser/rate_limiter.py") as f:
             content = f.read()
-        
+
         # The bug was: f"[RateLimiter] Usa valori aggressivi: min_delay_ms=%sms..."
         # The fix is: f"[RateLimiter] Usa valori aggressivi: min_delay_ms={self.min_delay_ms}ms..."
-        
+
         # Verify the fix is in place
-        assert 'min_delay_ms={self.min_delay_ms}' in content or \
-               'min_delay_ms=%s' not in content, \
+        assert "min_delay_ms={self.min_delay_ms}" in content or "min_delay_ms=%s" not in content, (
             "rate_limiter.py should use {self.min_delay_ms} in f-string, not %s"
+        )

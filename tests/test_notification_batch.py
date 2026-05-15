@@ -1,8 +1,9 @@
-import pytest
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
 from core.notification_batch import NotificationBatch
 from models.listing import ListingScanResult
+
 
 def test_notification_batch_accumulation():
     """Test che expired_detected usa succeeded + failed come proxy."""
@@ -27,6 +28,7 @@ def test_notification_batch_accumulation():
     assert batch.cycles == 2
     assert batch.expired_detected == 8  # 5 + 3 = 8
 
+
 def test_notification_batch_is_ready_to_flush_no_activity():
     """Test che is_ready_to_flush ritorna False senza attivita'."""
     batch = NotificationBatch(batch_window_seconds=120, max_cycles=5)
@@ -39,6 +41,7 @@ def test_notification_batch_is_ready_to_flush_no_activity():
     batch.cycles = 1
     batch.expired_detected = 5
     assert batch.is_ready_to_flush(current_wait=150) is False
+
 
 def test_notification_batch_is_ready_to_flush_long_wait():
     """Test che flusha quando il prossimo wait e' lungo."""
@@ -53,6 +56,7 @@ def test_notification_batch_is_ready_to_flush_long_wait():
     # Wait lungo (> batch_window) → pronto
     assert batch.is_ready_to_flush(current_wait=150) is True
 
+
 def test_notification_batch_is_ready_to_flush_max_cycles():
     """Test che flusha quando si raggiunge max_cycles."""
     batch = NotificationBatch(batch_window_seconds=120, max_cycles=5)
@@ -63,6 +67,7 @@ def test_notification_batch_is_ready_to_flush_max_cycles():
     # Max cycles raggiunto → pronto anche con wait corto
     assert batch.is_ready_to_flush(current_wait=30) is True
 
+
 def test_notification_batch_is_ready_to_flush_time_elapsed():
     """Test che flusha se e' passato batch_window_seconds dall'ultimo flush."""
     batch = NotificationBatch(batch_window_seconds=120, max_cycles=5)
@@ -71,10 +76,12 @@ def test_notification_batch_is_ready_to_flush_time_elapsed():
     batch.failed = 1
     # Simula un flush avvenuto 130 secondi fa
     from datetime import timedelta
+
     batch.last_flush_time = datetime.now() - timedelta(seconds=130)
 
     # Tempo trascorso > batch_window → pronto
     assert batch.is_ready_to_flush(current_wait=30) is True
+
 
 def test_notification_batch_is_ready_to_flush_not_yet():
     """Test che NON flusha se nessuna condizione e' soddisfatta."""
@@ -87,15 +94,19 @@ def test_notification_batch_is_ready_to_flush_not_yet():
     # Nessuna condizione soddisfatta → non pronto
     assert batch.is_ready_to_flush(current_wait=30) is False
 
+
 def test_notification_batch_no_activity_no_flush():
     """Test che flush_if_any non invia se non c'e' stata attivita'."""
     batch = NotificationBatch(batch_window_seconds=120, max_cycles=5)
 
     # cycles == 0, quindi flush_if_any non dovrebbe inviare
-    batch.flush_if_any(app_config=MagicMock(
-        notifications=MagicMock(telegram_token="test", telegram_chat_id="123")
-    ), page=None, logger=MagicMock())
+    batch.flush_if_any(
+        app_config=MagicMock(notifications=MagicMock(telegram_token="test", telegram_chat_id="123")),
+        page=None,
+        logger=MagicMock(),
+    )
     assert batch.cycles == 0
+
 
 def test_notification_batch_reset():
     """Test che reset() azzera tutti i contatori."""
@@ -112,6 +123,7 @@ def test_notification_batch_reset():
     assert batch.expired_detected == 0
     assert batch.last_flush_time is not None
 
+
 def test_notification_batch_flush_with_activity_and_long_wait():
     """Test che flush_if_any invia quando c'e' attivita' e wait lungo."""
     batch = NotificationBatch(batch_window_seconds=120, max_cycles=5)
@@ -127,12 +139,14 @@ def test_notification_batch_flush_with_activity_and_long_wait():
     # Con wait lungo → deve flushare
     # Simuliamo: impostiamo last_flush_time nel passato per far passare il time check
     from datetime import timedelta
+
     batch.last_flush_time = datetime.now() - timedelta(seconds=130)
 
     batch.flush_if_any(app_config, page=None, logger=mock_logger, scan=scan)
     assert batch.cycles == 0  # Resettato dopo flush
     assert batch.relisted == 0
     mock_logger.info.assert_called()
+
 
 def test_notification_batch_flush_no_activity_no_send():
     """Test che flush_if_any NON invia se non c'e' attivita' reale."""
@@ -152,6 +166,7 @@ def test_notification_batch_flush_no_activity_no_send():
     assert batch.cycles == 1  # Non resettato
     assert batch.relisted == 0
 
+
 def test_notification_batch_flush_force_sends():
     """Test che flush_if_any con force=True invia indipendentemente dalle condizioni."""
     batch = NotificationBatch(batch_window_seconds=120, max_cycles=5)
@@ -169,6 +184,7 @@ def test_notification_batch_flush_force_sends():
     assert batch.cycles == 0  # Resettato dopo flush
     assert batch.relisted == 0
     mock_logger.info.assert_called()
+
 
 def test_notification_batch_flush_alias():
     """Test che flush() e' un alias di flush_if_any()."""

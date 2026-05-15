@@ -1,10 +1,10 @@
-import logging
+import os
+import tempfile
 from datetime import datetime
-from typing import Optional
+
 from models.listing import ListingScanResult
 from notifier import send_telegram_photo
-import tempfile
-import os
+
 
 class NotificationBatch:
     """
@@ -13,6 +13,7 @@ class NotificationBatch:
     Il flush è determinato da `is_ready_to_flush(current_wait)`: quando il
     prossimo wait è lungo (> batch_window), significa che l'ondata e' finita.
     """
+
     def __init__(self, batch_window_seconds: int = 120, max_cycles: int = 5):
         self.batch_window_seconds = batch_window_seconds
         self.max_cycles = max_cycles
@@ -20,7 +21,7 @@ class NotificationBatch:
         self.failed = 0
         self.cycles = 0
         self.expired_detected = 0
-        self.last_flush_time: Optional[datetime] = None
+        self.last_flush_time: datetime | None = None
 
     def accumulate(self, scan: ListingScanResult, succeeded: int, failed: int):
         """Aggiunge i risultati di un ciclo all'accumulatore.
@@ -68,7 +69,15 @@ class NotificationBatch:
 
         return False
 
-    def flush_if_any(self, app_config, page, logger, scan: Optional[ListingScanResult] = None, last_relist_error: Optional[str] = None, force: bool = False):
+    def flush_if_any(
+        self,
+        app_config,
+        page,
+        logger,
+        scan: ListingScanResult | None = None,
+        last_relist_error: str | None = None,
+        force: bool = False,
+    ):
         """Invia il report se c'e' stata attivita' e le condizioni di flush sono soddisfatte.
 
         Args:
@@ -120,6 +129,7 @@ class NotificationBatch:
                 send_telegram_photo(app_config.notifications, screenshot_path, msg)
             else:
                 from notifier import send_telegram_alert
+
                 send_telegram_alert(app_config.notifications, msg)
             logger.info(f"Notifica inviata: {self.relisted} rilistati, {self.failed} falliti.")
 
@@ -131,7 +141,15 @@ class NotificationBatch:
             self.reset()
 
     # Alias per compatibilita'
-    def flush(self, app_config, page, logger, scan: Optional[ListingScanResult] = None, last_relist_error: Optional[str] = None, force: bool = False):
+    def flush(
+        self,
+        app_config,
+        page,
+        logger,
+        scan: ListingScanResult | None = None,
+        last_relist_error: str | None = None,
+        force: bool = False,
+    ):
         """Flush standard — ora chiama flush_if_any per compatibilita'."""
         self.flush_if_any(app_config, page, logger, scan, last_relist_error, force=force)
 

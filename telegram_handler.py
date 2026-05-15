@@ -5,15 +5,15 @@ Permette di controllare il bot da remoto tramite comandi Telegram:
 
 Utilizza urllib per le chiamate API Telegram (nessuna dipendenza aggiuntiva).
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import threading
-import time
 import urllib.request
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
 
 from bot_state import BotState
 from models.sold_result import SoldCreditsResult
@@ -35,7 +35,7 @@ class TelegramHandler:
     # Mappa comandi → descrizioni (per /help)
     COMMANDS = {
         "status": "Mostra lo stato corrente del bot",
-        "pause": "Mette in pausa il bot",
+        "pause": "Mette in pausa il bot (es. /pause 4, /pause 0.5 per 30 min)",
         "resume": "Riavvia il bot dalla pausa",
         "console": "Modalità console: deep sleep (es. /console 2 per 2 ore)",
         "online": "Disattiva modalità console e riprendi",
@@ -82,29 +82,44 @@ class TelegramHandler:
         logger.info("TelegramHandler avviato (polling attivo)")
 
     def stop(self) -> None:
-        """Ferma il thread di polling Telegram."""
+        """Ferma il thread di polling Telegram.
+
+        Usa _stop_event per segnalare al thread di uscire PRIMA di join(),
+        evitando la race condition tra join(timeout=35) e urlopen(timeout=35).
+        Il thread controlla _stop_event ad ogni iterazione del loop di polling.
+        """
         if not self._running:
             return
 
         self._running = False
         self._stop_event.set()
-        
+
         if self._thread and self._thread.is_alive():
-            # Il timeout deve essere superiore a quello di getUpdates (30s)
-            # per garantire che il thread termini effettivamente prima di avviarne uno nuovo
-            # evitando l'errore 409 Conflict.
-            logger.info("Tentativo chiusura thread Telegram (attesa fino a 35s)...")
-            self._thread.join(timeout=35)
-            
-        # Conferma l'ultimo offset elaborato prima di chiudere
-        # per evitare che Telegram reinvii gli stessi comandi (es. /reboot doppio)
+            # Il thread controlla _stop_event ogni 5s (urlopen timeout),
+            # quindi 10s di join timeout sono sufficienti nella maggior parte dei casi.
+            # Usiamo 15s come upper bound di sicurezza.
+            logger.info("Chiusura thread Telegram in corso...")
+            self._thread.join(timeout=15)
+
+            if self._thread.is_alive():
+                logger.warning("Thread Telegram non terminato entro 15s — possibile stallo su urlopen")
+            else:
+                logger.info("Thread Telegram chiuso correttamente")
+
+        # Conferma l'ultimo offset elaborato prima di chiudere per evitare che
+        # Telegram reinvii gli stessi comandi al riavvio (es. /reboot loop infinito).
+        # NON usa _get_updates() perché quello controlla _stop_event (già set) e
+        # ritornerebbe [] senza mai chiamare l'API — lasciando l'offset non confermato.
         if self._offset > 0:
             try:
-                # Poll brevissimo solo per confermare l'offset
-                self._get_updates(offset=self._offset, timeout=1)
+                url = f"{self._api_base}/getUpdates?offset={self._offset}&timeout=0"
+                with urllib.request.urlopen(urllib.request.Request(url), timeout=5) as resp:
+                    resp.read()
+                logger.debug(f"Offset finale {self._offset} confermato a Telegram")
             except Exception as e:
                 logger.debug(f"Errore conferma offset finale: {e}")
-                
+
+        self._thread = None
         logger.info("TelegramHandler fermato")
 
     def send_message(self, text: str) -> None:
@@ -132,21 +147,46 @@ class TelegramHandler:
                 logger.error(f"Errore polling Telegram: {e}")
                 self._stop_event.wait(timeout=5)  # Pausa prima di riprovare
 
-    def _get_updates(self, offset: int = 0, timeout: int = 30) -> list[dict]:
-        """Chiama getUpdates API Telegram con long polling."""
+    def _get_updates(self, offset: int = 0, timeout: int = 10) -> list[dict]:
+        """Chiama getUpdates API Telegram con long polling.
+
+        Usa un timeout urlopen di (timeout + 3)s — sempre maggiore del long-poll
+        timeout — per evitare ReadTimeout spurii. Una sola connessione per chiamata:
+        il loop esterno precedente (5s chunk) creava nuove connessioni ad ogni
+        iterazione e non era un vero long polling. Il controllo di _stop_event
+        avviene prima di ogni chiamata; il thread si sblocca entro (timeout+3)s
+        dall'invocazione di stop(), compatibile con il join(timeout=15) in stop().
+        """
+        if self._stop_event.is_set():
+            return []
+
         url = f"{self._api_base}/getUpdates?offset={offset}&timeout={timeout}"
         req = urllib.request.Request(url)
 
-        try:
-            with urllib.request.urlopen(req, timeout=timeout + 5) as response:
-                data = json.loads(response.read().decode("utf-8"))
-                if data.get("ok"):
-                    return data.get("result", [])
-                logger.warning(f"Telegram API error: {data}")
+        _max_retries = 3
+        _base_delay = 2
+        _urlopen_timeout = timeout + 3  # sempre > long-poll timeout → nessun ReadTimeout spurio
+
+        for attempt in range(_max_retries):
+            if self._stop_event.is_set():
                 return []
-        except Exception as e:
-            logger.debug(f"getUpdates fallito: {e}")
-            return []
+            try:
+                with urllib.request.urlopen(req, timeout=_urlopen_timeout) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                    if data.get("ok"):
+                        return data.get("result", [])
+                    logger.warning(f"Telegram API error: {data}")
+                    return []
+            except Exception as e:
+                if attempt < _max_retries - 1:
+                    delay = _base_delay * (2**attempt)
+                    logger.warning(f"Telegram API retry {attempt + 1}/{_max_retries} dopo {delay}s: {e}")
+                    if self._stop_event.wait(timeout=delay):
+                        return []
+                else:
+                    logger.debug(f"getUpdates fallito dopo {_max_retries} tentativi: {e}")
+                    return []
+        return []
 
     def _handle_update(self, update: dict) -> None:
         """Elabora un singolo update Telegram."""
@@ -232,7 +272,8 @@ class TelegramHandler:
             until = status.get("console_until")
             mode = f"🎮 Console (fino {until})" if until else "🎮 Console"
         elif status["paused"]:
-            mode = "⏸️ In Pausa"
+            until = status.get("pause_until")
+            mode = f"⏸️ In Pausa (fino {until})" if until else "⏸️ In Pausa"
 
         return (
             f"📊 Stato Bot\n\n"
@@ -246,7 +287,20 @@ class TelegramHandler:
 
     def _cmd_pause(self, args: list[str]) -> str:
         """Mette il bot in pausa."""
-        self.bot_state.set_paused(True)
+        hours = None
+        if args:
+            try:
+                hours = float(args[0])
+            except ValueError:
+                return "❌ Usa: /pause [ore] (es. /pause 4)"
+            if hours <= 0:
+                return "❌ Le ore di pausa devono essere maggiori di 0"
+
+        self.bot_state.set_paused(True, hours=hours)
+
+        if hours:
+            resume_at = (datetime.now() + timedelta(hours=hours)).strftime("%H:%M")
+            return f"⏸️ Bot in pausa per {hours:g}h (auto-resume alle {resume_at})"
         return "⏸️ Bot in pausa"
 
     def _cmd_resume(self, args: list[str]) -> str:
@@ -282,7 +336,6 @@ class TelegramHandler:
         self.bot_state.set_console_mode(True, hours=hours)
 
         if hours:
-            from datetime import datetime, timedelta
             resume_at = (datetime.now() + timedelta(hours=hours)).strftime("%H:%M")
             return (
                 f"🎮 Modalità Console ATTIVA\n"
@@ -302,10 +355,7 @@ class TelegramHandler:
         if not self.bot_state.is_console_mode():
             return "ℹ️ Il bot non è in modalità console."
         self.bot_state.set_console_mode(False)
-        return (
-            "✅ Modalità Console DISATTIVATA\n"
-            "▶️ Bot riprende le operazioni normali"
-        )
+        return "✅ Modalità Console DISATTIVATA\n▶️ Bot riprende le operazioni normali"
 
     def _cmd_screenshot(self, args: list[str]) -> str:
         """Invia uno screenshot della WebApp (richiede page).
@@ -324,7 +374,17 @@ class TelegramHandler:
 
     def _execute_screenshot(self) -> dict:
         """Esegue lo screenshot nel contesto del main thread."""
-        screenshot_path = "manual_screenshot.png"
+        # Verifica se la pagina è di login EA
+        if "signin.ea.com" in self.page.url:
+            logger.warning("Screenshot bloccato: pagina di login EA rilevata.")
+            return {"success": False, "error": "Pagina di login - screenshot bloccato"}
+
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            screenshot_path = tmp.name
+
         try:
             # Esegui screenshot (nel main thread, thread-safe)
             self.page.screenshot(path=screenshot_path)
@@ -332,46 +392,64 @@ class TelegramHandler:
             # Invia la foto (thread-safe, usa urllib)
             self._send_photo(screenshot_path)
 
-            # Elimina file temporaneo
-            if Path(screenshot_path).exists():
-                Path(screenshot_path).unlink()
-
             return {"success": True, "message": "Screenshot inviato"}
         except Exception as e:
             logger.error(f"Errore durante lo screenshot: {e}")
             return {"success": False, "error": str(e)}
+        finally:
+            # Elimina file temporaneo
+            if os.path.exists(screenshot_path):
+                os.remove(screenshot_path)
 
     def _send_photo(self, photo_path: str) -> None:
         """Invia una foto tramite API Telegram sendPhoto."""
         url = f"{self._api_base}/sendPhoto"
-        try:
-            with open(photo_path, "rb") as photo:
-                # Per l'invio di file via urllib, usiamo un payload multipart/form-data
-                # Tuttavia, per semplicità e robustezza in questo bot, usiamo una richiesta
-                # con parametri per il chat_id e il file.
-                
-                # Costruiamo il corpo multipart manualmente per evitare dipendenze esterne
-                boundary = "boundary123"
-                body = (
+        with open(photo_path, "rb") as photo:
+            # Per l'invio di file via urllib, usiamo un payload multipart/form-data
+            # Tuttavia, per semplicità e robustezza in questo bot, usiamo una richiesta
+            # con parametri per il chat_id e il file.
+
+            # Costruiamo il corpo multipart manualmente per evitare dipendenze esterne.
+            # uuid4().hex garantisce un boundary unico: il pattern fisso 'boundary123'
+            # poteva collidere con i byte dell'immagine e corrompere il payload.
+            import uuid
+
+            boundary = uuid.uuid4().hex
+            body = (
+                (
                     f"--{boundary}\r\n"
                     f'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
                     f"{self.chat_id}\r\n"
                     f"--{boundary}\r\n"
                     f'Content-Disposition: form-data; name="photo"; filename="{Path(photo_path).name}"\r\n'
                     f"Content-Type: image/png\r\n\r\n"
-                ).encode("utf-8") + photo.read() + f"\r\n--{boundary}--".encode("utf-8")
+                ).encode()
+                + photo.read()
+                + f"\r\n--{boundary}--".encode()
+            )
 
-                req = urllib.request.Request(
-                    url,
-                    data=body,
-                    headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-                    method="POST",
-                )
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    if response.status == 200:
-                        logger.debug("Foto inviata con successo")
-        except Exception as e:
-            logger.error(f"Errore invio foto Telegram: {e}")
+            req = urllib.request.Request(
+                url,
+                data=body,
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+                method="POST",
+            )
+            _max_retries = 3
+            _base_delay = 2
+            for attempt in range(_max_retries):
+                try:
+                    with urllib.request.urlopen(req, timeout=15) as response:
+                        if response.status == 200:
+                            logger.debug("Foto inviata con successo")
+                    break
+                except Exception as e:
+                    if attempt < _max_retries - 1:
+                        delay = _base_delay * (2**attempt)
+                        logger.warning(f"Telegram API retry {attempt + 1}/{_max_retries} dopo {delay}s: {e}")
+                        if self._stop_event.wait(timeout=delay):
+                            break
+                    else:
+                        logger.error(f"Errore invio foto Telegram: {e}")
 
     def _cmd_del_sold(self, args: list[str]) -> str:
         """Cancella gli oggetti venduti e raccoglie i crediti (richiede page).
@@ -466,9 +544,19 @@ class TelegramHandler:
             method="POST",
         )
 
-        try:
-            with urllib.request.urlopen(req, timeout=10) as response:
-                if response.status == 200:
-                    logger.debug(f"Telegram message inviato: {text[:50]}...")
-        except Exception as e:
-            logger.error(f"Errore invio messaggio Telegram: {e}")
+        _max_retries = 3
+        _base_delay = 2
+        for attempt in range(_max_retries):
+            try:
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    if response.status == 200:
+                        logger.debug(f"Telegram message inviato: {text[:50]}...")
+                break
+            except Exception as e:
+                if attempt < _max_retries - 1:
+                    delay = _base_delay * (2**attempt)
+                    logger.warning(f"Telegram API retry {attempt + 1}/{_max_retries} dopo {delay}s: {e}")
+                    if self._stop_event.wait(timeout=delay):
+                        break
+                else:
+                    logger.error(f"Errore invio messaggio Telegram: {e}")

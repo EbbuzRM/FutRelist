@@ -1,8 +1,8 @@
 """Test per TelegramHandler — parsing comandi, routing e risposte."""
+
 import json
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -48,6 +48,12 @@ class TestParseCommand:
         assert cmd == "pause"
         assert args == []
 
+    def test_parse_pause_with_hours(self, handler):
+        """/pause 4 → ("pause", ["4"])."""
+        cmd, args = handler._parse_command("/pause 4")
+        assert cmd == "pause"
+        assert args == ["4"]
+
     def test_parse_unknown(self, handler):
         """/unknown → ("unknown", [])."""
         cmd, args = handler._parse_command("/unknown")
@@ -83,6 +89,20 @@ class TestHandleCommand:
         msg = handler._handle_command("pause", [])
         assert bot_state.is_paused() is True
         assert "pausa" in msg.lower() or "⏸" in msg
+
+    def test_handle_timed_pause(self, handler, bot_state):
+        """/pause 4 → pausa temporizzata per 4 ore."""
+        msg = handler._handle_command("pause", ["4"])
+        assert bot_state.is_paused() is True
+        assert bot_state.get_pause_until() is not None
+        assert "4" in msg
+        assert "auto-resume" in msg.lower() or "ripr" in msg.lower()
+
+    def test_handle_pause_invalid_hours(self, handler, bot_state):
+        """/pause abc → errore e non mette in pausa."""
+        msg = handler._handle_command("pause", ["abc"])
+        assert bot_state.is_paused() is False
+        assert "usa" in msg.lower() or "ore" in msg.lower() or "❌" in msg
 
     def test_handle_resume(self, handler, bot_state):
         """/resume → bot_state.set_paused(False), messaggio di riavvio."""
@@ -171,12 +191,12 @@ class TestGetUpdates:
     def test_get_updates_mocked(self, handler):
         """_get_updates(offset=0) → lista di update."""
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({
-            "ok": True,
-            "result": [
-                {"update_id": 1, "message": {"chat": {"id": 999888}, "text": "/status", "message_id": 1}}
-            ],
-        }).encode()
+        mock_response.read.return_value = json.dumps(
+            {
+                "ok": True,
+                "result": [{"update_id": 1, "message": {"chat": {"id": 999888}, "text": "/status", "message_id": 1}}],
+            }
+        ).encode()
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 

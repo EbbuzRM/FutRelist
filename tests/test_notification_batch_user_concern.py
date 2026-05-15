@@ -6,8 +6,8 @@ This addresses the user's concern that removing the capping logic might cause
 over-counting, when in fact it prevents under-counting.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
 from core.notification_batch import NotificationBatch
 from models.listing import ListingScanResult
 
@@ -25,7 +25,7 @@ def test_notification_batch_correctly_handles_accumulated_greater_than_current_s
 
     # Ciclo 1: Iniziamo con 10 oggetti scaduti, ne rilistiamo 8 con successo
     scan1 = MagicMock(spec=ListingScanResult)
-    scan1.total_count = 10    # 10 oggetti nello scan iniziale
+    scan1.total_count = 10  # 10 oggetti nello scan iniziale
     scan1.expired_count = 10  # Tutti e 10 sono scaduti e disponibili per rilist
     batch.accumulate(scan1, succeeded=8, failed=0)
     # Dopo ciclo 1: self.relisted = 8 (8 oggetti rilistati con successo)
@@ -34,19 +34,19 @@ def test_notification_batch_correctly_handles_accumulated_greater_than_current_s
     # Ciclo 2: Ora troviamo solo 2 oggetti scaduti (gli altri 8 sono già stati rilistati)
     # Rilistiamo 1 di questi 2 rimanenti
     scan2 = MagicMock(spec=ListingScanResult)
-    scan2.total_count = 8     # Ora abbiamo 8 oggetti attivi + 2 scaduti = 10 totali
-                              # Ma il detector potrebbe restituire solo quelli attualmente visibili
-                              # o il total_count potrebbe essere filtrato in qualche modo
-                              # L'importante è che gli oggetti rilistati non siano più nello scan
-    scan2.expired_count = 2   # Solo 2 oggetti ancora scaduti da rilistare
+    scan2.total_count = 8  # Ora abbiamo 8 oggetti attivi + 2 scaduti = 10 totali
+    # Ma il detector potrebbe restituire solo quelli attualmente visibili
+    # o il total_count potrebbe essere filtrato in qualche modo
+    # L'importante è che gli oggetti rilistati non siano più nello scan
+    scan2.expired_count = 2  # Solo 2 oggetti ancora scaduti da rilistare
     batch.accumulate(scan2, succeeded=1, failed=0)
     # Dopo ciclo 2: self.relisted = 9 (8+1 oggetti rilasciati con successo totale)
 
     # Ciclo 3: Ora troviamo 0 oggetti scaduti (tutti e 10 sono stati rilistati con successo)
     # Non possiamo rilistare nulla perché non ci sono più oggetti scaduti
     scan3 = MagicMock(spec=ListingScanResult)
-    scan3.total_count = 10    # Tutti e 10 oggetti sono ora attivi (rilistati con successo)
-    scan3.expired_count = 0   # Nessun oggetto scaduto rimanente
+    scan3.total_count = 10  # Tutti e 10 oggetti sono ora attivi (rilistati con successo)
+    scan3.expired_count = 0  # Nessun oggetto scaduto rimanente
     batch.accumulate(scan3, succeeded=0, failed=0)
     # Dopo ciclo 3: self.relisted = 9 (totale oggetti rilasciati con successo)
 
@@ -79,7 +79,7 @@ def test_notification_batch_correctly_handles_accumulated_greater_than_current_s
     # Ciclo 2: Per qualche motivo (filtro, timing, ecc.) il scan riporta solo 5 oggetti totali
     # Ma noi abbiamo già rilistato 20 oggetti nei cicli precedenti, quindi ne abbiamo 0 da rilistare ora
     scan_b = MagicMock(spec=ListingScanResult)
-    scan_b.total_count = 5    # Solo 5 oggetti riportati nello scan corrente
+    scan_b.total_count = 5  # Solo 5 oggetti riportati nello scan corrente
     scan_b.expired_count = 0  # Nessuno scaduto da rilistare (tutti già rilistati)
     batch.accumulate(scan_b, succeeded=0, failed=0)
     # self.relisted è ancora 20 (il totale corretto)
@@ -123,8 +123,8 @@ def test_notification_batch_old_behavior_would_cause_under_reporting():
 
     # Ora arriva uno scan che, per ragioni di stato degli oggetti, riporta pochi oggetti totali
     scan = MagicMock(spec=ListingScanResult)
-    scan.total_count = 8   # Ad esempio, molti oggetti sono già stati rilistati e sono attivi
-    scan.expired_count = 2 # Solo 2 ancora da processare
+    scan.total_count = 8  # Ad esempio, molti oggetti sono già stati rilistati e sono attivi
+    scan.expired_count = 2  # Solo 2 ancora da processare
 
     # Simuliamo cosa avrebbe fatto il VECCHIO codice:
     totale_oggetti = scan.total_count if scan else 0
@@ -151,11 +151,11 @@ def test_notification_batch_never_over_reports():
 
     # Simuliamo qualsiasi sequenza di accumulazione
     test_sequences = [
-        (5, 0),   # 5 riusciti
-        (3, 2),   # 3 riusciti, 2 falliti
-        (0, 0),   # nessun lavoro
+        (5, 0),  # 5 riusciti
+        (3, 2),  # 3 riusciti, 2 falliti
+        (0, 0),  # nessun lavoro
         (10, 1),  # 10 riusciti, 1 fallito
-        (1, 0),   # 1 riuscito
+        (1, 0),  # 1 riuscito
     ]
 
     for succeeded, failed in test_sequences:

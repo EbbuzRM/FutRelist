@@ -1,13 +1,13 @@
-import pytest
 from datetime import datetime
-from unittest.mock import MagicMock
+
 from logic.golden_hour import (
     get_next_golden_hour,
-    is_in_golden_period,
-    is_in_hold_window,
     is_close_to_golden,
-    is_in_golden_window
+    is_in_golden_period,
+    is_in_golden_window,
+    is_in_hold_window,
 )
+
 
 def test_is_in_golden_period():
     # 15:00 -> False
@@ -18,6 +18,7 @@ def test_is_in_golden_period():
     assert is_in_golden_period(datetime(2026, 4, 18, 18, 15)) is True
     # 18:16 -> False
     assert is_in_golden_period(datetime(2026, 4, 18, 18, 16)) is False
+
 
 def test_is_in_golden_window():
     # 16:08 -> False
@@ -31,6 +32,7 @@ def test_is_in_golden_window():
     # 16:12 -> False
     assert is_in_golden_window(datetime(2026, 4, 18, 16, 12)) is False
 
+
 def test_is_in_hold_window():
     # Fuori fascia golden -> False
     assert is_in_hold_window(datetime(2026, 4, 18, 14, 0)) is False
@@ -39,6 +41,7 @@ def test_is_in_hold_window():
     # In fascia golden, fuori finestra relist -> True
     assert is_in_hold_window(datetime(2026, 4, 18, 16, 0)) is True
     assert is_in_hold_window(datetime(2026, 4, 18, 17, 30)) is True
+
 
 def test_is_close_to_golden():
     # 16:08 -> True
@@ -49,6 +52,7 @@ def test_is_close_to_golden():
     assert is_close_to_golden(datetime(2026, 4, 18, 16, 7)) is False
     # 15:00 -> False
     assert is_close_to_golden(datetime(2026, 4, 18, 15, 0)) is False
+
 
 def test_get_next_golden_hour():
     # 15:00 -> 16:10

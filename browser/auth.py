@@ -1,12 +1,13 @@
 """
 Autenticazione FIFA 26 WebApp - Gestione login e sessione persistente
 """
-import json
+
 import logging
 import re
 import shutil
 import time
 from pathlib import Path
+
 from playwright.sync_api import Page
 
 logger = logging.getLogger(__name__)
@@ -15,11 +16,12 @@ logger = logging.getLogger(__name__)
 class AuthError(Exception):
     """Autenticazione fallita. Il chiamante decide se terminare o recuperare."""
 
+
 SELECTORS = {
     # Selettore per il messaggio di sessione console attiva
-    "console_error": '.ut-messaging-view, .dialog-body, .dialog-title',
+    "console_error": ".ut-messaging-view, .dialog-body, .dialog-title",
     # Dialog messaggi generici / errori
-    "generic_dialog": '.dialog-body, .ut-messaging-view',
+    "generic_dialog": ".dialog-body, .ut-messaging-view",
 }
 
 
@@ -46,10 +48,13 @@ class AuthManager:
 
             # Verifica attiva che lo shield sia realmente scomparso
             # (non solo nascosto ma non intercetti eventi)
-            page.wait_for_function("""() => {
+            page.wait_for_function(
+                """() => {
                 const shield = document.querySelector('.ut-click-shield.showing');
                 return !shield || getComputedStyle(shield).display === 'none';
-            }""", timeout=5000)
+            }""",
+                timeout=5000,
+            )
 
             # Verifica che lo shield sia ancora assente
             shield = page.query_selector(".ut-click-shield.showing")
@@ -98,7 +103,7 @@ class AuthManager:
     def check_and_handle_disconnect_modal(self, page: Page) -> bool:
         """Controlla se c'è il popup 'Cannot Authenticate' / 'Impossibile autenticare'.
         Clicca 'Ok' se lo trova e aspetta il logout.
-        
+
         Ritorna True se ha trovato e gestito il modale.
         """
         try:
@@ -108,9 +113,9 @@ class AuthManager:
                 "unable to authenticate with the football",
                 "logged out of the application",
                 "impossibile autenticare",
-                "sarai disconnesso dall'applicazione"
+                "sarai disconnesso dall'applicazione",
             ]
-            
+
             dialogs = page.query_selector_all(SELECTORS["generic_dialog"])
             for dialog in dialogs:
                 if dialog and dialog.is_visible():
@@ -124,7 +129,7 @@ class AuthManager:
                         else:
                             # Fallback Playwright
                             page.get_by_role("button", name=re.compile("ok", re.IGNORECASE)).first.click(timeout=3000)
-                            
+
                         logger.info("Modale disconnessione accettato. Attesa redirect a login...")
                         page.wait_for_timeout(3000)
                         return True
@@ -154,8 +159,8 @@ class AuthManager:
                 'button:has-text("Transfers")',
                 'button:has-text("Trasferimenti")',
                 'button:has-text("Club")',
-                '.ut-navigation-container',
-                '.ut-tab-bar'
+                ".ut-navigation-container",
+                ".ut-tab-bar",
             ]
 
             start_time = time.time()
@@ -381,6 +386,94 @@ class AuthManager:
         except Exception as e:
             logger.error(f"Errore durante login: {e}")
             return False
+
+    def perform_full_login(self, page: Page, controller, wait_fn=None, get_credentials_fn=None) -> None:
+        """Flusso completo di login con gestione console session.
+
+        Questo metodo sostituisce la funzione authenticate() da main.py,
+        eliminando la dipendenza circolare tra main.py e error_handler.py.
+
+        Args:
+            get_credentials_fn: callable opzionale che ritorna (email, password).
+                Se non fornito, legge da os.environ come fallback.
+        """
+        from browser.auth import AuthError
+
+        logger = logging.getLogger(__name__)
+        if self.has_saved_session():
+            page.wait_for_timeout(2000)
+
+        while True:
+            if self.is_console_session_active(page):
+                logger.warning("Sessione console attiva. Attesa...")
+                if wait_fn:
+                    if wait_fn(1800):
+                        raise AuthError("Login interrotto da richiesta reboot durante sessione console")
+                else:
+                    import time
+
+                    time.sleep(1800)
+                controller.navigate_to_webapp()
+                page.wait_for_timeout(5000)
+
+                # Attendi che il click-shield scompaia prima di cliccare Login
+                self.wait_for_click_shield(page, timeout_ms=15000)
+
+                login_btn = page.get_by_role("button", name="Login")
+                if login_btn.count():
+                    # Retry con gestione shield (come perform_login)
+                    for attempt in range(1, 4):
+                        try:
+                            login_btn.first.click(timeout=10000)
+                            break
+                        except Exception as e:
+                            err_msg = str(e)
+                            logger.warning(f"Click Login fallito in perform_full_login (tentativo {attempt}): {e}")
+                            if "intercepts pointer events" in err_msg or "ut-click-shield" in err_msg:
+                                self.wait_for_click_shield(page, timeout_ms=10000)
+                            # Fallback: click via JavaScript (SEMPRE tentato)
+                            try:
+                                page.evaluate("document.querySelector('.btn-standard.primary')?.click()")
+                                break
+                            except Exception:
+                                pass
+                            # Fallback: force click (SEMPRE tentato)
+                            try:
+                                login_btn.first.click(timeout=5000, force=True)
+                                break
+                            except Exception:
+                                if attempt < 3:
+                                    page.wait_for_timeout(3000)
+                                    self.wait_for_click_shield(page, timeout_ms=10000)
+                                else:
+                                    logger.error("Impossibile cliccare Login dopo 3 tentativi in perform_full_login")
+                    page.wait_for_timeout(5000)
+
+            if self.is_logged_in(page, timeout_ms=5000):
+                self.save_session(controller.context)
+                return
+
+            # Risolve le credenziali tramite il callable iniettato (preferito)
+            # oppure tramite variabili d'ambiente come fallback di compatibilità.
+            if get_credentials_fn is not None:
+                try:
+                    email, password = get_credentials_fn()
+                except Exception as e:
+                    raise AuthError(f"Impossibile ottenere le credenziali: {e}") from e
+            else:
+                import os
+
+                email = os.environ.get("FIFA_EMAIL")
+                password = os.environ.get("FIFA_PASSWORD")
+            if not email or not password:
+                raise AuthError("Credenziali FIFA_EMAIL o FIFA_PASSWORD non trovate nel file .env")
+
+            if self.perform_login(page, email, password):
+                self.save_session(controller.context)
+                return
+            if self.is_console_session_active(page):
+                continue
+            raise AuthError("Login fallito")
 
     def handle_verification_if_needed(self, page: Page) -> bool:
         """Gestisce il 2FA/verifica identità EA se richiesto."""

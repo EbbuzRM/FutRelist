@@ -1,5 +1,6 @@
 """Test per SoldHandler — navigazione, raccolta crediti, pulizia venduti."""
-from unittest.mock import MagicMock, patch
+
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -188,6 +189,7 @@ class TestProcessSoldItems:
 
     def test_full_flow_success(self, handler, mock_page):
         """Navigazione + raccolta + cancellazione → SoldCreditsResult."""
+
         # Mock navigazione
         def mock_get_by_role(role, name=None):
             btn = MagicMock()
@@ -222,6 +224,7 @@ class TestProcessSoldItems:
 
     def test_no_sold_items(self, handler, mock_page):
         """Nessun oggetto venduto → risultato con zero crediti."""
+
         def mock_get_by_role(role, name=None):
             btn = MagicMock()
             btn.count.return_value = 1

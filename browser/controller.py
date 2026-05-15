@@ -1,11 +1,16 @@
 """
 Browser Controller - Wrapper Playwright per automazione FIFA 26 WebApp
 """
+
 import logging
 from pathlib import Path
-from playwright.sync_api import sync_playwright, BrowserContext, Page
+
+from playwright.sync_api import BrowserContext, Page, sync_playwright
 
 logger = logging.getLogger(__name__)
+
+# LO-07: Default profile directory — variabile di modulo (non class variable)
+DEFAULT_PROFILE_DIR = Path("storage/browser_profile")
 
 
 class BrowserController:
@@ -17,8 +22,6 @@ class BrowserController:
         self.context: BrowserContext | None = None
         self.page: Page | None = None
         self._is_running = False
-
-    DEFAULT_PROFILE_DIR = Path("storage/browser_profile")
 
     def start(self, user_data_dir: str | None = None) -> Page:
         """Avvia il browser con profilo persistente.
@@ -34,15 +37,14 @@ class BrowserController:
         viewport = browser_cfg.get("viewport", {"width": 1280, "height": 720})
 
         # Determina la cartella del profilo: quella passata o quella di default
-        profile_path = Path(user_data_dir) if user_data_dir else self.DEFAULT_PROFILE_DIR
+        profile_path = Path(user_data_dir) if user_data_dir else DEFAULT_PROFILE_DIR
         profile_path.mkdir(parents=True, exist_ok=True)
 
         logger.info("Avvio Playwright...")
         self.playwright = sync_playwright().start()
 
         logger.info(
-            f"Lancio browser con profilo persistente: {profile_path} "
-            f"(headless={browser_cfg.get('headless', False)})"
+            f"Lancio browser con profilo persistente: {profile_path} (headless={browser_cfg.get('headless', False)})"
         )
 
         # launch_persistent_context salva TUTTI i dati di sessione su disco:
@@ -56,11 +58,14 @@ class BrowserController:
                 "width": viewport.get("width", 1280),
                 "height": viewport.get("height", 720),
             },
-            args=["--no-sandbox"]
+            args=["--no-sandbox"],
         )
 
         # Riusa la pagina già aperta oppure ne crea una nuova
-        self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
+        if self.context.pages:
+            self.page = self.context.pages[0]
+        else:
+            self.page = self.context.new_page()
 
         self._is_running = True
         logger.info("Browser avviato con successo")
@@ -70,15 +75,12 @@ class BrowserController:
         if not self._is_running or not self.page:
             raise RuntimeError("Browser non avviato. Usa start() prima.")
 
-        url = self.config.get(
-            "fifa_webapp_url", "https://www.ea.com/ea-sports-fc/ultimate-team/web-app/"
-        )
+        url = self.config.get("fifa_webapp_url", "https://www.ea.com/ea-sports-fc/ultimate-team/web-app/")
 
         logger.info(f"Navigazione a: {url}")
         self.page.goto(url, wait_until="domcontentloaded", timeout=60000)
         self.page.wait_for_timeout(3000)
         logger.info(f"Pagina caricata: {self.page.title()}")
-
 
     def stop(self) -> None:
         logger.info("Chiusura browser...")
@@ -105,6 +107,51 @@ class BrowserController:
         self.page = None
         self._is_running = False
         logger.info("Browser chiuso")
+
+    def force_kill_chrome(self) -> None:
+        """Uccide forzatamente il processo Chrome che usa il profilo del bot.
+
+        Necessario prima di os.execv() per liberare il lock sul user-data-dir:
+        Chrome non viene terminato automaticamente quando os.execv() sostituisce
+        il processo Python padre, diventando orfano e bloccando il profilo.
+        """
+        import subprocess
+        import sys
+
+        profile_marker = "browser_profile"
+        try:
+            if sys.platform == "win32":
+                # Cerca e uccide tutti i processi Chrome che usano il nostro profilo
+                result = subprocess.run(
+                    [
+                        "wmic",
+                        "process",
+                        "where",
+                        f"name='chrome.exe' and CommandLine like '%{profile_marker}%'",
+                        "get",
+                        "ProcessId",
+                        "/format:list",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                pids = [
+                    line.split("=")[1].strip()
+                    for line in result.stdout.splitlines()
+                    if line.startswith("ProcessId=") and line.split("=")[1].strip()
+                ]
+                for pid in pids:
+                    try:
+                        subprocess.run(["taskkill", "/F", "/T", "/PID", pid], capture_output=True, timeout=5)
+                        logger.info(f"Chrome PID {pid} terminato forzatamente")
+                    except Exception as e:
+                        logger.debug(f"taskkill PID {pid} fallito: {e}")
+            else:
+                subprocess.run(["pkill", "-9", "-f", profile_marker], capture_output=True, timeout=5)
+                logger.info("Chrome processi terminati (pkill)")
+        except Exception as e:
+            logger.debug(f"force_kill_chrome fallito (non critico): {e}")
 
     def is_running(self) -> bool:
         return self._is_running

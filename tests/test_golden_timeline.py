@@ -18,9 +18,9 @@ Verifies the bot's behavior at every critical moment of the golden hour schedule
     18:11:00 -> is_in_hold_window=True MA get_next_golden_hour=None -> in_hold=False -> RELIST IMMEDIATO
     18:15+  -> Relist normale (fuori golden period)
 """
+
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
@@ -42,7 +42,6 @@ from logic.golden_hour import (
 )
 from logic.relist_engine import RelistEngine
 from models.listing import ListingScanResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -276,9 +275,7 @@ class TestHoldDecisionLogic:
         next_g = get_next_golden_hour(now)
         # When next_golden is None, the hold MUST be overridden
         should_relist = not in_hold or (in_hold and next_g is None)
-        assert should_relist is True, (
-            "At 18:14, hold should be overridden because no more goldens"
-        )
+        assert should_relist is True, "At 18:14, hold should be overridden because no more goldens"
 
     def test_at_16_12_hold_with_golden_should_stay_hold(self):
         """At 16:12: hold_window=True, next_golden=17:10 -> stay in hold."""
@@ -290,9 +287,7 @@ class TestHoldDecisionLogic:
         # The main loop logic: hold is genuine, don't override
         in_hold = is_in_hold_window(now)
         should_hold = in_hold and next_g is not None
-        assert should_hold is True, (
-            "At 16:12, hold is genuine because 17:10 is coming"
-        )
+        assert should_hold is True, "At 16:12, hold is genuine because 17:10 is coming"
 
     def test_at_15_30_hold_with_golden_should_stay_hold(self):
         """At 15:30: hold_window=True, next_golden=16:10 -> stay in hold."""
@@ -342,18 +337,14 @@ class TestGoldenWaitSkipLogic:
         # The condition: if NOT in golden window -> sleep
         # So if in golden window -> skip sleep
         should_sleep = not is_in_golden_window(now)
-        assert should_sleep is False, (
-            "At 16:10 the bot must NOT sleep — it's golden time"
-        )
+        assert should_sleep is False, "At 16:10 the bot must NOT sleep — it's golden time"
 
     def test_at_16_08_should_wait_until_golden(self):
         """At 16:08: is_in_golden_window=False -> should time.sleep() until 16:10."""
         now = dt(16, 8)
         assert is_in_golden_window(now) is False
         should_sleep = not is_in_golden_window(now)
-        assert should_sleep is True, (
-            "At 16:08 the bot should sleep until golden window opens"
-        )
+        assert should_sleep is True, "At 16:08 the bot should sleep until golden window opens"
 
     def test_at_16_09_should_skip_wait(self):
         """At 16:09: is_in_golden_window=True -> skip time.sleep()."""
@@ -389,9 +380,7 @@ class TestComputeNextWaitGoldenWindow:
         scan.processing_count = 0
         engine = RelistEngine(None, None, None, None, None, None, None)
         result = engine._compute_next_wait(scan)
-        assert result == 10, (
-            f"During golden window, wait should be 10s for ritardatari polling, got {result}"
-        )
+        assert result == 10, f"During golden window, wait should be 10s for ritardatari polling, got {result}"
 
     @patch("logic.relist_engine.datetime")
     def test_hold_window_returns_wait_until_golden(self, mock_dt):
@@ -479,9 +468,7 @@ class TestFullDayTimeline:
     def test_timeline_minute(self, hour, minute, expected):
         now = dt(hour, minute)
         actual = _classify_behavior(now)
-        assert actual == expected, (
-            f"At {hour:02d}:{minute:02d}: expected '{expected}', got '{actual}'"
-        )
+        assert actual == expected, f"At {hour:02d}:{minute:02d}: expected '{expected}', got '{actual}'"
 
 
 # ===========================================================================
@@ -629,20 +616,14 @@ class TestPostGoldenHoldOverride:
         h, m = map(int, time_str.split(":"))
         now = dt(h, m)
         # is_in_hold_window is True (we're in golden period, not in golden window)
-        assert is_in_hold_window(now) is True, (
-            f"Expected hold_window=True at {time_str}"
-        )
+        assert is_in_hold_window(now) is True, f"Expected hold_window=True at {time_str}"
         # But get_next_golden_hour returns None — no more goldens!
-        assert get_next_golden_hour(now) is None, (
-            f"Expected no more goldens at {time_str}"
-        )
+        assert get_next_golden_hour(now) is None, f"Expected no more goldens at {time_str}"
         # The main loop overrides hold when next_golden is None
         in_hold = is_in_hold_window(now)
         next_g = get_next_golden_hour(now)
         effective_hold = in_hold and next_g is not None
-        assert effective_hold is False, (
-            f"At {time_str}: hold must be overridden (no future golden)"
-        )
+        assert effective_hold is False, f"At {time_str}: hold must be overridden (no future golden)"
 
     def test_18_10_is_golden_window_not_hold(self):
         """At 18:10 we're in the golden window, not in hold."""
@@ -714,15 +695,18 @@ class TestComputeNextWaitIntegration:
         scan.processing_count = 0
         # If we need active listings with timers:
         if active_with_timer is not None:
-            from models.listing import PlayerListing, ListingState
+            from models.listing import ListingState, PlayerListing
+
             for i, t in enumerate(active_with_timer):
-                scan.listings.append(PlayerListing(
-                    index=i,
-                    player_name=f"Player {i}",
-                    state=ListingState.ACTIVE,
-                    time_remaining_seconds=t,
-                    time_remaining=f"{t // 60}m",
-                ))
+                scan.listings.append(
+                    PlayerListing(
+                        index=i,
+                        player_name=f"Player {i}",
+                        state=ListingState.ACTIVE,
+                        time_remaining_seconds=t,
+                        time_remaining=f"{t // 60}m",
+                    )
+                )
         return scan
 
     @patch("logic.relist_engine.datetime")

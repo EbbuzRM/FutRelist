@@ -3,18 +3,33 @@
 Provides session expiry detection, automatic re-authentication,
 retry on timeout decorator, and element-not-found handling.
 """
+
 from __future__ import annotations
 
 import functools
 import logging
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
-    from playwright.sync_api import Error as PlaywrightError
+
     from browser.auth import AuthManager
 
 logger = logging.getLogger(__name__)
+
+
+def _perform_full_login(
+    auth: AuthManager,
+    page: Page,
+    controller,
+    wait_fn: Callable[[float], bool] | None,
+    get_credentials_fn: Callable | None = None,
+) -> None:
+    if wait_fn is None:
+        auth.perform_full_login(page, controller, get_credentials_fn=get_credentials_fn)
+    else:
+        auth.perform_full_login(page, controller, wait_fn=wait_fn, get_credentials_fn=get_credentials_fn)
 
 
 def retry_on_timeout(func: Callable | None = None, *, max_retries: int = 3) -> Callable:
@@ -22,10 +37,12 @@ def retry_on_timeout(func: Callable | None = None, *, max_retries: int = 3) -> C
 
     Uses exponential backoff (1s, 2s, 4s) between retries.
     """
+
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             from playwright.sync_api import Error as PlaywrightError
+
             last_exc = None
             for attempt in range(max_retries):
                 try:
@@ -33,16 +50,17 @@ def retry_on_timeout(func: Callable | None = None, *, max_retries: int = 3) -> C
                 except PlaywrightError as e:
                     last_exc = e
                     if "timeout" in str(e).lower() or "timed out" in str(e).lower():
-                        wait = 2 ** attempt  # 1s, 2s, 4s
+                        wait = 2**attempt  # 1s, 2s, 4s
                         logger.warning(
-                            f"Timeout al tentativo {attempt + 1}/{max_retries}, "
-                            f"attesa {wait}s prima del retry: {e}"
+                            f"Timeout al tentativo {attempt + 1}/{max_retries}, attesa {wait}s prima del retry: {e}"
                         )
                         import time
+
                         time.sleep(wait)
                     else:
                         raise
             raise last_exc  # type: ignore[misc]
+
         return wrapper
 
     if func is not None:
@@ -51,7 +69,7 @@ def retry_on_timeout(func: Callable | None = None, *, max_retries: int = 3) -> C
 
 
 def handle_element_not_found(
-    page: "Page",
+    page: Page,
     selector: str,
     *,
     fallback_reload: bool = True,
@@ -82,7 +100,7 @@ def handle_element_not_found(
     return False
 
 
-def is_session_expired(page: "Page") -> bool:
+def is_session_expired(page: Page) -> bool:
     """Verifica se la sessione è scaduta controllando lo stato della pagina.
 
     Ritorna True se siamo chiaramente su una pagina di login/url sconosciuto.
@@ -103,11 +121,11 @@ def is_session_expired(page: "Page") -> bool:
 
 
 def ensure_session(
-    page: "Page",
-    auth: "AuthManager",
+    page: Page,
+    auth: AuthManager,
     controller,
-    get_credentials_fn: Callable[[], tuple[str, str]] | None = None,
     timeout_ms: int = 5000,
+    wait_fn: Callable[[float], bool] | None = None,
 ) -> None:
     """Verifica la sessione e tenta il recupero se scaduta.
 
@@ -131,11 +149,10 @@ def ensure_session(
             logger.warning("Redirect non completato, navigazione forzata...")
             controller.navigate_to_webapp()
             page.wait_for_timeout(3000)
-        
+
         # Ora fai il re-login completo
         try:
-            from main import authenticate
-            authenticate(controller, auth, page)
+            _perform_full_login(auth, page, controller, wait_fn)
             logger.info("Sessione ripristinata con successo")
         except Exception as e:
             raise AuthError(f"Recupero sessione fallito: {e}") from e
@@ -149,15 +166,14 @@ def ensure_session(
         page.wait_for_timeout(3000)
         # Riprova il check del modale dopo il reload
         auth.check_and_handle_disconnect_modal(page)
-        
+
         if not is_session_expired(page) and auth.is_logged_in(page, timeout_ms=timeout_ms):
             return
         # Dopo reload ancora non loggato: cade nel blocco di re-auth sotto
 
     logger.warning("Sessione non valida, tento il ripristino (incluso eventuale controllo console)...")
     try:
-        from main import authenticate
-        authenticate(controller, auth, page)
+        _perform_full_login(auth, page, controller, wait_fn)
         logger.info("Sessione ripristinata con successo")
     except AuthError:
         raise

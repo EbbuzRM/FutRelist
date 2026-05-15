@@ -1,11 +1,10 @@
 """Tests for ActionLogEntry dataclass and JsonFormatter."""
+
 import json
 import logging
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
-import pytest
 
 from models.action_log import ActionLogEntry, JsonFormatter, parse_action_history
 
@@ -16,7 +15,7 @@ class TestActionLogEntry:
     def test_creation_with_required_fields(self):
         """ActionLogEntry can be created with all required fields."""
         entry = ActionLogEntry(
-            timestamp=datetime(2026, 3, 23, 12, 0, 0, tzinfo=timezone.utc),
+            timestamp=datetime(2026, 3, 23, 12, 0, 0, tzinfo=UTC),
             level="INFO",
             action="relist",
             player_name="Mbappé",
@@ -32,7 +31,7 @@ class TestActionLogEntry:
     def test_to_dict_produces_correct_structure(self):
         """to_dict() returns flat dict suitable for JSON serialization."""
         entry = ActionLogEntry(
-            timestamp=datetime(2026, 3, 23, 12, 0, 0, tzinfo=timezone.utc),
+            timestamp=datetime(2026, 3, 23, 12, 0, 0, tzinfo=UTC),
             level="ERROR",
             action="relist",
             player_name="Haaland",
@@ -53,7 +52,7 @@ class TestActionLogEntry:
     def test_from_dict_round_trips_correctly(self):
         """from_dict() reconstructs ActionLogEntry identical to original."""
         original = ActionLogEntry(
-            timestamp=datetime(2026, 3, 23, 12, 0, 0, tzinfo=timezone.utc),
+            timestamp=datetime(2026, 3, 23, 12, 0, 0, tzinfo=UTC),
             level="WARNING",
             action="scan",
             player_name=None,
@@ -101,6 +100,7 @@ class TestJsonFormatter:
             raise ValueError("errore di test")
         except ValueError:
             import sys
+
             exc_info = sys.exc_info()
 
         record = logging.LogRecord(

@@ -1,7 +1,9 @@
 """
 Navigazione Transfer Market FIFA 26 WebApp - Dalla home alla Transfer List
 """
+
 import logging
+
 from playwright.sync_api import Page
 
 from browser.rate_limiter import RateLimiter
@@ -33,26 +35,23 @@ class TransferMarketNavigator:
         """
         # Lista di testi che identificano pulsanti di dismissione comune nei popup EA
         dismiss_labels = ["Continue", "Continua", "Ok", "OK", "Close", "Chiudi", "Got It", "Ho capito"]
-        
-        for label in dismiss_labels:
-            try:
-                btn = self.page.get_by_role("button", name=label)
-                if btn.count() and btn.first.is_visible():
-                    logger.info(f"Popup rilevato. Click su '{label}' per chiuderlo...")
-                    btn.first.click()
-                    self.page.wait_for_timeout(1500)
-                    # Controlla se ci sono ulteriori popup in cascata (es. 1/2, 2/2)
-                    # Riesegue il check fino a 3 volte per smaltire messaggi multipli
-                    for _ in range(2):
-                        btn2 = self.page.get_by_role("button", name=label)
-                        if btn2.count() and btn2.first.is_visible():
-                            btn2.first.click()
-                            self.page.wait_for_timeout(1500)
-                        else:
-                            break
-                    break  # Uscito dal loop label se ha trovato e cliccato
-            except Exception:
-                continue  # Tenta il label successivo
+
+        # EA può mostrare popup in cascata (es. promo + avviso sicurezza).
+        # Iteriamo più volte finché non troviamo più nulla da chiudere.
+        for _ in range(3):
+            found_any = False
+            for label in dismiss_labels:
+                try:
+                    btn = self.page.get_by_role("button", name=label)
+                    if btn.count() and btn.first.is_visible(timeout=500):
+                        logger.info(f"Popup rilevato. Click su '{label}' per chiuderlo...")
+                        btn.first.click()
+                        self.page.wait_for_timeout(1000)
+                        found_any = True
+                except Exception:
+                    continue
+            if not found_any:
+                break
 
     def go_to_transfer_list(self, fast: bool = False) -> bool:
         """Naviga dalla Home alla vista Transfer List.
@@ -71,13 +70,13 @@ class TransferMarketNavigator:
             # Step 0b: Dismiss any blocking modal overlay (e.g. form-modal, view-modal)
             # These intercept clicks even when no button is visible
             try:
-                modal = self.page.query_selector('.view-modal-container, .ea-dialog-view, .form-modal')
+                modal = self.page.query_selector(".view-modal-container, .ea-dialog-view, .form-modal")
                 if modal and modal.is_visible():
                     logger.info("Modale bloccante rilevata. Press Escape per chiuderla...")
                     self.page.keyboard.press("Escape")
                     self.page.wait_for_timeout(1000)
                     # Verify modal is gone
-                    modal2 = self.page.query_selector('.view-modal-container, .ea-dialog-view, .form-modal')
+                    modal2 = self.page.query_selector(".view-modal-container, .ea-dialog-view, .form-modal")
                     if modal2 and modal2.is_visible():
                         logger.warning("Modale ancora presente dopo Escape, secondo tentativo...")
                         self.page.keyboard.press("Escape")
@@ -108,7 +107,7 @@ class TransferMarketNavigator:
             self.dismiss_popups()
             # Also try Escape to dismiss any blocking modal overlay
             try:
-                modal = self.page.query_selector('.view-modal-container, .ea-dialog-view, .form-modal')
+                modal = self.page.query_selector(".view-modal-container, .ea-dialog-view, .form-modal")
                 if modal and modal.is_visible():
                     logger.info("Modale EA apparso dopo click Transfers. Chiudo con Escape...")
                     self.page.keyboard.press("Escape")
@@ -124,6 +123,8 @@ class TransferMarketNavigator:
             for attempt in range(3):
                 transfer_list_area = self.page.get_by_role("heading", name="Transfer List")
                 if not transfer_list_area.count():
+                    transfer_list_area = self.page.get_by_role("heading", name="Lista trasferimenti")
+                if not transfer_list_area.count():
                     logger.error("Transfer List non trovato")
                     return False
 
@@ -134,13 +135,14 @@ class TransferMarketNavigator:
                     break
                 except Exception as click_err:
                     if "intercepts pointer events" in str(click_err) or "timeout" in str(click_err).lower():
-                        logger.warning(f"Click Transfer List bloccato (tentativo {attempt+1}/3), dismiss popup...")
+                        logger.warning(f"Click Transfer List bloccato (tentativo {attempt + 1}/3), dismiss popup...")
                         self.dismiss_popups()
                         # Try Escape for stubborn modals
                         self.page.keyboard.press("Escape")
                         self.page.wait_for_timeout(1000)
                         self.dismiss_popups()
                     else:
+                        logger.error(f"Click su Transfer List fallito dopo tutti i tentativi: {click_err}")
                         raise
 
             if not transfer_list_clicked:
@@ -155,7 +157,7 @@ class TransferMarketNavigator:
             # Aspettiamo il container o i listing oppure lo stato vuoto.
             try:
                 self.page.wait_for_selector(
-                    '.ut-transfer-list-view, .listFUTItem, .no-items, .empty-list',
+                    ".ut-transfer-list-view, .listFUTItem, .no-items, .empty-list",
                     timeout=5000,
                 )
                 logger.info("Transfer List caricata con successo")
@@ -169,4 +171,3 @@ class TransferMarketNavigator:
         except Exception as e:
             logger.error(f"Errore navigazione: {e}")
             return False
-

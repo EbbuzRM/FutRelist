@@ -2,32 +2,34 @@
 FIFA 26 Auto-Relist Tool
 Refactored Entrypoint
 """
+
 from __future__ import annotations
+
 import logging
 import os
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
 from rich.console import Console
 
-from browser.controller import BrowserController
-from browser.auth import AuthManager
-from browser.navigator import TransferMarketNavigator
-from browser.detector import ListingDetector
-from browser.relist import RelistExecutor
-from browser.rate_limiter import RateLimiter
 from bot_state import BotState, RebootRequestError
-from telegram_handler import TelegramHandler
+from browser.auth import AuthManager
+from browser.controller import BrowserController
+from browser.detector import ListingDetector
+from browser.navigator import TransferMarketNavigator
+from browser.rate_limiter import RateLimiter
+from browser.relist import RelistExecutor
+from browser.session_keeper import SessionKeeper
 from browser.sold_handler import SoldHandler
 from config.config import ConfigManager
 from config.log_config import setup_logging
-from browser.session_keeper import SessionKeeper
-from logic.relist_engine import RelistEngine, ConsoleSessionError
 from core.notification_batch import NotificationBatch
+from logic.relist_engine import ConsoleSessionError, RelistEngine
 from notifier import send_telegram_alert, send_telegram_error_with_screenshot
+from telegram_handler import TelegramHandler
+
 
 def get_credentials() -> tuple[str, str]:
     email = os.environ.get("FIFA_EMAIL")
@@ -36,22 +38,24 @@ def get_credentials() -> tuple[str, str]:
         return email, password
     raise RuntimeError("Credenziali FIFA_EMAIL o FIFA_PASSWORD non trovate nel file .env")
 
+
 def authenticate(controller, auth, page) -> None:
     from browser.auth import AuthError
+
     logger = logging.getLogger(__name__)
     if auth.has_saved_session():
         page.wait_for_timeout(2000)
-    
+
     while True:
         if auth.is_console_session_active(page):
             logger.warning("Sessione console attiva. Attesa...")
             time.sleep(1800)
             controller.navigate_to_webapp()
             page.wait_for_timeout(5000)
-            
+
             # Attendi che il click-shield scompaia prima di cliccare Login
             auth.wait_for_click_shield(page, timeout_ms=15000)
-            
+
             login_btn = page.get_by_role("button", name="Login")
             if login_btn.count():
                 # Retry con gestione shield (come perform_login)
@@ -66,7 +70,9 @@ def authenticate(controller, auth, page) -> None:
                             auth.wait_for_click_shield(page, timeout_ms=10000)
                         # Fallback: click via JavaScript (SEMPRE tentato)
                         try:
-                            clicked = page.evaluate("el = document.querySelector('.btn-standard.primary'); if (el) { el.click(); return true; } return false;")
+                            clicked = page.evaluate(
+                                "el = document.querySelector('.btn-standard.primary'); if (el) { el.click(); return true; } return false;"
+                            )
                             if clicked:
                                 break
                         except Exception:
@@ -82,7 +88,7 @@ def authenticate(controller, auth, page) -> None:
                             else:
                                 logger.error("Impossibile cliccare Login dopo 3 tentativi in authenticate")
                 page.wait_for_timeout(5000)
-        
+
         if auth.is_logged_in(page, timeout_ms=5000):
             auth.save_session(controller.context)
             return
@@ -94,6 +100,7 @@ def authenticate(controller, auth, page) -> None:
         if auth.is_console_session_active(page):
             continue
         raise AuthError("Login fallito")
+
 
 def main() -> None:
     load_dotenv()
@@ -151,7 +158,7 @@ def main() -> None:
             while True:
                 cycle += 1
                 bot_state.update_stats(cycle=1)
-                
+
                 if keeper.supervise_state(status_console):
                     continue
 
@@ -192,12 +199,12 @@ def main() -> None:
 
                     rate_limiter.wait()
                     if keeper.wait_with_heartbeat(next_wait, logger, deadline=deadline):
-                        break # Reboot
+                        break  # Reboot
 
                 except RebootRequestError:
                     # Inviato dal golden loop o dal supervisor per forzare un riavvio dolce
                     logger.info("Ricevuta richiesta di Reboot interno asincrono.")
-                    batch.flush_if_any(app_config, page, logger, locals().get('scan_result'), force=True)
+                    batch.flush_if_any(app_config, page, logger, locals().get("scan_result"), force=True)
                     break
                 except InterruptedError:
                     # This normally means Ctrl+C or a fatal signal to stop the whole app
@@ -208,13 +215,16 @@ def main() -> None:
             # Inner loop broke (Reboot requested or heartbeat reboot)
             if telegram:
                 telegram.stop()
-            batch.flush_if_any(app_config, page, logger, locals().get('scan_result'), force=True)
+            batch.flush_if_any(app_config, page, logger, locals().get("scan_result"), force=True)
             keeper.handle_reboot()
-        
+
         except ConsoleSessionError:
             logger.warning("Terminazione forzata del ciclo per Console attiva. Preparazione riavvio silente...")
             from notifier import send_telegram_emergency_alert
-            send_telegram_emergency_alert(app_config.notifications, "🎮 Console session rilevata — bot in pausa per prevenire ban risk.")
+
+            send_telegram_emergency_alert(
+                app_config.notifications, "🎮 Console session rilevata — bot in pausa per prevenire ban risk."
+            )
             try:
                 if telegram:
                     telegram.stop()
@@ -222,7 +232,7 @@ def main() -> None:
             except:
                 pass
             continue
-            
+
         except (MemoryError, RecursionError) as e:
             # Errori fatali: reboot inutile, termina il processo
             err_msg = f"🚨 ERRORE FATALE ({type(e).__name__}): {e}. Processo terminato."
@@ -242,12 +252,10 @@ def main() -> None:
 
         except Exception as e:
             logger.exception(f"Errore critico: {e}")
-            page_ref = page if 'page' in locals() else None
-            scan_ref = locals().get('scan_result')
+            page_ref = page if "page" in locals() else None
+            scan_ref = locals().get("scan_result")
             send_telegram_error_with_screenshot(
-                app_config.notifications, 
-                f"🚨 Errore critico: {e}. Riavvio in corso...",
-                page=page_ref
+                app_config.notifications, f"🚨 Errore critico: {e}. Riavvio in corso...", page=page_ref
             )
             time.sleep(10)
 

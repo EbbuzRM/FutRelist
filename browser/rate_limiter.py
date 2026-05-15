@@ -2,10 +2,12 @@
 
 Enforces configurable delay range with jitter between browser actions.
 """
+
 from __future__ import annotations
 
 import logging
 import random
+import threading
 import time
 
 logger = logging.getLogger(__name__)
@@ -22,13 +24,17 @@ class RateLimiter:
         self.min_delay_ms = min_delay_ms
         self.max_delay_ms = max_delay_ms
         self._warning_logged = False
+        self._lock = threading.Lock()
 
     def wait(self) -> None:
         """Attendi un ritardo casuale tra min e max."""
-        if self.min_delay_ms < 1200 and not self._warning_logged:
-            logger.warning(f"[RateLimiter] Usa valori aggressivi: min_delay_ms={self.min_delay_ms}ms. Rischio di rilevamento aumentato.")
-            self._warning_logged = True
-            
+        with self._lock:
+            if self.min_delay_ms < 1200 and not self._warning_logged:
+                logger.warning(
+                    f"[RateLimiter] Usa valori aggressivi: min_delay_ms={self.min_delay_ms}ms. Rischio di rilevamento aumentato."
+                )
+                self._warning_logged = True
+
         delay_ms = random.randint(self.min_delay_ms, self.max_delay_ms)
         logger.debug(f"Rate limit: attesa {delay_ms}ms")
         time.sleep(delay_ms / 1000.0)

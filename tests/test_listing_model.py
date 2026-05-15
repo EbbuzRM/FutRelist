@@ -3,7 +3,6 @@
 NOTE: These tests will fail until T01 creates models/listing.py.
 That's expected for Wave 0 — tests define the contract before implementation.
 """
-import pytest
 
 
 def test_listing_state_values():
@@ -18,7 +17,7 @@ def test_listing_state_values():
 
 def test_player_listing_creation():
     """Create a PlayerListing with all fields, assert fields accessible."""
-    from models.listing import PlayerListing, ListingState
+    from models.listing import ListingState, PlayerListing
 
     listing = PlayerListing(
         index=0,
@@ -43,32 +42,52 @@ def test_player_listing_creation():
 
 def test_player_listing_needs_relist():
     """Assert needs_relist is True for EXPIRED, False for ACTIVE/SOLD/UNKNOWN."""
-    from models.listing import PlayerListing, ListingState
+    from models.listing import ListingState, PlayerListing
 
     expired = PlayerListing(
-        index=0, player_name="Test", rating=80, position="ST",
-        state=ListingState.EXPIRED, current_price=1000, start_price=1000,
+        index=0,
+        player_name="Test",
+        rating=80,
+        position="ST",
+        state=ListingState.EXPIRED,
+        current_price=1000,
+        start_price=1000,
         time_remaining=None,
     )
     assert expired.needs_relist is True
 
     active = PlayerListing(
-        index=1, player_name="Test", rating=80, position="ST",
-        state=ListingState.ACTIVE, current_price=1000, start_price=1000,
+        index=1,
+        player_name="Test",
+        rating=80,
+        position="ST",
+        state=ListingState.ACTIVE,
+        current_price=1000,
+        start_price=1000,
         time_remaining="2h",
     )
     assert active.needs_relist is False
 
     sold = PlayerListing(
-        index=2, player_name="Test", rating=80, position="ST",
-        state=ListingState.SOLD, current_price=1000, start_price=1000,
+        index=2,
+        player_name="Test",
+        rating=80,
+        position="ST",
+        state=ListingState.SOLD,
+        current_price=1000,
+        start_price=1000,
         time_remaining=None,
     )
     assert sold.needs_relist is False
 
     unknown = PlayerListing(
-        index=3, player_name="Test", rating=80, position="ST",
-        state=ListingState.UNKNOWN, current_price=1000, start_price=1000,
+        index=3,
+        player_name="Test",
+        rating=80,
+        position="ST",
+        state=ListingState.UNKNOWN,
+        current_price=1000,
+        start_price=1000,
         time_remaining=None,
     )
     assert unknown.needs_relist is False
@@ -90,22 +109,37 @@ def test_listing_scan_result_empty():
 
 def test_listing_scan_result_counts():
     """Create ListingScanResult with listings, verify counts."""
-    from models.listing import ListingScanResult, PlayerListing, ListingState
+    from models.listing import ListingScanResult, ListingState, PlayerListing
 
     listings = [
         PlayerListing(
-            index=0, player_name="Mbappé", rating=91, position="ST",
-            state=ListingState.EXPIRED, current_price=50000, start_price=45000,
+            index=0,
+            player_name="Mbappé",
+            rating=91,
+            position="ST",
+            state=ListingState.EXPIRED,
+            current_price=50000,
+            start_price=45000,
             time_remaining=None,
         ),
         PlayerListing(
-            index=1, player_name="Messi", rating=90, position="RW",
-            state=ListingState.ACTIVE, current_price=30000, start_price=28000,
+            index=1,
+            player_name="Messi",
+            rating=90,
+            position="RW",
+            state=ListingState.ACTIVE,
+            current_price=30000,
+            start_price=28000,
             time_remaining="2h 30m",
         ),
         PlayerListing(
-            index=2, player_name="Haaland", rating=89, position="ST",
-            state=ListingState.SOLD, current_price=40000, start_price=38000,
+            index=2,
+            player_name="Haaland",
+            rating=89,
+            position="ST",
+            state=ListingState.SOLD,
+            current_price=40000,
+            start_price=38000,
             time_remaining=None,
         ),
     ]

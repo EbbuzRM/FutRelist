@@ -5,14 +5,16 @@ venduti e li cancella per liberare spazio nella lista.
 
 Segue i pattern esistenti: get_by_role selectors, RateLimiter, logging italiano.
 """
+
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from playwright.sync_api import Page
 
+from browser.detector import parse_price
+from browser.navigator import TransferMarketNavigator
 from browser.rate_limiter import RateLimiter
 from models.sold_result import SoldCreditsResult
 
@@ -37,9 +39,16 @@ class SoldHandler:
         rate_limiter: Optional RateLimiter instance. If not provided, creates internal instance.
     """
 
-    def __init__(self, page: Page, config: dict[str, Any], rate_limiter: RateLimiter | None = None):
+    def __init__(
+        self,
+        page: Page,
+        config: dict[str, Any],
+        rate_limiter: RateLimiter | None = None,
+        navigator: TransferMarketNavigator | None = None,
+    ):
         self.page = page
         self.config = config
+        self.navigator = navigator  # ME-11: iniettato per riusare go_to_transfer_list()
         if rate_limiter:
             self.rate_limiter = rate_limiter
         else:
@@ -104,69 +113,51 @@ class SoldHandler:
             )
 
     def _navigate_to_sold_items(self) -> bool:
-        """Naviga alla sezione Sold Items nella Transfer List.
+        """Naviga alla Transfer List delegando a TransferMarketNavigator (ME-11).
 
-        Percorso: Transfers → Transfer List → (ella pagina stessa) Sold section
+        Il tab Sold non è più necessario: i sold items sono visibili direttamente
+        nella Transfer List dopo la navigazione.
 
         Returns True se la navigazione ha successo.
         """
         try:
             logger.info("Navigazione verso Sold Items...")
 
-            # Step 1: Clicca Transfers nella sidebar
-            transfers_btn = self.page.get_by_role("button", name="Transfers")
-            if not transfers_btn.count():
-                transfers_btn = self.page.get_by_role("button", name=" Transfers")
-            if not transfers_btn.count():
-                transfers_btn = self.page.get_by_role("button", name="Trasferimenti")
-            if not transfers_btn.count():
-                transfers_btn = self.page.get_by_role("button", name=" Trasferimenti")
+            if self.navigator:
+                # ME-11: delega completa al navigator — nessuna duplicazione
+                if not self.navigator.go_to_transfer_list():
+                    logger.error("Navigator: go_to_transfer_list() fallito")
+                    return False
+            else:
+                # Fallback legacy (nessun navigator iniettato)
+                transfers_btn = self.page.get_by_role("button", name="Transfers")
+                if not transfers_btn.count():
+                    transfers_btn = self.page.get_by_role("button", name=" Transfers")
+                if not transfers_btn.count():
+                    transfers_btn = self.page.get_by_role("button", name="Trasferimenti")
+                if not transfers_btn.count():
+                    transfers_btn = self.page.get_by_role("button", name=" Trasferimenti")
 
-            if not transfers_btn.count():
-                logger.error("Pulsante Transfers non trovato")
-                return False
+                if not transfers_btn.count():
+                    logger.error("Pulsante Transfers non trovato")
+                    return False
 
-            transfers_btn.first.click()
-            logger.info("Clic su Transfers (sidebar)")
-            self.page.wait_for_timeout(1500)
-            self.rate_limiter.wait()
+                transfers_btn.first.click()
+                logger.info("Clic su Transfers (sidebar)")
+                self.page.wait_for_timeout(1500)
+                self.rate_limiter.wait()
 
-            # Step 2: Clicca Transfer List heading
-            transfer_list = self.page.get_by_role("heading", name="Transfer List")
-            if not transfer_list.count():
-                transfer_list = self.page.get_by_role("heading", name="Lista trasferimenti")
+                transfer_list = self.page.get_by_role("heading", name="Transfer List")
+                if not transfer_list.count():
+                    transfer_list = self.page.get_by_role("heading", name="Lista trasferimenti")
+                if not transfer_list.count():
+                    logger.error("Transfer List non trovato")
+                    return False
 
-            if not transfer_list.count():
-                logger.error("Transfer List non trovato")
-                return False
-
-            transfer_list.first.click()
-            logger.info("Clic su Transfer List")
-            self.page.wait_for_timeout(1500)
-            self.rate_limiter.wait()
-
-            # Step 3: Nella Transfer List, cerca e clicca "Sold" tab/heading
-            sold_tab = self.page.get_by_role("heading", name="Sold")
-            if not sold_tab.count():
-                sold_tab = self.page.get_by_role("heading", name="Venduti")
-            if not sold_tab.count():
-                sold_tab = self.page.get_by_role("heading", name="Sold Items")
-            if not sold_tab.count():
-                sold_tab = self.page.get_by_role("heading", name="Oggetti venduti")
-            if not sold_tab.count():
-                # Prova come button/tab
-                sold_tab = self.page.get_by_role("button", name="Sold")
-            if not sold_tab.count():
-                sold_tab = self.page.get_by_role("button", name="Venduti")
-
-            if not sold_tab.count():
-                logger.error("Tab Sold non trovato nella Transfer List")
-                return False
-
-            sold_tab.first.click()
-            logger.info("Clic su Sold")
-            self.page.wait_for_timeout(1500)
-            self.rate_limiter.wait()
+                transfer_list.first.click()
+                logger.info("Clic su Transfer List")
+                self.page.wait_for_timeout(1500)
+                self.rate_limiter.wait()
 
             logger.info("Navigazione a Sold completata")
             return True
@@ -221,7 +212,7 @@ class SoldHandler:
             if not clear_btn.count():
                 # Prova con selector CSS generico
                 clear_btn = self.page.locator('button:has-text("Clear Sold"), button:has-text("Cancella")')
-            
+
             if not clear_btn.count():
                 logger.warning("Pulsante Clear Sold Items non trovato")
                 return False
@@ -260,18 +251,15 @@ class SoldHandler:
 
     # --- Helper methods ---
 
-    @staticmethod
-    def _parse_coin_value(text: str) -> int | None:
+    def _parse_coin_value(self, text: str) -> int | None:
         """Parsa un valore in coins da una stringa.
+
+        Delega a parse_price() di browser.detector (LO-05: evita duplicazione).
+        parse_price è una funzione module-level, non un metodo di istanza.
 
         Esempi:
             '10,000 coins' → 10000
             '500' → 500
             'invalid' → None
         """
-        if not text:
-            return None
-        digits = re.sub(r'[^\d]', '', text)
-        if digits:
-            return int(digits)
-        return None
+        return parse_price(text)

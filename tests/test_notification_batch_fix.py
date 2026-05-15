@@ -1,6 +1,5 @@
-import pytest
-from datetime import datetime
 from unittest.mock import MagicMock
+
 from core.notification_batch import NotificationBatch
 from models.listing import ListingScanResult
 

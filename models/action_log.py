@@ -3,12 +3,13 @@
 Provides ActionLogEntry dataclass for structured logging and JsonFormatter
 for JSONL output to logs/actions.jsonl.
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 VALID_LEVELS = {"INFO", "WARNING", "ERROR"}
@@ -32,9 +33,7 @@ class ActionLogEntry:
 
     def __post_init__(self):
         if self.level not in VALID_LEVELS:
-            raise ValueError(
-                f"level deve essere uno di {VALID_LEVELS}, ricevuto '{self.level}'"
-            )
+            raise ValueError(f"level deve essere uno di {VALID_LEVELS}, ricevuto '{self.level}'")
         if not self.action:
             raise ValueError("action non può essere vuota")
 
@@ -81,9 +80,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_dict = {
-            "timestamp": datetime.fromtimestamp(
-                record.created, tz=timezone.utc
-            ).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -96,11 +93,30 @@ class JsonFormatter(logging.Formatter):
 
         # Include any other extra fields not in standard LogRecord attrs
         standard_attrs = {
-            "name", "msg", "args", "levelname", "levelno", "pathname",
-            "filename", "module", "exc_info", "exc_text", "stack_info",
-            "lineno", "funcName", "created", "msecs", "relativeCreated",
-            "thread", "threadName", "processName", "process", "message",
-            "action", "player_name", "success",
+            "name",
+            "msg",
+            "args",
+            "levelname",
+            "levelno",
+            "pathname",
+            "filename",
+            "module",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "processName",
+            "process",
+            "message",
+            "action",
+            "player_name",
+            "success",
         }
         for key, value in record.__dict__.items():
             if key not in standard_attrs and not key.startswith("_"):
@@ -121,7 +137,7 @@ def parse_action_history(path: Path, lines: int = 20) -> list[dict]:
     if not path.exists():
         return []
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         all_lines = f.readlines()
 
     # Take last N non-empty lines

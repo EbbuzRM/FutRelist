@@ -8,32 +8,31 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 class ListingState(enum.Enum):
     """Stato di un listing sul transfer market."""
 
-    ACTIVE = "active"       # attualmente sul mercato
-    EXPIRED = "expired"     # non venduto, da rimettere in lista
-    SOLD = "sold"           # venduto con successo
+    ACTIVE = "active"  # attualmente sul mercato
+    EXPIRED = "expired"  # non venduto, da rimettere in lista
+    SOLD = "sold"  # venduto con successo
     PROCESSING = "processing"  # in attesa di conferma EA (limbo post-scadenza)
-    UNKNOWN = "unknown"     # stato non determinabile
+    UNKNOWN = "unknown"  # stato non determinabile
 
 
 @dataclass
 class PlayerListing:
     """Rappresenta un singolo player listing."""
 
-    index: int                          # posizione nella lista (0-based)
-    player_name: str                    # nome giocatore (es. "Mbappé")
-    rating: Optional[int] = None        # overall rating (es. 91)
-    position: Optional[str] = None      # posizione (es. "ST")
+    index: int  # posizione nella lista (0-based)
+    player_name: str  # nome giocatore (es. "Mbappé")
+    rating: int | None = None  # overall rating (es. 91)
+    position: str | None = None  # posizione (es. "ST")
     state: ListingState = ListingState.UNKNOWN
-    current_price: Optional[int] = None # prezzo Buy Now in coins
-    start_price: Optional[int] = None   # prezzo partenza asta in coins
-    time_remaining: Optional[str] = None  # tempo rimanente (es. "1h 5m")
-    time_remaining_seconds: Optional[int] = None  # tempo rimanente in secondi
+    current_price: int | None = None  # prezzo Buy Now in coins
+    start_price: int | None = None  # prezzo partenza asta in coins
+    time_remaining: str | None = None  # tempo rimanente (es. "1h 5m")
+    time_remaining_seconds: int | None = None  # tempo rimanente in secondi
 
     @property
     def needs_relist(self) -> bool:
