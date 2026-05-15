@@ -56,7 +56,7 @@ class ListingScanResult:
     @property
     def processing_count(self) -> int:
         """Numero di listing in stato Processing (limbo EA)."""
-        return sum(1 for l in self.listings if l.state == ListingState.PROCESSING)
+        return sum(1 for listing in self.listings if listing.state == ListingState.PROCESSING)
 
     @property
     def is_empty(self) -> bool:

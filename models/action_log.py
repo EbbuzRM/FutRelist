@@ -56,10 +56,7 @@ class ActionLogEntry:
     def from_dict(cls, data: dict) -> ActionLogEntry:
         """Ricostruisce ActionLogEntry da un dizionario parsato."""
         ts = data.get("timestamp", "")
-        if isinstance(ts, str):
-            timestamp = datetime.fromisoformat(ts)
-        else:
-            timestamp = ts
+        timestamp = datetime.fromisoformat(ts) if isinstance(ts, str) else ts
         return cls(
             timestamp=timestamp,
             level=data["level"],

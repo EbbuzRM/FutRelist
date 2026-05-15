@@ -5,6 +5,7 @@ import os
 import random
 import sys
 import time
+from contextlib import suppress
 from datetime import datetime
 
 from bot_state import BotState, RebootRequestError
@@ -64,9 +65,7 @@ class SessionKeeper:
             status_console.print(self._make_status_table("🎮 Console Mode", 0, 0, 0))
             # Se wait_interruptible ritorna False, un comando Telegram è in arrivo:
             # restituisci False per permettere al main loop di processarlo.
-            if self.bot_state.wait_interruptible(self._state_wait_seconds(until)):  # si sveglia subito su /reboot
-                return True
-            return False
+            return self.bot_state.wait_interruptible(self._state_wait_seconds(until))  # si sveglia subito su /reboot
 
         if self.bot_state.is_paused():
             until = self.bot_state.get_pause_until()
@@ -75,11 +74,9 @@ class SessionKeeper:
             status_console.print(self._make_status_table(f"⏸️ In Pausa (Telegram){until_str}", 0, 0, 0))
             # Se wait_interruptible ritorna False, un comando Telegram è in arrivo:
             # restituisci False per permettere al main loop di processarlo.
-            if self.bot_state.wait_interruptible(
+            return self.bot_state.wait_interruptible(
                 self._state_wait_seconds(until)
-            ):  # si sveglia subito su /resume o /reboot
-                return True
-            return False
+            )  # si sveglia subito su /resume o /reboot
 
         return False
 
@@ -142,12 +139,11 @@ class SessionKeeper:
                 return True  # Reboot richiesto
 
             # ⚠️ CONTROLLO DEADLINE: dopo il chunk sleep, controlla se siamo alla deadline
-            if deadline:
-                if datetime.now() >= deadline:
-                    logger_instance.info(
-                        f"Deadline {deadline.strftime('%H:%M:%S')} raggiunta, esco dal wait per Pre-Nav Guard"
-                    )
-                    break  # Esce dal while, ritorna al chiamante
+            if deadline and datetime.now() >= deadline:
+                logger_instance.info(
+                    f"Deadline {deadline.strftime('%H:%M:%S')} raggiunta, esco dal wait per Pre-Nav Guard"
+                )
+                break  # Esce dal while, ritorna al chiamante
 
             if self.bot_state.has_commands():
                 return False  # Interrotto per comandi
@@ -228,7 +224,9 @@ class SessionKeeper:
                     )
 
                     # HI-06: Solleva RebootRequestError per riavviare il bot
-                    raise RebootRequestError(f"Impossibile recuperare la sessione: {recovery_error}")
+                    raise RebootRequestError(
+                        f"Impossibile recuperare la sessione: {recovery_error}"
+                    ) from recovery_error
 
         except RebootRequestError:
             raise  # HI-06: Propaga SEMPRE RebootRequestError
@@ -281,14 +279,10 @@ class SessionKeeper:
     def handle_reboot(self) -> None:
         """Riavvio completo del processo con os.execv()."""
         logger.info("🔄 Riavvio processo...")
-        try:
+        with suppress(Exception):
             self.controller.stop()
-        except Exception:
-            pass
         # Forza kill di Chrome orfano prima di os.execv (libera il lock sul profilo)
-        try:
+        with suppress(Exception):
             self.controller.force_kill_chrome()
-        except Exception:
-            pass
         time.sleep(2)  # Attendi che il filesystem rilasci i file del profilo
         os.execv(sys.executable, [sys.executable, sys.argv[0]])

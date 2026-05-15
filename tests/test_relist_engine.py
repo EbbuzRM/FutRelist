@@ -127,7 +127,7 @@ class TestGoldenRetryLoopReturnValues:
         """Verify that _golden_retry_loop is defined to return 3 values."""
         import inspect
 
-        sig = inspect.signature(RelistEngine._golden_retry_loop)
+        inspect.signature(RelistEngine._golden_retry_loop)
         # The function should return a tuple; we can't directly check return type
         # but we can verify the function exists and is callable
         assert callable(RelistEngine._golden_retry_loop)
@@ -137,7 +137,7 @@ class TestGoldenRetryLoopReturnValues:
 
         # Check for return statements that return tuples
         lines = source.split("\n")
-        return_lines = [l.strip() for l in lines if l.strip().startswith("return ")]
+        return_lines = [line.strip() for line in lines if line.strip().startswith("return ")]
 
         # At least one return should have 3 values (comma-separated after "return")
         found_three_values = False

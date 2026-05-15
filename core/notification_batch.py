@@ -23,17 +23,16 @@ class NotificationBatch:
         self.expired_detected = 0
         self.last_flush_time: datetime | None = None
 
-    def accumulate(self, scan: ListingScanResult, succeeded: int, failed: int):
+    def accumulate(self, scan: ListingScanResult, succeeded: int, failed: int, expired_count: int = 0):
         """Aggiunge i risultati di un ciclo all'accumulatore.
 
-        expired_detected usa succeeded+failed come proxy degli scaduti trovati:
-        la scan_result arriva post-relist, quando gli item sono gia' tornati ACTIVE,
-        quindi scan.expired_count sarebbe sempre 0 dopo un relist riuscito.
+        expired_detected usa expired_count se fornito (scansione pre-relist),
+        altrimenti fallback a succeeded+failed come proxy degli scaduti trovati.
         """
         self.relisted += succeeded
         self.failed += failed
         self.cycles += 1
-        self.expired_detected += succeeded + failed  # proxy: scaduti trovati = item tentati
+        self.expired_detected += expired_count if expired_count > 0 else (succeeded + failed)
 
     def is_ready_to_flush(self, current_wait: int) -> bool:
         """

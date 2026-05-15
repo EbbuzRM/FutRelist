@@ -37,11 +37,11 @@ logger = logging.getLogger(__name__)
 def get_min_active_seconds(scan: ListingScanResult) -> int | None:
     """Restituisce il tempo minimo rimanente tra i listing attivi."""
     active_times = [
-        l.time_remaining_seconds
-        for l in scan.listings
-        if l.state == ListingState.ACTIVE
-        and l.time_remaining_seconds is not None
-        and l.time_remaining not in ("---", "Expired", "Scaduto")
+        listing.time_remaining_seconds
+        for listing in scan.listings
+        if listing.state == ListingState.ACTIVE
+        and listing.time_remaining_seconds is not None
+        and listing.time_remaining not in ("---", "Expired", "Scaduto")
     ]
     return min(active_times) if active_times else None
 
@@ -50,10 +50,10 @@ def get_active_with_timer_count(scan: ListingScanResult) -> int:
     """Conta gli attivi che hanno un timer reale (esclusi quelli con '--')."""
     return sum(
         1
-        for l in scan.listings
-        if l.state == ListingState.ACTIVE
-        and l.time_remaining_seconds is not None
-        and l.time_remaining not in ("---", "Expired", "Scaduto")
+        for listing in scan.listings
+        if listing.state == ListingState.ACTIVE
+        and listing.time_remaining_seconds is not None
+        and listing.time_remaining not in ("---", "Expired", "Scaduto")
     )
 
 
@@ -86,9 +86,7 @@ def is_in_golden_period(now: datetime) -> bool:
 
     if hour < start_h or (hour == start_h and minute < start_m):
         return False
-    if hour > end_h or (hour == end_h and minute > end_m):
-        return False
-    return True
+    return not (hour > end_h or (hour == end_h and minute > end_m))
 
 
 def is_in_hold_window(now: datetime) -> bool:
@@ -104,10 +102,7 @@ def is_in_hold_window(now: datetime) -> bool:
         return False
 
     # Finestra relist: :09-:11 delle GOLDEN_HOURS
-    if now.hour in GOLDEN_HOURS and now.minute in GOLDEN_RELIST_WINDOW:
-        return False  # Momento del relist golden
-
-    return True
+    return not (now.hour in GOLDEN_HOURS and now.minute in GOLDEN_RELIST_WINDOW)
 
 
 def is_close_to_golden(now: datetime) -> bool:

@@ -80,7 +80,7 @@ Puoi controllare il bot direttamente da Telegram, anche mentre è in esecuzione:
 | `/status` | Mostra lo stato attuale del bot, numero di listing, ultimo relist |
 | `/reboot` | Riavvia il bot in modo pulito (chiude il browser e ricarica tutto il codice) |
 | `/force_relist` | Forza un relist immediato, bypassando la hold window |
-| `/pause` | Metti in pausa il relist automatico |
+| `/pause [ore]` | Metti in pausa il relist automatico. Opzionale specifica ore (es. `/pause 4`) |
 | `/resume` | Riprendi il relist automatico |
 | `/console [ore]` | Attiva modalità console (deep sleep, zero interazione). Opzionale specifica ore (es. `/console 2`) |
 | `/online` | Disattiva modalità console e riprende operazioni normali |
@@ -102,4 +102,3 @@ python main.py
 Il bot avvierà Chrome, effettuerà il login e inizierà a gestire la lista mercato per tuo conto.
 
 ---
-

@@ -56,8 +56,8 @@ def _make_scan(
 ) -> ListingScanResult:
     """Build a ListingScanResult for testing."""
     if listings is not None:
-        ec = sum(1 for l in listings if l.state in (ListingState.EXPIRED, ListingState.PROCESSING))
-        ac = sum(1 for l in listings if l.state == ListingState.ACTIVE)
+        ec = sum(1 for listing in listings if listing.state in (ListingState.EXPIRED, ListingState.PROCESSING))
+        ac = sum(1 for listing in listings if listing.state == ListingState.ACTIVE)
         return ListingScanResult(
             total_count=len(listings),
             active_count=ac,

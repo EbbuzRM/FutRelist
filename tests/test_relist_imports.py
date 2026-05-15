@@ -19,10 +19,9 @@ class TestRelistImports:
         # Check that AuthManager is imported at module level
         module_level_imports = []
         for node in ast.iter_child_nodes(tree):
-            if isinstance(node, ast.ImportFrom):
-                if node.module == "browser.auth":
-                    for alias in node.names:
-                        module_level_imports.append(alias.name)
+            if isinstance(node, ast.ImportFrom) and node.module == "browser.auth":
+                for alias in node.names:
+                    module_level_imports.append(alias.name)
 
         assert "AuthManager" in module_level_imports, "AuthManager should be imported at module level from browser.auth"
 
@@ -31,7 +30,7 @@ class TestRelistImports:
             if isinstance(node, ast.FunctionDef):
                 for child in ast.walk(node):
                     if isinstance(child, (ast.Import, ast.ImportFrom)):
-                        assert False, f"Local import found inside function {node.name}"
+                        raise AssertionError(f"Local import found inside function {node.name}")
 
     def test_relist_py_imports_authmanager_at_module_level(self):
         """Verify the exact import statement exists at module level."""

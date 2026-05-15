@@ -6,6 +6,7 @@ import logging
 import re
 import shutil
 import time
+from contextlib import suppress
 from pathlib import Path
 
 from playwright.sync_api import Page
@@ -148,10 +149,8 @@ class AuthManager:
                 return False
 
             # Attendiamo che lo "shield" di caricamento scompaia
-            try:
+            with suppress(Exception):
                 page.wait_for_selector(".ut-click-shield", state="hidden", timeout=5000)
-            except Exception:
-                pass
 
             # Indicatori di login (inglese e italiano)
             logged_in_indicators = [
@@ -244,10 +243,8 @@ class AuthManager:
         except Exception:
             if "signin.ea.com" in page.url:
                 return True
-            try:
+            with suppress(Exception):
                 logger.debug(f"URL al timeout: {page.url}")
-            except Exception:
-                pass
             logger.warning("Pagina di login non rilevata nel timeout")
             return False
 

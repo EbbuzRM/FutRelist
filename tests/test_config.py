@@ -175,15 +175,17 @@ class TestConfigWarningMessage:
         tree = ast.parse(content)
 
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                # Check if it's a logger.warning/error call
-                if isinstance(node.func, ast.Attribute) and node.func.attr in ("warning", "error"):
-                    for arg in node.args:
-                        if isinstance(arg, ast.JoinedStr):  # f-string
-                            fstring_content = ast.unparse(arg) if hasattr(ast, "unparse") else str(arg)
-                            # Check that it doesn't contain %s pattern (incorrect in f-string)
-                            if "%s" in fstring_content:
-                                assert False, "Found %s in f-string warning message. Use {} format instead."
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in ("warning", "error")
+            ):
+                for arg in node.args:
+                    if isinstance(arg, ast.JoinedStr):  # f-string
+                        fstring_content = ast.unparse(arg) if hasattr(ast, "unparse") else str(arg)
+                        # Check that it doesn't contain %s pattern (incorrect in f-string)
+                        if "%s" in fstring_content:
+                            raise AssertionError("Found %s in f-string warning message. Use {} format instead.")
 
         # Also verify the file doesn't have the specific bug pattern
         # Search for f"...{var}%s..." pattern
@@ -194,7 +196,7 @@ class TestConfigWarningMessage:
                 for j in range(i, min(i + 3, len(lines))):  # Check current and next 2 lines
                     if "%s" in lines[j] and "{" in lines[j] and "}" in lines[j]:
                         # This might be the bug pattern
-                        assert False, f"Line {j + 1} may have incorrect format: mixes f-string {{}} with %s"
+                        raise AssertionError(f"Line {j + 1} may have incorrect format: mixes f-string {{}} with %s")
 
     def test_rate_limiter_warning_format(self):
         """Verify rate_limiter.py also uses correct warning format (HI-01 fix)."""

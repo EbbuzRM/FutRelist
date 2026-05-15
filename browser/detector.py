@@ -313,10 +313,12 @@ class ListingDetector:
             listings.append(listing)
 
         # Step 5: build scan result
-        active_count = sum(1 for l in listings if l.state == ListingState.ACTIVE)
-        expired_count = sum(1 for l in listings if l.state in (ListingState.EXPIRED, ListingState.PROCESSING))
-        sold_count = sum(1 for l in listings if l.state == ListingState.SOLD)
-        processing_count = sum(1 for l in listings if l.state == ListingState.PROCESSING)
+        active_count = sum(1 for listing in listings if listing.state == ListingState.ACTIVE)
+        expired_count = sum(
+            1 for listing in listings if listing.state in (ListingState.EXPIRED, ListingState.PROCESSING)
+        )
+        sold_count = sum(1 for listing in listings if listing.state == ListingState.SOLD)
+        processing_count = sum(1 for listing in listings if listing.state == ListingState.PROCESSING)
 
         result = ListingScanResult(
             total_count=len(listings),

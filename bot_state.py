@@ -70,15 +70,13 @@ class BotState:
 
     def _apply_auto_resume_locked(self) -> None:
         """Applica eventuali auto-resume scaduti. Da chiamare solo con _lock acquisito."""
-        if self._paused and self._pause_until:
-            if datetime.now() >= self._pause_until:
-                self._paused = False
-                self._pause_until = None
+        if self._paused and self._pause_until and datetime.now() >= self._pause_until:
+            self._paused = False
+            self._pause_until = None
 
-        if self._console_mode and self._console_mode_until:
-            if datetime.now() >= self._console_mode_until:
-                self._console_mode = False
-                self._console_mode_until = None
+        if self._console_mode and self._console_mode_until and datetime.now() >= self._console_mode_until:
+            self._console_mode = False
+            self._console_mode_until = None
 
     def set_paused(self, value: bool, hours: float | None = None) -> None:
         """Imposta lo stato di pausa del bot.

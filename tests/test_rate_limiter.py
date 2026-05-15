@@ -59,23 +59,16 @@ class TestRateLimiterWarningMessage:
 
         # Check that warning messages use proper f-string format with {}
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                # Check if it's a logger.warning call
-                if isinstance(node.func, ast.Attribute) and node.func.attr == "warning":
-                    # Check the args for f-string with %s (which would be wrong)
-                    for arg in node.args:
-                        if isinstance(arg, ast.JoinedStr):  # f-string
-                            # Get the f-string content
-                            fstring_value = ast.unparse(arg) if hasattr(ast, "unparse") else None
-                            # The f-string should NOT contain %s
-                            if fstring_value and "%s" in fstring_value:
-                                assert False, "f-string contains %s format specifier - should use {} instead"
-                        elif isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "warning":
+                for arg in node.args:
+                    if isinstance(arg, ast.JoinedStr):  # f-string
+                        fstring_value = ast.unparse(arg) if hasattr(ast, "unparse") else None
+                        if fstring_value and "%s" in fstring_value:
+                            raise AssertionError("f-string contains %s format specifier - should use {} instead")
+                        elif isinstance(arg, ast.Constant) and isinstance(arg.value, str) and "%s" in arg.value:
                             # Regular string with %s would be wrong in an f-string context
-                            if "%s" in arg.value:
-                                # Check if this is passed as part of an f-string
-                                # In the original bug, the code was: f"...{var}%s..."
-                                pass  # This is hard to detect statically, so we'll check the source
+                            # In the original bug, the code was: f"...{var}%s..."
+                            pass  # This is hard to detect statically, so we'll check the source
 
         # Simpler check: verify the source doesn't have the bug pattern
         # The bug was: f"[RateLimiter] Usa valori aggressivi: min_delay_ms=%sms. Rischio..."
@@ -94,7 +87,7 @@ class TestRateLimiterWarningMessage:
         # Find lines with logger.warning
         lines = content.split("\n")
         for i, line in enumerate(lines):
-            if "logger.warning" in line and "%s" in line:
-                # Check if this is the min_delay_ms warning
-                if "min_delay_ms" in line or (i > 0 and "min_delay_ms" in lines[i - 1]):
-                    assert False, f"Line {i + 1} uses %s in warning message about min_delay_ms. Should use {{}} format."
+            if "logger.warning" in line and "%s" in line and "min_delay_ms" in line:
+                raise AssertionError(
+                    f"Line {i + 1} uses %s in warning message about min_delay_ms. Should use {{}} format."
+                )

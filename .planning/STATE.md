@@ -1,5 +1,5 @@
 status: production
-last_updated: "2026-05-07T17:55:00.000Z"
+last_updated: "2026-05-12T18:45:00.000Z"
 ---
 
 # Project State — FIFA 26 Auto-Relist Bot
@@ -62,6 +62,50 @@ Regole fondamentali verificate nel codice sorgente:
 
 
 ## 5. Current Activity & Known Issues
+
+### Today's Fixes (May 12, 2026)
+### Fix 1: Golden Retry Loop — Ottimizzazione e Dati Freschi
+- **Problema**: Il `_golden_retry_loop` veniva avviato anche se il relist principale era andato a buon fine (0 expired), causando un'attesa di 9s e una scansione DOM inutile. Inoltre, usava i dati di processing "stale" della scansione iniziale.
+- **Root cause**: 
+  1. Passaggio di `scan.processing_count` (pre-relist) invece del valore post-relist alla funzione di retry.
+  2. Guardia interna `initial_f == 0 and processing_count == 0` che non scattava con dati stale.
+- **Fix**: Il bot ora calcola `post_processing` usando l'ultimo risultato disponibile (`self._last_scan_result`) aggiornato durante la verifica del relist. Se non ci sono falliti né oggetti in processing dopo il relist, il retry loop viene saltato istantaneamente.
+- **File modificato**: `logic/relist_engine.py` — `process_cycle()` (righe 183-187)
+- **Verifica**: Log confermano l'uscita immediata e il calcolo del wait corretto verso la prossima golden hour. ✅
+
+### Fix 2: Golden Retry Loop — Correzione Break Prematuro
+- **Problema**: Il loop di retry usciva prematuramente se il numero di falliti era zero (`f == 0`), anche se c'erano ancora oggetti in stato "Processing" (limbo EA). Questo delegava il lavoro al ciclo principale (polling ogni 10s), invece di gestirlo internamente.
+- **Root cause**: Condizione di `break` troppo semplice: `if f == 0: break`.
+- **Fix**: La condizione di uscita ora è `if f == 0 and remaining_processing == 0`. Il loop rimane attivo e continua ad aspettare la transizione degli oggetti in limbo EA finché la golden window è aperta o i tentativi non finiscono.
+- **File modificato**: `logic/relist_engine.py` — `_golden_retry_loop()` (righe 331-338)
+- **Verifica**: Logica verificata per garantire che tutto il lavoro "golden" rimanga atomico dentro il loop di retry. ✅
+
+### Today's Fixes (May 11, 2026)
+### Fix 1: Heartbeat — Recupero Automatico Sessione Scaduta
+- **Problema**: L'heartbeat rilevava la sessione scaduta ma non eseguiva alcun recupero. Il bot continuava a battere heartbeat per ore senza mai ristabilire la connessione EA.
+- **Root cause**: `_execute_heartbeat()` in `browser/session_keeper.py` loggava l'errore ma non chiamava `ensure_session()` per il recupero.
+- **Fix**: Dopo il rilevamento di sessione scaduta nell'heartbeat, il bot ora tenta automaticamente il recupero con `ensure_session()`. Se il recupero riesce, il bot continua normalmente. Se fallisce, invia notifica Telegram con screenshot e solleva `RebootRequestError` per riavvio controllato.
+- **File modificato**: `browser/session_keeper.py` — `_execute_heartbeat()` (righe 173-198)
+- **Verifica**: 693 test passano. ✅
+
+### Fix 2: Reboot con os.execv() — Ricaricamento Completo dei Moduli
+- **Problema**: Il commento in `telegram_handler.py` diceva "poi rilancia il processo" ma `handle_reboot()` fermava solo il browser. Il `while True` di `main.py` ripartiva nello stesso processo Python → `sys.modules` già popolato → zero moduli ricaricati → le modifiche al codice non venivano viste dopo un `/reboot`.
+- **Root cause**: `handle_reboot()` non sostituiva il processo, faceva solo `controller.stop()` e il loop ricominciava nello stesso interprete.
+- **Fix**: `handle_reboot()` ora usa `os.execv(sys.executable, [sys.executable, "main.py"])` per sostituire completamente il processo corrente con uno nuovo. Tutti i moduli vengono ricaricati da zero. Pulizia minimale: solo `controller.stop()` (try/except) + `os.execv()`.
+- **File modificato**: `browser/session_keeper.py` — `handle_reboot()` (riga 301-308), `main.py` — chiamata semplificata senza parametri (riga 198)
+- **Verifica**: 693 test passano. ✅
+
+### Fix 3: Aumento Tentativi Processing Items Fuori Golden Window
+- **Problema**: Gli item in stato "Processing" fuori dalla golden window avevano solo 3 tentativi con attese di 15-30s (totale ~90s). EA spesso impiega più tempo per processare gli item, specialmente sotto carico, e il bot li abbandonava troppo presto.
+- **Root cause**: Parametri troppo conservativi in `_processing_wait_loop()`: max 3 tentativi, attesa 15-30s, nessun timeout totale.
+- **Fix**: Aumentati i parametri per la fascia fuori golden window:
+  - Tentativi: 3 → 15
+  - Attesa: 15-30s → 30-60s
+  - Timeout totale: nessuno → 300s (5 minuti)
+  - Le 4 costanti sono in `logic/golden_hour.py` per centralizzazione
+  - La golden window (`_golden_retry_loop`) rimane invariata (6 tentativi, 5-10s)
+- **File modificati**: `logic/golden_hour.py` — 4 nuove costanti (righe 19-23), `logic/relist_engine.py` — `_processing_wait_loop()` riscritto (righe 330-389) + import costanti (righe 20-23)
+- **Verifica**: 693 test passano. ✅
 
 ### Today's Fixes (May 07, 2026)
 ### Root Cause Fix: Telegram Relist Overcount (`17` invece di `16`)
@@ -172,5 +216,5 @@ Regole fondamentali verificate nel codice sorgente:
 </details>
 
 ### Test Suite Summary
-- **Total:** 687 tests passing.
+- **Total:** 693 tests passing.
 - **Coverage:** 155 unit tests + 531 golden timeline simulations (added test_relist_engine.py, test_relist_imports.py)
