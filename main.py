@@ -125,6 +125,9 @@ def main() -> None:
             controller.navigate_to_webapp()
             authenticate(controller, auth, page)
 
+            # Notify that the bot has started
+            send_telegram_alert(app_config.notifications, "🤖 Bot avviato")
+
             # Create a single RateLimiter instance to be shared across modules
             rate_limiter = RateLimiter(
                 min_delay_ms=app_config.rate_limiting.min_delay_ms,

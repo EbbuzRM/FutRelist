@@ -6,14 +6,13 @@ from models.listing import ListingScanResult
 
 
 def test_notification_batch_accumulation():
-    """Test che expired_detected usa succeeded + failed come proxy."""
+    """Test che expired_detected segue il totale processato nei cicli."""
     batch = NotificationBatch()
 
     # Crea un mock con expired_count impostato
     scan = MagicMock(spec=ListingScanResult)
     scan.expired_count = 5
 
-    # expired_detected = succeeded + failed (proxy)
     batch.accumulate(scan, succeeded=3, failed=2)
     assert batch.relisted == 3
     assert batch.failed == 2
@@ -26,7 +25,32 @@ def test_notification_batch_accumulation():
     assert batch.relisted == 5
     assert batch.failed == 3
     assert batch.cycles == 2
-    assert batch.expired_detected == 8  # 5 + 3 = 8
+    assert batch.expired_detected == 8  # 5 + 3 processati
+
+
+def test_notification_batch_does_not_sum_repeated_expired_detections():
+    """Scaduti rilevati non deve sommare riletture della stessa Transfer List."""
+    batch = NotificationBatch()
+    scan = MagicMock(spec=ListingScanResult)
+    scan.total_count = 100
+
+    batch.accumulate(scan, succeeded=78, failed=0, expired_count=78)
+    batch.accumulate(scan, succeeded=0, failed=0, expired_count=54)
+
+    assert batch.expired_detected == 78
+
+
+def test_notification_batch_counts_distinct_work_across_multiple_cycles():
+    """Se il bot lavora su piu' cicli, il report conta il totale processato."""
+    batch = NotificationBatch()
+    scan = MagicMock(spec=ListingScanResult)
+    scan.total_count = 100
+
+    batch.accumulate(scan, succeeded=30, failed=0, expired_count=30)
+    batch.accumulate(scan, succeeded=20, failed=0, expired_count=20)
+    batch.accumulate(scan, succeeded=10, failed=0, expired_count=10)
+
+    assert batch.expired_detected == 60
 
 
 def test_notification_batch_is_ready_to_flush_no_activity():

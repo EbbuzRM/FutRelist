@@ -39,3 +39,4 @@ tmp/
 package-lock.json
 package.json
 skills-lock.json
+.planning/STATE.md

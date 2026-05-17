@@ -14,6 +14,8 @@ class NotificationBatch:
     prossimo wait è lungo (> batch_window), significa che l'ondata e' finita.
     """
 
+    TRANSFER_LIST_CAPACITY = 100
+
     def __init__(self, batch_window_seconds: int = 120, max_cycles: int = 5):
         self.batch_window_seconds = batch_window_seconds
         self.max_cycles = max_cycles
@@ -26,13 +28,15 @@ class NotificationBatch:
     def accumulate(self, scan: ListingScanResult, succeeded: int, failed: int, expired_count: int = 0):
         """Aggiunge i risultati di un ciclo all'accumulatore.
 
-        expired_detected usa expired_count se fornito (scansione pre-relist),
-        altrimenti fallback a succeeded+failed come proxy degli scaduti trovati.
+        expired_detected rappresenta gli oggetti realmente emersi nel batch:
+        usa il totale processato come base, senza sommare scansioni duplicate.
         """
         self.relisted += succeeded
         self.failed += failed
         self.cycles += 1
-        self.expired_detected += expired_count if expired_count > 0 else (succeeded + failed)
+        detected = expired_count if expired_count > 0 else (succeeded + failed)
+        processed = self.relisted + self.failed
+        self.expired_detected = min(max(self.expired_detected, detected, processed), self.TRANSFER_LIST_CAPACITY)
 
     def is_ready_to_flush(self, current_wait: int) -> bool:
         """
