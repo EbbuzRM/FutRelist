@@ -28,15 +28,24 @@ class NotificationBatch:
     def accumulate(self, scan: ListingScanResult, succeeded: int, failed: int, expired_count: int = 0):
         """Aggiunge i risultati di un ciclo all'accumulatore.
 
-        expired_detected rappresenta gli oggetti realmente emersi nel batch:
-        usa il totale processato come base, senza sommare scansioni duplicate.
+        expired_detected rappresenta gli oggetti UNICAMENTE processati nel batch
+        (cumulativo di relisted + failed), non la somma delle scansioni DOM che
+        puo' causare doppio conteggio quando gli stessi item vengono riletti.
+
+        failed viene ricalcolato come expired_detected - relisted per catturare
+        anche gli item silenziosamente ignorati da EA (HTTP 200 ma nessun listing).
         """
         self.relisted += succeeded
-        self.failed += failed
         self.cycles += 1
-        detected = expired_count if expired_count > 0 else (succeeded + failed)
-        processed = self.relisted + self.failed
-        self.expired_detected = min(max(self.expired_detected, detected, processed), self.TRANSFER_LIST_CAPACITY)
+        # expired_detected = cumulativo degli oggetti processati, NON il max
+        # delle scansioni DOM (che puo' includere riletture duplicate)
+        self.expired_detected = min(
+            self.expired_detected + succeeded + failed,
+            self.TRANSFER_LIST_CAPACITY,
+        )
+        # failed = expired_detected - relisted: cattura anche gli item ignorati
+        # silenziosamente da EA (risposta 200 ma listing non apparso nel DOM)
+        self.failed = max(self.expired_detected - self.relisted, 0)
 
     def is_ready_to_flush(self, current_wait: int) -> bool:
         """
