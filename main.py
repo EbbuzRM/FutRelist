@@ -194,7 +194,7 @@ def main() -> None:
 
                 try:
                     succeeded, failed, next_wait, scan_result, deadline, expired_count = engine.process_cycle()
-                    batch.accumulate(scan_result, succeeded, failed, expired_count)
+                    batch.accumulate(scan_result, succeeded, failed)
 
                     # Flush solo se le condizioni di batch sono soddisfatte
                     # (ondata finita, max cicli, o timeout dall'ultimo flush)

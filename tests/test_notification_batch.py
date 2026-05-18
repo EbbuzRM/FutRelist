@@ -34,8 +34,8 @@ def test_notification_batch_does_not_sum_repeated_expired_detections():
     scan = MagicMock(spec=ListingScanResult)
     scan.total_count = 100
 
-    batch.accumulate(scan, succeeded=78, failed=0, expired_count=78)
-    batch.accumulate(scan, succeeded=0, failed=0, expired_count=54)
+    batch.accumulate(scan, succeeded=78, failed=0)
+    batch.accumulate(scan, succeeded=0, failed=0)
 
     assert batch.expired_detected == 78
 
@@ -46,9 +46,9 @@ def test_notification_batch_counts_distinct_work_across_multiple_cycles():
     scan = MagicMock(spec=ListingScanResult)
     scan.total_count = 100
 
-    batch.accumulate(scan, succeeded=30, failed=0, expired_count=30)
-    batch.accumulate(scan, succeeded=20, failed=0, expired_count=20)
-    batch.accumulate(scan, succeeded=10, failed=0, expired_count=10)
+    batch.accumulate(scan, succeeded=30, failed=0)
+    batch.accumulate(scan, succeeded=20, failed=0)
+    batch.accumulate(scan, succeeded=10, failed=0)
 
     assert batch.expired_detected == 60
 

@@ -1,5 +1,5 @@
 status: production
-last_updated: "2026-05-12T18:45:00.000Z"
+last_updated: "2026-05-17T00:00:00.000Z"
 ---
 
 # Project State — FIFA 26 Auto-Relist Bot
@@ -62,6 +62,20 @@ Regole fondamentali verificate nel codice sorgente:
 
 
 ## 5. Current Activity & Known Issues
+
+### Today's Fixes (May 17, 2026)
+### Fix 1: Telegram Report — Conteggio `Scaduti rilevati` senza doppio conteggio
+- **Problema**: Il report Telegram poteva mostrare un numero impossibile di scaduti rilevati (es. `132`) anche se la Transfer List EA accetta massimo 100 oggetti.
+- **Root cause**: `NotificationBatch.expired_detected` sommava gli `expired_count` delle scansioni batch. Durante cicli rapidi, processing wait o retry, il bot puo rileggere gli stessi slot della Transfer List; sommare le scansioni produceva doppio conteggio.
+- **Fix**: `expired_detected` ora rappresenta gli oggetti realmente emersi nel batch:
+  - usa il totale processato (`relisted + failed`) come base quando il bot lavora su piu cicli;
+  - non somma scansioni duplicate quando un ciclo successivo rilegge gli stessi item senza processarne altri;
+  - resta limitato alla capienza reale della Transfer List (`100`).
+- **Esempi verificati**:
+  - `78` rilistati + scansione successiva `54` senza lavoro extra -> `Scaduti rilevati: 78`, non `132`.
+  - Tre cicli reali `30 + 20 + 10` -> `Scaduti rilevati: 60`.
+- **File modificati**: `core/notification_batch.py`, `tests/test_notification_batch.py`
+- **Verifica**: `python -m pytest tests\test_notification_batch.py tests\test_notification_batch_fix.py tests\test_notification_batch_user_concern.py -q` -> 20 test passano. ✅
 
 ### Today's Fixes (May 12, 2026)
 ### Fix 1: Golden Retry Loop — Ottimizzazione e Dati Freschi

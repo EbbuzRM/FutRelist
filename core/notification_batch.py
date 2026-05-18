@@ -25,7 +25,7 @@ class NotificationBatch:
         self.expired_detected = 0
         self.last_flush_time: datetime | None = None
 
-    def accumulate(self, scan: ListingScanResult, succeeded: int, failed: int, expired_count: int = 0):
+    def accumulate(self, scan: ListingScanResult, succeeded: int, failed: int):
         """Aggiunge i risultati di un ciclo all'accumulatore.
 
         expired_detected rappresenta gli oggetti UNICAMENTE processati nel batch
@@ -34,6 +34,10 @@ class NotificationBatch:
 
         failed viene ricalcolato come expired_detected - relisted per catturare
         anche gli item silenziosamente ignorati da EA (HTTP 200 ma nessun listing).
+
+        Quando expired_detected raggiunge la capacita' massima della Transfer List (100),
+        anche relisted viene limitato proporzionalmente per mantenere l'invariante:
+        expired_detected == relisted + failed.
         """
         self.relisted += succeeded
         self.cycles += 1
@@ -43,6 +47,10 @@ class NotificationBatch:
             self.expired_detected + succeeded + failed,
             self.TRANSFER_LIST_CAPACITY,
         )
+        # Quando il cap e' stato raggiunto, limita anche relisted per evitare
+        # che failed diventi 0 anche se ci sono stati fallimenti reali
+        if self.expired_detected == self.TRANSFER_LIST_CAPACITY:
+            self.relisted = min(self.relisted, self.TRANSFER_LIST_CAPACITY)
         # failed = expired_detected - relisted: cattura anche gli item ignorati
         # silenziosamente da EA (risposta 200 ma listing non apparso nel DOM)
         self.failed = max(self.expired_detected - self.relisted, 0)
