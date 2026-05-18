@@ -228,7 +228,9 @@ class RelistEngine:
                 if reboot:
                     raise RebootRequestError("Reboot richiesto dall'utente via Telegram")
                 succeeded += retry_s
-                failed += retry_f
+                # Il retry recupera item che erano falliti nel relist iniziale.
+                # Ogni succeeded del retry compensa un failed originale.
+                failed = max(failed - retry_s + retry_f, 0)
             # Processing wait loop - handles processing items outside golden window.
             # Usa self._last_scan_result (post-relist) per catturare sia il Caso 1
             # (solo processing) sia il Caso 2 con residui processing dopo un relist parziale.

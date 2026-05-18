@@ -206,24 +206,25 @@ class TestRelistCountConsistency:
         """Simulate a realistic golden hour relist session.
 
         16 items expired → 15 relisted, 1 failed → golden retry → 1 more relisted.
+
+        After the process_cycle fix, the returned values are already compensated:
+        - process_cycle returns (succeeded=16, failed=0) — the retry recovery
+          is baked into the totals before main.py calls batch.accumulate().
+        - batch.accumulate receives the final aggregated values, not per-relist steps.
+
         Total: 16 processed, 16 relisted, 0 failed.
         """
         batch = NotificationBatch()
         scan = MagicMock(spec=ListingScanResult)
 
-        # First relist: 15 succeeded, 1 failed
+        # process_cycle returns aggregated values after golden retry compensation.
+        # main.py calls batch.accumulate ONCE per cycle with these totals.
         scan.expired_count = 16
-        batch.accumulate(scan, succeeded=15, failed=1)
-        assert batch.expired_detected == 16
-        assert batch.relisted == 15
-        assert batch.failed == 1
+        batch.accumulate(scan, succeeded=16, failed=0)
 
-        # Golden retry: 1 more succeeded (the previously failed one)
-        scan.expired_count = 1
-        batch.accumulate(scan, succeeded=1, failed=0)
-        assert batch.expired_detected == 17  # 16 + 1
+        assert batch.expired_detected == 16
         assert batch.relisted == 16
-        assert batch.failed == 1  # Still 1 (17 - 16)
+        assert batch.failed == 0
 
     def test_no_double_counting_on_re_scan(self):
         """Re-scanning the same items without processing must not increase counts.
