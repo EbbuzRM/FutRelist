@@ -106,7 +106,10 @@ class NotificationBatch:
         if self.cycles == 0:
             return
 
-        if not force and not self.is_ready_to_flush(0):
+        # Il chiamante (main.py) ha già verificato is_ready_to_flush(next_wait).
+        # Questo check con 0 hardcoded causava notifiche perse quando
+        # last_flush_time era None (fresh session dopo reboot).
+        if not force and self.relisted == 0 and self.failed == 0:
             return
 
         if not app_config.notifications.telegram_token or not app_config.notifications.telegram_chat_id:
