@@ -219,7 +219,9 @@ def main() -> None:
             # Inner loop broke (Reboot requested or heartbeat reboot)
             if telegram:
                 telegram.stop()
-            batch.flush_if_any(app_config, page, logger, locals().get("scan_result"), force=True)
+            # Reset del batch prima del reboot: evita notifiche fuorvianti
+            # con dati accumulati nella sessione precedente (ME-09)
+            batch.reset()
             keeper.handle_reboot()
 
         except ConsoleSessionError:
