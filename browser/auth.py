@@ -405,7 +405,9 @@ class AuthManager:
                 logger.warning("Sessione console attiva. Attesa...")
                 if wait_fn:
                     if wait_fn(1800):
-                        raise AuthError("Login interrotto da richiesta reboot durante sessione console")
+                        from bot_state import RebootRequestError
+
+                        raise RebootRequestError("Reboot richiesto durante sessione console")
                 else:
                     import time
 

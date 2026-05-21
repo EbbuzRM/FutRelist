@@ -147,6 +147,38 @@ Fixes:
 
 ---
 
+### Phase 9: Modular Refactoring ✅ COMPLETED
+**Goal:** Refactor main.py into modular architecture
+**Completed:** 2026-04-20
+
+**Key Changes:**
+- [x] Estrazione logica in `logic/relist_engine.py`
+- [x] Estrazione `core/notification_batch.py`
+- [x] Main.py ridotto a ~200 righe
+- [x] Test suite: 674 test passing
+
+---
+
+### Phase 10: Stability & Notification Fixes ✅ COMPLETED
+**Goal:** Fix critical notification bugs and improve stability
+**Completed:** 2026-05-19
+
+**Fixes:**
+- [x] **v1.11** (2026-05-07): Telegram Relist Overcount — Detector fix per `Expired` in sezione `active`
+- [x] **v1.12** (2026-05-12): Processing & Recovery — Heartbeat recovery, `os.execv()` reboot, 15 processing attempts
+- [x] **v1.13** (2026-05-17): Golden Retry & Stale Page — Dati freschi retry loop, stale page detection
+- [x] **v1.14** (2026-05-18): Telegram Notification — Reset batch pre-reboot, fix `flush_if_any()`, anti-doppio conteggio
+
+**Success Criteria:**
+1. ✅ Notifiche Telegram accurate (nessun overcount o dati stale)
+2. ✅ Nessuna notifica persa (fix 18:10 missing)
+3. ✅ Recupero automatico sessione scaduta
+4. ✅ Reload completo moduli dopo reboot
+5. ✅ Stale page detection e recovery
+6. ✅ Test suite: 740 test passing
+
+---
+
 ## Shipped Milestones
 
 | Version | Name | Date | Phases | Tests |
@@ -162,6 +194,10 @@ Fixes:
 | v1.8 | Two-Phase Post-Relist Verification | 2026-04-16 | 8 | 658 |
 | v1.9 | Main Loop Refactoring | 2026-04-20 | 9 | 674 |
 | v1.10 | Golden Stability & Session Heartbeat | 2026-04-21 | 9 | 674 |
+| v1.11 | Detector & Stale Scan Fixes | 2026-05-07 | 9+ | 687 |
+| v1.12 | Processing & Recovery Improvements | 2026-05-12 | 9+ | 693 |
+| v1.13 | Golden Retry & Stale Page Fixes | 2026-05-17 | 9+ | 693 |
+| v1.14 | Telegram Notification Fixes | 2026-05-18 | 9+ | 740 |
 
 ## Future Milestones
 

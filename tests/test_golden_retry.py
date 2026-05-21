@@ -144,7 +144,7 @@ class TestSingleRetryClearsAll:
     @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True, True])
     @patch("logic.relist_engine.random.uniform", return_value=7.0)
     def test_single_retry(self, mock_uniform, mock_gw, mock_dt):
-        now = dt(16, 10)
+        now = dt(17, 10)
         mock_dt.now.return_value = now
 
         executor = MagicMock()
@@ -193,7 +193,7 @@ class TestMultipleRetriesNeeded:
     @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True, True, True, True])
     @patch("logic.relist_engine.random.uniform", return_value=6.0)
     def test_multiple_retries(self, mock_uniform, mock_gw, mock_dt):
-        now = dt(16, 10)
+        now = dt(17, 10)
         mock_dt.now.return_value = now
 
         executor = MagicMock()
@@ -252,7 +252,7 @@ class TestGoldenWindowClosesMidRetry:
     @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, False])
     @patch("logic.relist_engine.random.uniform", return_value=5.5)
     def test_window_closes(self, mock_uniform, mock_gw, mock_dt):
-        now = dt(16, 10)
+        now = dt(17, 10)
         mock_dt.now.return_value = now
 
         executor = MagicMock()
@@ -297,7 +297,7 @@ class TestRebootInterruptsWait:
     @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True])
     @patch("logic.relist_engine.random.uniform", return_value=8.0)
     def test_reboot_during_wait(self, mock_uniform, mock_gw, mock_dt):
-        now = dt(16, 10)
+        now = dt(17, 10)
         mock_dt.now.return_value = now
 
         executor = MagicMock()
@@ -339,7 +339,7 @@ class TestPerListingModeUsesRelistSingle:
     @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True, True])
     @patch("logic.relist_engine.random.uniform", return_value=7.5)
     def test_per_listing_mode(self, mock_uniform, mock_gw, mock_dt):
-        now = dt(16, 10)
+        now = dt(17, 10)
         mock_dt.now.return_value = now
 
         executor = MagicMock()
@@ -393,7 +393,7 @@ class TestSessionRecoveryOnInvalidSession:
     @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True])
     @patch("logic.relist_engine.random.uniform", return_value=6.0)
     def test_session_recovery_triggers_exit(self, mock_uniform, mock_gw, mock_dt):
-        now = dt(16, 10)
+        now = dt(17, 10)
         mock_dt.now.return_value = now
 
         executor = MagicMock()
@@ -437,7 +437,7 @@ class TestWaitTiming:
     @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True, True])
     @patch("logic.relist_engine.random.uniform", return_value=8.3)
     def test_wait_uses_random_uniform(self, mock_uniform, mock_gw, mock_dt):
-        now = dt(16, 10)
+        now = dt(17, 10)
         mock_dt.now.return_value = now
 
         executor = MagicMock()
@@ -481,7 +481,7 @@ class TestFreshScanEachRetry:
     @patch("logic.relist_engine.is_in_golden_window", side_effect=[True, True, True, True, True, True, True, True])
     @patch("logic.relist_engine.random.uniform", return_value=5.0)
     def test_fresh_scan_each_iteration(self, mock_uniform, mock_gw, mock_dt):
-        now = dt(16, 10)
+        now = dt(17, 10)
         mock_dt.now.return_value = now
 
         executor = MagicMock()

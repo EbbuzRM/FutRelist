@@ -2,16 +2,12 @@
 
 Verifies the bot's behavior at every critical moment of the golden hour schedule:
 
-    15:10 -> HOLD con heartbeat (aspetta 16:09:30)
-    16:09:30 -> Pre-nav: naviga alla Transfer List
-    16:10:00 -> SKIP attesa (is_in_golden_window=True) -> SCANSIONE -> RELIST tutti
-    16:10:10 -> Polling ritardatari (10s)
-    16:10:20 -> Relist ritardatari se ce ne sono
-    16:11:00 -> is_in_golden_window=False -> HOLD -> aspetta 17:09:30
-    17:09:30 -> Pre-nav
-    17:10:00 -> RELIST
+    16:10 -> HOLD con heartbeat (aspetta 17:09:30; 16:10 non è golden hour)
+    17:09:30 -> Pre-nav: naviga alla Transfer List
+    17:10:00 -> SKIP attesa (is_in_golden_window=True) -> SCANSIONE -> RELIST tutti
     17:10:10 -> Polling ritardatari (10s)
-    17:11:00 -> HOLD -> aspetta 18:09:30
+    17:10:20 -> Relist ritardatari se ce ne sono
+    17:11:00 -> is_in_golden_window=False -> HOLD -> aspetta 18:09:30
     18:09:30 -> Pre-nav
     18:10:00 -> RELIST
     18:10:10 -> Polling ritardatari (10s)
@@ -65,17 +61,17 @@ class TestGetNextGoldenHour:
     @pytest.mark.parametrize(
         "time_str, expected",
         [
-            # Well before golden period — next is 16:10
-            ("14:00", "16:10"),
-            # Inside golden period but before first golden — next is 16:10
-            ("15:30", "16:10"),
-            # Just before 16:10 — next is 16:10
-            ("16:05", "16:10"),
-            # Exactly at 16:10 — next future is 17:10 (must be strictly future)
+            # Well before golden period — next is 17:10
+            ("14:00", "17:10"),
+            # Before golden period start — next is 17:10
+            ("15:30", "17:10"),
+            # Just before 17:10 — next is 17:10
+            ("16:05", "17:10"),
+            # In HOLD fascia (16:10 non è golden) — next is 17:10
             ("16:10", "17:10"),
-            # Just after 16:10 — next future is 17:10
+            # Just after period start — next is 17:10
             ("16:11", "17:10"),
-            # Just after window closes — next is 17:10
+            # Just before first golden window — next is 17:10
             ("16:12", "17:10"),
             # Just before 17:10 — next is 17:10
             ("17:09", "17:10"),
@@ -117,11 +113,11 @@ class TestIsInGoldenPeriod:
             # Well before — False
             ("14:00", False),
             # One minute before start — False
-            ("15:09", False),
+            ("16:09", False),
             # Exactly at start — True
-            ("15:10", True),
-            # During golden period — True
-            ("16:00", True),
+            ("16:10", True),
+            # Before golden period start — False
+            ("16:00", False),
             # One minute before end — True
             ("18:14", True),
             # Exactly at end — True
@@ -146,19 +142,15 @@ class TestIsInHoldWindow:
         "time_str, expected",
         [
             # Before golden period — False (not in golden period at all)
-            ("15:09", False),
-            # At golden period start, not in golden hour relist window — True (HOLD)
-            ("15:10", True),
-            # At 16:08 — in golden period, not in relist window — True (HOLD)
-            ("16:08", True),
-            # At 16:09 — in golden hour 16, minute in GOLDEN_RELIST_WINDOW(9,10,11) — False
-            ("16:09", False),
-            # At 16:10 — in golden relist window — False
-            ("16:10", False),
-            # At 16:11 — in golden relist window — False
-            ("16:11", False),
-            # At 16:12 — past relist window for hour 16, in golden period — True (HOLD)
-            ("16:12", True),
+            ("15:30", False),
+            # At golden period start, not in golden relist window — True (HOLD verso 17:10)
+            ("16:10", True),
+            # At 16:30 — in golden period, not in relist window — True (HOLD)
+            ("16:30", True),
+            # At 16:59 — still HOLD (ora 16 non è golden hour)
+            ("16:59", True),
+            # At 17:08 — in golden period, not in relist window — True (HOLD)
+            ("17:08", True),
             # At 17:09 — in golden relist window for hour 17 — False
             ("17:09", False),
             # At 17:10 — in golden relist window — False
@@ -190,16 +182,14 @@ class TestIsInGoldenWindow:
     @pytest.mark.parametrize(
         "time_str, expected",
         [
-            # 16:08 — minute 8 not in range(9,12) — False
-            ("16:08", False),
-            # 16:09 — minute 9 in range(9,12) — True
-            ("16:09", True),
-            # 16:10 — True
-            ("16:10", True),
-            # 16:11 — minute 11 in range(9,12) — True
-            ("16:11", True),
-            # 16:12 — minute 12 not in range(9,12) — False
-            ("16:12", False),
+            # 16:10 — ora 16 non è golden hour — False
+            ("16:10", False),
+            # 16:11 — non golden hour — False
+            ("16:11", False),
+            # 17:08 — minute 8 not in range(9,12) — False
+            ("17:08", False),
+            # 17:09 — minute 9 in range(9,12) — True
+            ("17:09", True),
             # 17:10 — True
             ("17:10", True),
             # 18:10 — True
@@ -208,8 +198,6 @@ class TestIsInGoldenWindow:
             ("18:11", True),
             # 18:12 — False
             ("18:12", False),
-            # Not a golden hour (15:10) — False
-            ("15:10", False),
         ],
     )
     def test_is_in_golden_window(self, time_str, expected):
@@ -227,20 +215,22 @@ class TestIsCloseToGolden:
     @pytest.mark.parametrize(
         "time_str, expected",
         [
-            # 16:07 — minute 7 not in range(8,13) — False
-            ("16:07", False),
-            # 16:08 — minute 8 in range(8,13) — True
-            ("16:08", True),
-            # 16:09 — True
-            ("16:09", True),
-            # 16:10 — True
-            ("16:10", True),
-            # 16:11 — True
-            ("16:11", True),
-            # 16:12 — minute 12 in range(8,13) — True
-            ("16:12", True),
-            # 16:13 — minute 13 not in range(8,13) — False
-            ("16:13", False),
+            # 16:08 — ora 16 non è golden hour — False
+            ("16:08", False),
+            # 17:07 — minute 7 not in range(8,13) — False
+            ("17:07", False),
+            # 17:08 — minute 8 in range(8,13) — True
+            ("17:08", True),
+            # 17:09 — True
+            ("17:09", True),
+            # 17:10 — True
+            ("17:10", True),
+            # 17:11 — True
+            ("17:11", True),
+            # 17:12 — minute 12 in range(8,13) — True
+            ("17:12", True),
+            # 17:13 — minute 13 not in range(8,13) — False
+            ("17:13", False),
         ],
     )
     def test_is_close_to_golden(self, time_str, expected):
@@ -289,12 +279,12 @@ class TestHoldDecisionLogic:
         should_hold = in_hold and next_g is not None
         assert should_hold is True, "At 16:12, hold is genuine because 17:10 is coming"
 
-    def test_at_15_30_hold_with_golden_should_stay_hold(self):
-        """At 15:30: hold_window=True, next_golden=16:10 -> stay in hold."""
-        now = dt(15, 30)
+    def test_at_16_30_hold_with_golden_should_stay_hold(self):
+        """At 16:30: hold_window=True, next_golden=17:10 -> stay in hold."""
+        now = dt(16, 30)
         assert is_in_hold_window(now) is True
         next_g = get_next_golden_hour(now)
-        assert next_g == dt(16, 10)
+        assert next_g == dt(17, 10)
         in_hold = is_in_hold_window(now)
         should_hold = in_hold and next_g is not None
         assert should_hold is True
@@ -330,39 +320,39 @@ class TestGoldenWaitSkipLogic:
                 # Already in golden window, scan immediately
     """
 
-    def test_at_16_10_should_skip_wait(self):
-        """At 16:10: is_in_golden_window=True -> skip time.sleep()."""
-        now = dt(16, 10)
+    def test_at_17_10_should_skip_wait(self):
+        """At 17:10: is_in_golden_window=True -> skip time.sleep()."""
+        now = dt(17, 10)
         assert is_in_golden_window(now) is True
         # The condition: if NOT in golden window -> sleep
         # So if in golden window -> skip sleep
         should_sleep = not is_in_golden_window(now)
-        assert should_sleep is False, "At 16:10 the bot must NOT sleep — it's golden time"
+        assert should_sleep is False, "At 17:10 the bot must NOT sleep — it's golden time"
 
-    def test_at_16_08_should_wait_until_golden(self):
-        """At 16:08: is_in_golden_window=False -> should time.sleep() until 16:10."""
-        now = dt(16, 8)
+    def test_at_17_08_should_wait_until_golden(self):
+        """At 17:08: is_in_golden_window=False -> should time.sleep() until 17:10."""
+        now = dt(17, 8)
         assert is_in_golden_window(now) is False
         should_sleep = not is_in_golden_window(now)
-        assert should_sleep is True, "At 16:08 the bot should sleep until golden window opens"
+        assert should_sleep is True, "At 17:08 the bot should sleep until golden window opens"
 
-    def test_at_16_09_should_skip_wait(self):
-        """At 16:09: is_in_golden_window=True -> skip time.sleep()."""
-        now = dt(16, 9)
+    def test_at_17_09_should_skip_wait(self):
+        """At 17:09: is_in_golden_window=True -> skip time.sleep()."""
+        now = dt(17, 9)
         assert is_in_golden_window(now) is True
         should_sleep = not is_in_golden_window(now)
         assert should_sleep is False
 
-    def test_at_16_11_should_skip_wait(self):
-        """At 16:11: is_in_golden_window=True -> skip time.sleep()."""
-        now = dt(16, 11)
+    def test_at_17_11_should_skip_wait(self):
+        """At 17:11: is_in_golden_window=True -> skip time.sleep()."""
+        now = dt(17, 11)
         assert is_in_golden_window(now) is True
         should_sleep = not is_in_golden_window(now)
         assert should_sleep is False
 
-    def test_at_16_12_should_wait_if_still_before_next_golden(self):
-        """At 16:12: is_in_golden_window=False, next golden at 17:10."""
-        now = dt(16, 12)
+    def test_at_17_12_should_wait_if_still_before_next_golden(self):
+        """At 17:12: is_in_golden_window=False, next golden at 18:10."""
+        now = dt(17, 12)
         assert is_in_golden_window(now) is False
         # After golden window closes, the hold logic takes over (not sleep-til-golden)
 
@@ -373,7 +363,7 @@ class TestComputeNextWaitGoldenWindow:
     @patch("logic.relist_engine.datetime")
     def test_golden_window_returns_10(self, mock_dt):
         """During golden window, _compute_next_wait should return 10s if items are left."""
-        mock_dt.now.return_value = dt(16, 10)
+        mock_dt.now.return_value = dt(17, 10)
         scan = MagicMock(spec=ListingScanResult)
         scan.listings = []
         scan.expired_count = 1
@@ -385,12 +375,12 @@ class TestComputeNextWaitGoldenWindow:
     @patch("logic.relist_engine.datetime")
     def test_hold_window_returns_wait_until_golden(self, mock_dt):
         """During hold, _compute_next_wait should return exact wait until next golden pre-nav (:08)."""
-        mock_dt.now.return_value = dt(15, 30)
+        mock_dt.now.return_value = dt(16, 30)
         scan = MagicMock(spec=ListingScanResult)
         scan.listings = []
         engine = RelistEngine(None, None, None, None, None, None, None)
         result = engine._compute_next_wait(scan)
-        # A 15:30 → prossima golden 16:10, target :08 = 16:08 = 38 min = 2280s
+        # A 16:30 → prossima golden 17:10, target :08 = 17:08 = 38 min = 2280s
         assert result == 2280, (
             f"During hold, wait should be exactly toward :08 pre-nav slot, expected 2280s, got {result}"
         )
@@ -486,22 +476,22 @@ class TestGoldenWindowBoundaries:
     @pytest.mark.parametrize(
         "time_tuple, in_window",
         [
-            # 16:08:59 — just before golden window
-            ((16, 8, 59), False),
-            # 16:09:00 — golden window opens
-            ((16, 9, 0), True),
-            # 16:09:30 — pre-nav time
-            ((16, 9, 30), True),
-            # 16:10:00 — exact golden minute
-            ((16, 10, 0), True),
-            # 16:10:59 — still golden
-            ((16, 10, 59), True),
-            # 16:11:00 — last minute of golden window
-            ((16, 11, 0), True),
-            # 16:11:59 — last second of golden window
-            ((16, 11, 59), True),
-            # 16:12:00 — golden window closes
-            ((16, 12, 0), False),
+            # 17:08:59 — just before golden window
+            ((17, 8, 59), False),
+            # 17:09:00 — golden window opens
+            ((17, 9, 0), True),
+            # 17:09:30 — pre-nav time
+            ((17, 9, 30), True),
+            # 17:10:00 — exact golden minute
+            ((17, 10, 0), True),
+            # 17:10:59 — still golden
+            ((17, 10, 59), True),
+            # 17:11:00 — last minute of golden window
+            ((17, 11, 0), True),
+            # 17:11:59 — last second of golden window
+            ((17, 11, 59), True),
+            # 17:12:00 — golden window closes
+            ((17, 12, 0), False),
         ],
     )
     def test_golden_window_second_precision(self, time_tuple, in_window):
@@ -516,18 +506,18 @@ class TestHoldWindowBoundaries:
     @pytest.mark.parametrize(
         "time_tuple, in_hold",
         [
-            # 15:09:59 — just before golden period starts
-            ((15, 9, 59), False),
-            # 15:10:00 — golden period starts, not in golden window -> HOLD
-            ((15, 10, 0), True),
-            # 16:08:59 — in golden period, not golden window -> HOLD
-            ((16, 8, 59), True),
-            # 16:09:00 — golden window opens -> NOT hold
-            ((16, 9, 0), False),
-            # 16:11:59 — last second of golden window -> NOT hold
-            ((16, 11, 59), False),
-            # 16:12:00 — golden window closes -> HOLD
-            ((16, 12, 0), True),
+            # 16:09:59 — just before golden period starts
+            ((16, 9, 59), False),
+            # 16:10:00 — golden period starts, not in golden window -> HOLD
+            ((16, 10, 0), True),
+            # 17:08:59 — in golden period, not golden window -> HOLD
+            ((17, 8, 59), True),
+            # 17:09:00 — golden window opens -> NOT hold
+            ((17, 9, 0), False),
+            # 17:11:59 — last second of golden window -> NOT hold
+            ((17, 11, 59), False),
+            # 17:12:00 — golden window closes -> HOLD
+            ((17, 12, 0), True),
             # 18:15:00 — last moment of golden period -> HOLD
             ((18, 15, 0), True),
             # 18:16:00 — past golden period -> NOT hold
@@ -543,29 +533,29 @@ class TestHoldWindowBoundaries:
 class TestGetNextGoldenHourBoundaries:
     """Test get_next_golden_hour at exact boundary times."""
 
-    def test_just_before_16_10(self):
-        """15:59:59 -> next golden is 16:10."""
-        now = dt(15, 59, 59)
-        result = get_next_golden_hour(now)
-        assert result == dt(16, 10)
-
-    def test_exactly_16_10(self):
-        """At exactly 16:10, must return 17:10 (strictly future)."""
-        now = dt(16, 10, 0)
+    def test_just_before_17_10(self):
+        """16:59:59 -> next golden is 17:10."""
+        now = dt(16, 59, 59)
         result = get_next_golden_hour(now)
         assert result == dt(17, 10)
 
-    def test_just_after_16_10(self):
-        """At 16:11:59, next future is 17:10."""
-        now = dt(16, 11, 59)
+    def test_exactly_17_10(self):
+        """At exactly 17:10, must return 18:10 (strictly future)."""
+        now = dt(17, 10, 0)
         result = get_next_golden_hour(now)
-        assert result == dt(17, 10)
+        assert result == dt(18, 10)
 
-    def test_window_closes_16_12(self):
-        """At 16:12:00, window closed -> next is 17:10."""
-        now = dt(16, 12, 0)
+    def test_just_after_17_10(self):
+        """At 17:11:59, next future is 18:10."""
+        now = dt(17, 11, 59)
         result = get_next_golden_hour(now)
-        assert result == dt(17, 10)
+        assert result == dt(18, 10)
+
+    def test_window_closes_17_12(self):
+        """At 17:12:00, window closed -> next is 18:10."""
+        now = dt(17, 12, 0)
+        result = get_next_golden_hour(now)
+        assert result == dt(18, 10)
 
     def test_just_before_18_10(self):
         """18:09:59 -> next golden is 18:10."""
@@ -586,10 +576,10 @@ class TestGetNextGoldenHourBoundaries:
         assert result is None
 
     def test_midnight_before_goldens(self):
-        """00:00 -> next golden is 16:10."""
+        """00:00 -> next golden is 17:10."""
         now = dt(0, 0, 0)
         result = get_next_golden_hour(now)
-        assert result == dt(16, 10)
+        assert result == dt(17, 10)
 
 
 # ===========================================================================
@@ -646,8 +636,8 @@ class TestPostGoldenHoldOverride:
 class TestGoldenConstantsConsistency:
     """Verify the golden hour constants are internally consistent."""
 
-    def test_golden_hours_are_16_17_18(self):
-        assert GOLDEN_HOURS == (16, 17, 18)
+    def test_golden_hours_are_17_18(self):
+        assert GOLDEN_HOURS == (17, 18)
 
     def test_golden_minute_is_10(self):
         assert GOLDEN_MINUTE == 10
@@ -672,8 +662,8 @@ class TestGoldenConstantsConsistency:
         assert 7 not in GOLDEN_CLOSE_WINDOW
         assert 13 not in GOLDEN_CLOSE_WINDOW
 
-    def test_period_start_is_15_10(self):
-        assert GOLDEN_PERIOD_START == (15, 10)
+    def test_period_start_is_16_10(self):
+        assert GOLDEN_PERIOD_START == (16, 10)
 
     def test_period_end_is_18_15(self):
         assert GOLDEN_PERIOD_END == (18, 15)
@@ -710,34 +700,34 @@ class TestComputeNextWaitIntegration:
         return scan
 
     @patch("logic.relist_engine.datetime")
-    def test_golden_window_16_10_returns_10_if_expired(self, mock_dt):
-        """At 16:10 in golden window with expired items -> 10s polling for ritardatari."""
-        mock_dt.now.return_value = dt(16, 10)
+    def test_golden_window_17_10_returns_10_if_expired(self, mock_dt):
+        """At 17:10 in golden window with expired items -> 10s polling for ritardatari."""
+        mock_dt.now.return_value = dt(17, 10)
         scan = self._make_scan(expired=1)
         engine = RelistEngine(None, None, None, None, None, None, None)
         assert engine._compute_next_wait(scan) == 10
 
     @patch("logic.relist_engine.datetime")
-    def test_hold_15_30_returns_short_wait(self, mock_dt):
-        """At 15:30 in hold -> exact wait until pre-nav of 16:08:00."""
-        mock_dt.now.return_value = dt(15, 30)
+    def test_hold_16_30_returns_short_wait(self, mock_dt):
+        """At 16:30 in hold -> exact wait until pre-nav of 17:08:00."""
+        mock_dt.now.return_value = dt(16, 30)
         scan = self._make_scan()
         engine = RelistEngine(None, None, None, None, None, None, None)
         result = engine._compute_next_wait(scan)
-        # A 15:30 il wait è tempo fino a 16:08:00
-        # 15:30 → 16:08 = 38min = 2280s
-        assert result == 2280, f"At 15:30 during hold, wait should be exactly 2280s, got {result}"
+        # A 16:30 il wait è tempo fino a 17:08:00
+        # 16:30 → 17:08 = 38min = 2280s
+        assert result == 2280, f"At 16:30 during hold, wait should be exactly 2280s, got {result}"
 
     @patch("logic.relist_engine.datetime")
-    def test_hold_16_12_returns_wait_toward_17_08(self, mock_dt):
-        """At 16:12 in hold -> wait toward 17:08:00 pre-nav."""
-        mock_dt.now.return_value = dt(16, 12)
+    def test_hold_17_12_returns_wait_toward_18_08(self, mock_dt):
+        """At 17:12 in hold -> wait toward 18:08:00 pre-nav."""
+        mock_dt.now.return_value = dt(17, 12)
         scan = self._make_scan()
         engine = RelistEngine(None, None, None, None, None, None, None)
         result = engine._compute_next_wait(scan)
-        # A 16:12 il wait è tempo fino a 17:08:00
-        # 16:12 → 17:08 = 56min = 3360s
-        assert result == 3360, f"At 16:12 during hold, wait should be exactly 3360s, got {result}"
+        # A 17:12 il wait è tempo fino a 18:08:00
+        # 17:12 → 18:08 = 56min = 3360s
+        assert result == 3360, f"At 17:12 during hold, wait should be exactly 3360s, got {result}"
 
     @patch("logic.relist_engine.datetime")
     def test_normal_period_14_00_with_active_timer(self, mock_dt):

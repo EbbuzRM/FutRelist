@@ -165,6 +165,21 @@ class TestEnsureSession:
         ensure_session(mock_page, mock_auth, mock_controller)
         mock_auth.perform_full_login.assert_called_once_with(mock_page, mock_controller, get_credentials_fn=None)
 
+    def test_ensure_session_propagates_reboot_without_wrapping(self):
+        """Un reboot richiesto non deve essere mascherato come AuthError."""
+        from bot_state import RebootRequestError
+
+        mock_page = MagicMock()
+        mock_page.url = "https://signin.ea.com/p/signin/"
+        mock_auth = MagicMock()
+        mock_auth.is_logged_in.return_value = False
+        mock_auth.check_and_handle_disconnect_modal.return_value = False
+        mock_controller = MagicMock()
+        mock_auth.perform_full_login.side_effect = RebootRequestError("Reboot richiesto durante sessione console")
+
+        with pytest.raises(RebootRequestError):
+            ensure_session(mock_page, mock_auth, mock_controller, wait_fn=MagicMock(return_value=False))
+
     def test_passes_interruptible_wait_to_full_login(self):
         """ensure_session passa la wait interrompibile al recovery login quando disponibile."""
         mock_page = MagicMock()

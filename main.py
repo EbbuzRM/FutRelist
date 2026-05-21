@@ -190,7 +190,13 @@ def main() -> None:
                         logger.error(f"Errore nel processing del comando Telegram {cmd_type}: {e}")
                         send_telegram_alert(app_config.notifications, f"❌ Comando /{cmd_type} fallito: {e}")
 
-                keeper.ensure_session()
+                if bot_state.is_reboot_requested():
+                    break
+
+                try:
+                    keeper.ensure_session()
+                except RebootRequestError:
+                    break
 
                 try:
                     succeeded, failed, next_wait, scan_result, deadline, expired_count = engine.process_cycle()
@@ -206,9 +212,7 @@ def main() -> None:
                         break  # Reboot
 
                 except RebootRequestError:
-                    # Inviato dal golden loop o dal supervisor per forzare un riavvio dolce
                     logger.info("Ricevuta richiesta di Reboot interno asincrono.")
-                    batch.flush_if_any(app_config, page, logger, locals().get("scan_result"), force=True)
                     break
                 except InterruptedError:
                     # This normally means Ctrl+C or a fatal signal to stop the whole app

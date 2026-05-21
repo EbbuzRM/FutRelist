@@ -58,8 +58,8 @@ class ListingDefaults:
 class RateLimitingConfig:
     """Rate limiting delays for anti-detection."""
 
-    min_delay_ms: int = 2000
-    max_delay_ms: int = 5000
+    min_delay_ms: int = 1200
+    max_delay_ms: int = 2800
 
     def __post_init__(self):
         if self.min_delay_ms < 800:

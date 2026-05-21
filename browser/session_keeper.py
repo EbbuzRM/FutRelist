@@ -65,7 +65,10 @@ class SessionKeeper:
             status_console.print(self._make_status_table("🎮 Console Mode", 0, 0, 0))
             # Se wait_interruptible ritorna False, un comando Telegram è in arrivo:
             # restituisci False per permettere al main loop di processarlo.
-            return self.bot_state.wait_interruptible(self._state_wait_seconds(until))  # si sveglia subito su /reboot
+            self.bot_state.wait_interruptible(self._state_wait_seconds(until))  # si sveglia subito su /reboot
+            if self.bot_state.is_reboot_requested() or self.bot_state.has_commands():
+                return False
+            return True
 
         if self.bot_state.is_paused():
             until = self.bot_state.get_pause_until()
@@ -74,9 +77,10 @@ class SessionKeeper:
             status_console.print(self._make_status_table(f"⏸️ In Pausa (Telegram){until_str}", 0, 0, 0))
             # Se wait_interruptible ritorna False, un comando Telegram è in arrivo:
             # restituisci False per permettere al main loop di processarlo.
-            return self.bot_state.wait_interruptible(
-                self._state_wait_seconds(until)
-            )  # si sveglia subito su /resume o /reboot
+            self.bot_state.wait_interruptible(self._state_wait_seconds(until))  # si sveglia subito su /resume o /reboot
+            if self.bot_state.is_reboot_requested() or self.bot_state.has_commands():
+                return False
+            return True
 
         return False
 
@@ -214,7 +218,15 @@ class SessionKeeper:
                     else:
                         raise Exception("Recupero sessione fallito - utente non ancora autenticato")
 
+                except RebootRequestError:
+                    raise
                 except Exception as recovery_error:
+                    if self.bot_state.is_reboot_requested():
+                        logger.info("Recupero sessione interrotto da reboot richiesto")
+                        raise RebootRequestError(
+                            f"Reboot richiesto durante recupero sessione: {recovery_error}"
+                        ) from recovery_error
+
                     logger.error(f"Recupero sessione fallito: {recovery_error}")
 
                     send_telegram_error_with_screenshot(

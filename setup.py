@@ -15,7 +15,7 @@ def main():
 
         print("\n2. Installazione browser virtuali (playwright)...")
         # Chiamata a playwright direttamente tramite module python per compatibilità OS
-        subprocess.check_call([sys.executable, "-m", "playwright", "install"])
+        subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"])
     except Exception as e:
         print(f"\n[ERRORE] Impossibile installare le dipendenze: {e}")
         print("Assicurati di aver installato Python correttamente e di avere i permessi necessari.")
@@ -26,17 +26,38 @@ def main():
     print("=" * 50)
     print("Inserisci i dati per generare automaticamente i tuoi file di configurazione.\n")
 
-    email = input("Inserisci la tua Email FIFA: ").strip()
-    password = input("Inserisci la tua Password FIFA: ").strip()
+    email = ""
+    while not email:
+        email = input("Inserisci la tua Email FIFA (obbligatorio): ").strip()
+    
+    password = ""
+    while not password:
+        password = input("Inserisci la tua Password FIFA (obbligatorio): ").strip()
+
+    print("\n--- Notifiche Telegram (opzionale) ---")
+    print("Per ricevere notifiche sul telefono, hai bisogno di un bot Telegram.")
+    print("1. Apri Telegram e cerca @BotFather, invia /newbot e segui le istruzioni")
+    print("   per creare il tuo bot. Riceverai un token tipo: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11")
+    print("2. Cerca il tuo nuovo bot su Telegram, avvia una chat e invia /start")
+    print("3. Cerca @userinfobot, invia /start e trova il tuo Chat ID (numerico)")
+    print("   Oppure invia un messaggio al bot e visita: https://api.telegram.org/bot<IL_TUO_TOKEN>/getUpdates")
+    print()
+    token = input("Inserisci il tuo Bot Token Telegram (o premi invio per saltare): ").strip()
+    chat_id = input("Inserisci il tuo Chat ID Telegram (o premi invio per saltare): ").strip()
 
     with open(".env", "w") as f:
         f.write(f"FIFA_EMAIL={email}\n")
         f.write(f"FIFA_PASSWORD={password}\n")
-    # Limita i permessi a owner-read-write solo (0o600)
-    os.chmod(".env", 0o600)
-
-    token = input("\nInserisci il tuo Bot Token di Telegram (o premi invio se non vuoi usarlo): ").strip()
-    chat_id = input("Inserisci il tuo Chat ID di Telegram (o premi invio se non vuoi usarlo): ").strip()
+        f.write(f"TELEGRAM_TOKEN={token}\n")
+        f.write(f"TELEGRAM_CHAT_ID={chat_id}\n")
+    
+    if sys.platform == "win32":
+        subprocess.run(
+            ["icacls", ".env", "/inheritance:r", "/grant", f"{os.environ['USERNAME']}:F"],
+            capture_output=True, timeout=5
+        )
+    else:
+        os.chmod(".env", 0o600)
 
     config = {
         "browser": {
@@ -54,7 +75,7 @@ def main():
             "sync_minute_offset": 10,
         },
         "scan_interval_seconds": 3600,
-        "rate_limiting": {"min_delay_ms": 2000, "max_delay_ms": 5000},
+        "rate_limiting": {"min_delay_ms": 1200, "max_delay_ms": 2800},
         "notifications": {"telegram_token": token, "telegram_chat_id": chat_id},
     }
 

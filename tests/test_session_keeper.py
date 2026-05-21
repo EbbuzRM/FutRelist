@@ -67,6 +67,7 @@ class TestSessionKeeper:
         components = setup_session_keeper
         components["auth"].is_logged_in.return_value = False
         components["auth"].is_console_session_active.return_value = False
+        components["bot_state"].is_reboot_requested.return_value = False
 
         with (
             patch("browser.session_keeper.send_telegram_error_with_screenshot") as mock_send,
@@ -113,8 +114,41 @@ class TestSessionKeeper:
         with patch.object(real_state, "wait_interruptible", return_value=False) as wait_mock:
             handled = components["session_keeper"].supervise_state(MagicMock())
 
-        assert handled is False
+        assert handled is True
         assert wait_mock.call_args.args[0] <= 31
+
+    def test_execute_heartbeat_skips_error_notification_on_reboot(self, setup_session_keeper):
+        """Durante un reboot richiesto non inviare errori di recupero sessione."""
+        components = setup_session_keeper
+        components["auth"].is_logged_in.return_value = False
+        components["auth"].is_console_session_active.return_value = False
+        components["bot_state"].is_reboot_requested.return_value = True
+
+        with (
+            patch("browser.session_keeper.send_telegram_error_with_screenshot") as mock_send,
+            patch.object(
+                components["session_keeper"],
+                "ensure_session",
+                side_effect=Exception("Login interrotto"),
+            ),
+        ):
+            with pytest.raises(RebootRequestError):
+                components["session_keeper"]._execute_heartbeat()
+
+        mock_send.assert_not_called()
+
+    def test_supervise_console_returns_false_on_reboot(self, setup_session_keeper):
+        """Il reboot durante console mode deve uscire da supervise_state."""
+        components = setup_session_keeper
+        real_state = BotState()
+        real_state.set_console_mode(True, hours=1)
+        components["session_keeper"].bot_state = real_state
+        real_state.request_reboot()
+
+        with patch.object(real_state, "wait_interruptible", return_value=True):
+            handled = components["session_keeper"].supervise_state(MagicMock())
+
+        assert handled is False
 
     def test_supervise_console_caps_wait_to_auto_resume_deadline(self, setup_session_keeper):
         """La console mode temporizzata deve svegliarsi alla deadline, non dopo 300s."""
@@ -127,5 +161,5 @@ class TestSessionKeeper:
         with patch.object(real_state, "wait_interruptible", return_value=False) as wait_mock:
             handled = components["session_keeper"].supervise_state(MagicMock())
 
-        assert handled is False
+        assert handled is True
         assert wait_mock.call_args.args[0] <= 31

@@ -13,7 +13,7 @@
 - ConfigManager with typed dataclasses, CLI subcommands, deep-merge migration
 - Structured JSONL logging + rich console output
 - Rate limiting (2-5s random delays), error recovery, session persistence
-- Golden Hour scheduling: 16:10/17:10/18:10 with pre-nav at :09:00
+- Golden Hour scheduling: 17:10/18:10 with HOLD period from 16:10 and pre-nav at :09:00
 
 ---
 
@@ -100,6 +100,59 @@
 
 ---
 
+### v1.11 Code Quality & Timing Precision — SHIPPED 2026-05-06
+**Tests:** 686 passing (155 unit + 531 golden timeline)
+**Key accomplishments:**
+- **Code Review Fixes (CR-02, HI-01):** Fixed `_golden_retry_loop` return values (3 not 4); fixed logger warning format `%s` → `{var}` in config.py and rate_limiter.py
+- **Maintainability (ME-01/02/03):** Fixed `sys` import order in log_config.py; replaced `list.pop(0)` with `deque.popleft()` in BotState pending commands (O(1)); moved AuthManager imports to module level in relist.py
+- **Dependency Injection (LO-01):** Centralized RateLimiter via dependency injection across navigator, relist, sold_handler
+- **Root Cause Fix: `get_next_golden_hour()`:** Modified to return the **next future** golden hour instead of the current one when inside the :09-:11 window. All callers now correctly wait for future GH.
+- **Deadline Precision:** Simplified `_compute_deadline()` removing defensive logic; added deadline check in `wait_with_heartbeat()` to prevent oversleep past :08:00 with 1s safety margin and immediate exit when deadline reached.
+- **Click-Shield Fix:** Implemented `wait_for_click_shield()` with `wait_for_function()` (Playwright best practice) in browser/auth.py
+- **Error Screenshots:** Added `send_telegram_error_with_screenshot()` in notifier.py for visual diagnostics of critical errors
+- **Test Suite Expansion:** Added `test_relist_engine.py`, `test_relist_imports.py` and updated existing test files
+
+---
+
+### v1.12 Stale Page Detection & Processing Improvements — SHIPPED 2026-05-11
+**Tests:** 693 passing
+**Key accomplishments:**
+- **Root Cause Fix: Telegram Relist Overcount:** EA leaves items briefly in `section='active'` with `state='Expired'` after relist. Fixed detector.py to classify `Expired`/`Scaduto` text inside active section as `ListingState.EXPIRED`. Resolved "17 rilistati" bug (was counting 16 real + 1 phantom).
+- **Root Cause Fix: Processing Limbo & Double Notifications:** `_processing_wait_loop` now executes relist **immediately** after detecting Processing→Expired transition in the same cycle. Processing items outside golden window now get 15 attempts (was 3) with 30-60s waits and 300s total timeout. Fixed stale `_last_scan_result` causing processing wait bypass.
+- **Stale Page Detection:** Added detector in `process_cycle`: if bot does ≥10 rapid cycles (wait ≤30s) consecutively without finding expired items, forces `page.reload()` to get fresh data from EA server. Prevents infinite polling loop on frozen JavaScript timers after session expiry.
+- **Heartbeat Auto-Recovery:** `_execute_heartbeat()` now calls `ensure_session()` on session expiry detection. If recovery fails, sends Telegram notification with screenshot and raises `RebootRequestError`.
+- **Reboot with os.execv():** `handle_reboot()` now uses `os.execv(sys.executable, [sys.executable, "main.py"])` to fully replace the process. All Python modules are reloaded from disk. Previously `while True` in main.py restarted in the same interpreter with stale modules.
+- **Processing Wait Expansion:** Increased parameters for non-golden window: attempts 3→15, wait 15-30s→30-60s, added 300s total timeout. Constants centralized in `logic/golden_hour.py`.
+
+---
+
+### v1.13 Golden Retry & Notification Accuracy — SHIPPED 2026-05-17
+**Tests:** 740 passing
+**Key accomplishments:**
+- **Golden Retry Loop Optimization:** `_golden_retry_loop` now uses post-relist scan data (`_last_scan_result`) instead of stale pre-relist data. If no expired items remain after main relist, retry loop is skipped instantly (saves 9s of unnecessary waiting).
+- **Golden Retry Loop Break Fix:** Fixed premature `break` condition (`if f == 0: break`) — loop now continues if `f == 0` but `remaining_processing > 0`, ensuring all Processing items in EA limbo are handled atomically within the golden window.
+- **Telegram Report — No Double Counting:** `NotificationBatch.expired_detected` no longer sums expired counts across scans. Now uses the total processed (`relisted + failed`) as the base, preventing impossible counts (e.g., 132 scaduti when EA max is 100). Result is capped to actual Transfer List capacity.
+
+---
+
+### v1.14 Stale Data & Double Check Fixes — SHIPPED 2026-05-18
+**Tests:** 740 passing
+**Key accomplishments:**
+- **Fix: Stale Telegram Notification After Reboot:** Notification batch was not reset before reboot. `flush_if_any(force=True)` sent stale data from previous cycles (e.g., "Relistati: 1" for a relist done hours earlier). Replaced with `batch.reset()` before reboot — stale data is silently discarded.
+- **Fix: Missing 18:10 Telegram Notification:** Double redundant check in `flush_if_any()` was blocking notifications. `main.py:201` correctly checked `is_ready_to_flush(next_wait)`, but `flush_if_any()` internally rechecked with `is_ready_to_flush(0)` using hardcoded current_wait=0. After reboot, `last_flush_time` was `None` — none of 3 conditions passed. Replaced with `if not force and self.relisted == 0 and self.failed == 0: return`. The caller already verified conditions — internal check was redundant.
+
+---
+
+### v1.15 Golden Hour 16:10 Removal & Documentation Alignment — SHIPPED 2026-05-19
+**Tests:** 740 passing
+**Type:** Product Decision
+**Key accomplishments:**
+- **Golden Hour 16:10 RIMOSSA:** L'orario 16:10 non è più una golden hour attiva. Nessun relist tassativo alle 16:10. Restano solo 17:10 e 18:10 come picchi di relist (`GOLDEN_HOURS = (17, 18)`).
+- **HOLD Period Clarified:** Il periodo HOLD inizia ufficialmente alle 16:10 — un'ora prima del primo picco 17:10, nessun relist forzato durante questo periodo.
+- **Documentation Alignment:** Allineati tutti i file di planning (STATE.md, ROADMAP.md, PROJECT.md, CODEBASE.md) per riflettere la configurazione reale a 2 golden hours (non 3).
+- **Phase 10 Completed:** Formalizzata la chiusura della Phase 10 (Stability & Notification Fixes) nei documenti di planning.
+
+---
 
 ## Future Milestones
 

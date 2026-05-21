@@ -191,8 +191,26 @@ def test_notification_batch_flush_no_activity_no_send():
     assert batch.relisted == 0
 
 
+def test_notification_batch_flush_force_skips_empty_batch():
+    """Test che flush_if_any con force=True non invia report senza attivita'."""
+    batch = NotificationBatch(batch_window_seconds=120, max_cycles=5)
+    scan = MagicMock(spec=ListingScanResult)
+    scan.expired_count = 0
+    scan.total_count = 0
+
+    for _ in range(26):
+        batch.accumulate(scan, succeeded=0, failed=0)
+
+    app_config = MagicMock(notifications=MagicMock(telegram_token="test", telegram_chat_id="123"))
+    mock_logger = MagicMock()
+
+    batch.flush_if_any(app_config, page=None, logger=mock_logger, scan=scan, force=True)
+    assert batch.cycles == 0
+    mock_logger.info.assert_not_called()
+
+
 def test_notification_batch_flush_force_sends():
-    """Test che flush_if_any con force=True invia indipendentemente dalle condizioni."""
+    """Test che flush_if_any con force=True invia quando c'e' attivita'."""
     batch = NotificationBatch(batch_window_seconds=120, max_cycles=5)
     scan = MagicMock(spec=ListingScanResult)
     scan.expired_count = 2

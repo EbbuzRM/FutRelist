@@ -1,5 +1,5 @@
 status: production
-last_updated: "2026-05-17T00:00:00.000Z"
+last_updated: "2026-05-19T00:00:00.000Z"
 ---
 
 # Project State — FIFA 26 Auto-Relist Bot
@@ -15,7 +15,8 @@ Questa è la mappatura reale dei componenti dopo il refactoring della Fase 9.
 - **Orchestrator (`main.py`):** Entrypoint leggero (~200 righe). Gestisce il bootstrap, il loop principale e il coordinamento tra i moduli.
 - **Relist Engine (`logic/relist_engine.py`):** Il "cervello" decisionale. Implementa il ciclo di scansione e il protocollo di **Two-Phase Verification**.
 - **Golden Hour Logic (`logic/golden_hour.py`):** Unica fonte di verità per i timing.
-  - **Hours:** 16, 17, 18.
+  - **Hours:** 17, 18 (solo 17:10 e 18:10).
+  - **HOLD period start:** 16:10 (non è una golden hour).
   - **Protocol:** :09 (Pre-Nav) → :10 (Relist) → :11 (Ritardatari).
 - **Session Keeper (`browser/session_keeper.py`):** Gestisce la salute della sessione, il **Heartbeat** (click su tab 'Transfers') e le attese in Pausa/Console.
 - **Bot State (`bot_state.py`):** Gestore dello stato thread-safe (comandi Telegram, statistiche, reboot events).
@@ -48,9 +49,6 @@ Regole fondamentali verificate nel codice sorgente:
 **Relist Protocol Golden Hour**
 | Orario | Azione | Risultato nei Log |
 |--------|--------|-------------------|
-| **16:08:00** | Pre-Nav Guard scatta | `Minuto :08 — attendo pre-nav slot :09:00` 
-| **16:09:00** | Navigazione Transfer List | `Transfer List caricata con successo` 
-| **16:10:00** | SCANSIONE + Relist (4 item) | `4 rilistati, 0 falliti` | ✅ |
 | **17:08:00** | Pre-Nav Guard scatta | `Minuto :08 — attendo pre-nav slot :09:00` 
 | **17:09:00** | Navigazione Transfer List | `Transfer List caricata con successo` 
 | **17:10:00** | SCANSIONE + Relist (4 item) | `4 rilistati, 0 falliti` | ✅ |
@@ -62,6 +60,34 @@ Regole fondamentali verificate nel codice sorgente:
 
 
 ## 5. Current Activity & Known Issues
+
+### IMPORTANTE — Golden Hour 16:10 RIMOSSA (maggio 2026)
+
+**Decisione prodotto (intenzionale, non regressione):**
+
+- L'orario **16:10 NON è più una golden hour** — nessun relist tassativo alle 16:10.
+- Restano **solo 17:10 e 18:10** come picchi di relist (`GOLDEN_HOURS = (17, 18)` in `logic/golden_hour.py`).
+- Il **periodo HOLD** inizia alle **16:10** (`GOLDEN_PERIOD_START = (16, 10)`): un'ora prima del primo picco 17:10, gli scaduti restano in attesa.
+- Fine fascia invariata: **18:15** (`GOLDEN_PERIOD_END`).
+
+**Scopo:** evitare confusione per IA e sviluppatori che leggono vecchia documentazione o planning che citava «16:10, 17:10, 18:10» come tre golden hour attive.
+
+**Data modifica:** 19 maggio 2026.
+
+### Today's Fixes (May 18, 2026)
+### Fix: Notifica Telegram con dati stale dopo reboot
+- **Problema**: Dopo un reboot, il bot inviava una notifica Telegram con conteggi di relist vecchi (es. "Relistati: 1" alle 15:30 per un relist fatto alle 14:36).
+- **Root cause**: Il notification batch non veniva resettato prima del reboot. Il `flush_if_any(force=True)` inviava dati accumulati anche ore prima.
+- **Fix**: Sostituito `batch.flush_if_any(..., force=True)` con `batch.reset()` in `main.py` prima del reboot. I dati stale vengono scartati silenziosamente invece di essere inviati all'utente.
+- **File modificato**: `main.py` — riga 222 (circa)
+- **Verifica**: 740 test passano. ✅
+
+### Fix 2: Notifica Telegram mancante alle 18:10 — Doppio check ridondante
+- **Problema**: La notifica Telegram del relist delle 18:10 non veniva inviata, mentre quelle delle 16:10 e 17:10 funzionavano regolarmente.
+- **Root cause**: Doppio check ridondante in `flush_if_any()`. In `main.py:201`, `is_ready_to_flush(next_wait)` passava correttamente (next_wait=3520 > 120). Ma dentro `flush_if_any()`, un secondo check `is_ready_to_flush(0)` usava `current_wait=0` hardcoded. Dopo un reboot, `last_flush_time` era `None` (nuovo oggetto NotificationBatch), quindi nessuna delle 3 condizioni era soddisfatta: `0 > 120` False, `cycles >= 5` False, `elapsed` saltato perché `last_flush_time is None`.
+- **Fix**: Sostituito `if not force and not self.is_ready_to_flush(0): return` con `if not force and self.relisted == 0 and self.failed == 0: return` in `core/notification_batch.py`. Il chiamante (main.py) ha già verificato le condizioni di flush — il check interno era ridondante e causava notifiche perse.
+- **File modificato**: `core/notification_batch.py` — righe 109-113
+- **Verifica**: 740 test passano. ✅
 
 ### Today's Fixes (May 17, 2026)
 ### Fix 1: Telegram Report — Conteggio `Scaduti rilevati` senza doppio conteggio
@@ -230,5 +256,5 @@ Regole fondamentali verificate nel codice sorgente:
 </details>
 
 ### Test Suite Summary
-- **Total:** 693 tests passing.
+- **Total:** 740 tests passing.
 - **Coverage:** 155 unit tests + 531 golden timeline simulations (added test_relist_engine.py, test_relist_imports.py)

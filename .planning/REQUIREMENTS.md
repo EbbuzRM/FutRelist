@@ -85,6 +85,26 @@
 - [x] **GOLDEN-STABILITY-03**: Heartbeat robustness (Escape + force click)
 - [x] **GOLDEN-STABILITY-04**: Documentation lock in AGENTS.md
 
+## v1.11-v1.14 Requirements (May 2026) — ALL COMPLETE ✅
+
+### NOTIFY-FIX - Telegram Notification Reliability
+- [x] **NOTIFY-FIX-01**: Reset batch pre-reboot per evitare notifiche con dati stale
+- [x] **NOTIFY-FIX-02**: Rimozione check ridondante `is_ready_to_flush(0)` in `flush_if_any()`
+- [x] **NOTIFY-FIX-03**: Logica anti-doppio conteggio per `expired_detected`
+- [x] **NOTIFY-FIX-04**: Error screenshots per diagnostica visiva
+
+### PROCESSING-IMPROVE - Processing Item Handling
+- [x] **PROCESSING-IMPROVE-01**: Aumento tentativi da 3 a 15 (fuori golden window)
+- [x] **PROCESSING-IMPROVE-02**: Timeout totale 300s (5 minuti)
+- [x] **PROCESSING-IMPROVE-03**: Golden retry loop ottimizzato con dati freschi
+- [x] **PROCESSING-IMPROVE-04**: Break condition corretta: `f == 0 AND remaining_processing == 0`
+
+### STABILITY-FIX - Session & Page Stability
+- [x] **STABILITY-FIX-01**: Heartbeat recovery automatico sessione scaduta
+- [x] **STABILITY-FIX-02**: Reboot con `os.execv()` per reload completo moduli
+- [x] **STABILITY-FIX-03**: Stale page detection (reload dopo 10 cicli rapidi)
+- [x] **STABILITY-FIX-04**: Detector fix per `Expired` in sezione `active`
+
 ## Future Requirements (v2.0+)
 - Price monitoring and optimization
 - Trading history and profit statistics

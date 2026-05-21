@@ -134,6 +134,7 @@ def ensure_session(
       2. Se non è scaduta ma is_logged_in fallisce → reload e riprova
       3. Se dopo il reload ancora non loggato, o URL è login → re-authenticate
     """
+    from bot_state import RebootRequestError
     from browser.auth import AuthError
 
     # 0. Check per modali critici EA (es. Cannot Authenticate).
@@ -154,6 +155,8 @@ def ensure_session(
         try:
             _perform_full_login(auth, page, controller, wait_fn)
             logger.info("Sessione ripristinata con successo")
+        except RebootRequestError:
+            raise
         except Exception as e:
             raise AuthError(f"Recupero sessione fallito: {e}") from e
         return
@@ -175,6 +178,8 @@ def ensure_session(
     try:
         _perform_full_login(auth, page, controller, wait_fn)
         logger.info("Sessione ripristinata con successo")
+    except RebootRequestError:
+        raise
     except AuthError:
         raise
     except Exception as e:

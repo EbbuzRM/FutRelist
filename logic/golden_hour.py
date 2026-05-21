@@ -8,12 +8,12 @@ from models.listing import ListingScanResult, ListingState
 # ---------------------------------------------------------------------------
 # Costanti Golden Hour — unica fonte di verità
 # ---------------------------------------------------------------------------
-GOLDEN_HOURS: tuple[int, ...] = (16, 17, 18)
+GOLDEN_HOURS: tuple[int, ...] = (17, 18)  # solo 17:10 e 18:10 (16:10 rimossa)
 GOLDEN_MINUTE: int = 10  # :10 di ogni golden hour
 GOLDEN_PRE_NAV_MINUTE: int = 9  # navigazione pre-golden a :09:00
 GOLDEN_RELIST_WINDOW: range = range(9, 12)  # :09 → :11 inclusi
 GOLDEN_CLOSE_WINDOW: range = range(8, 13)  # :08 → :12 "vicino alla golden"
-GOLDEN_PERIOD_START: tuple[int, int] = (15, 10)  # 15:10
+GOLDEN_PERIOD_START: tuple[int, int] = (16, 10)  # 16:10 — inizio fascia HOLD (1h prima del primo picco 17:10)
 GOLDEN_PERIOD_END: tuple[int, int] = (18, 15)  # 18:15
 
 # ---------------------------------------------------------------------------
@@ -58,8 +58,9 @@ def get_active_with_timer_count(scan: ListingScanResult) -> int:
 
 
 def get_next_golden_hour(now: datetime) -> datetime | None:
-    """Restituisce la PROSSIMA golden hour futura (16:10, 17:10, 18:10) come datetime.
+    """Restituisce la PROSSIMA golden hour futura (17:10, 18:10) come datetime.
 
+    Nota: 16:10 non è una golden hour — è solo l'inizio della fascia HOLD.
     La funzione restituisce SEMPRE una golden hour nel futuro, mai quella corrente
     anche se siamo nella sua finestra di rilist (:09-:11).
     Se non ci sono più golden hours oggi, restituisce None.
@@ -75,10 +76,10 @@ def get_next_golden_hour(now: datetime) -> datetime | None:
 
 
 def is_in_golden_period(now: datetime) -> bool:
-    """True se siamo nella fascia 15:10 → 18:15.
+    """True se siamo nella fascia 16:10 → 18:15.
 
     In questa fascia il golden sync è attivo: il bot aspetta SEMPRE
-    la prossima golden hour (16:10, 17:10, 18:10) prima di navigare.
+    la prossima golden hour (17:10, 18:10) prima di navigare.
     """
     start_h, start_m = GOLDEN_PERIOD_START
     end_h, end_m = GOLDEN_PERIOD_END
@@ -92,11 +93,11 @@ def is_in_golden_period(now: datetime) -> bool:
 def is_in_hold_window(now: datetime) -> bool:
     """True se siamo nella fascia golden ma NON nel momento del relist (:09-:11).
 
-    Durante la fascia 15:10→18:15, il relist è consentito SOLO nella finestra:
-    - :09 → :11 delle ore 16, 17, 18 (pre-nav + relist :10 + ritardatari :11)
+    Durante la fascia 16:10→18:15, il relist è consentito SOLO nella finestra:
+    - :09 → :11 delle ore 17 e 18 (pre-nav + relist :10 + ritardatari :11)
     Tutto il resto è HOLD: gli scaduti aspettano la prossima golden.
 
-    Fuori dalla fascia 15:10-18:15: relist normale (sempre False).
+    Fuori dalla fascia 16:10-18:15: relist normale (sempre False).
     """
     if not is_in_golden_period(now):
         return False

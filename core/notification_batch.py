@@ -101,15 +101,15 @@ class NotificationBatch:
         """Invia il report se c'e' stata attivita' e le condizioni di flush sono soddisfatte.
 
         Args:
-            force: Se True, forza il flush indipendentemente dalle condizioni (usato per shutdown/reboot).
+            force: Se True, salta solo i controlli temporali del batch; non invia report vuoti.
         """
         if self.cycles == 0:
             return
 
-        # Il chiamante (main.py) ha già verificato is_ready_to_flush(next_wait).
-        # Questo check con 0 hardcoded causava notifiche perse quando
-        # last_flush_time era None (fresh session dopo reboot).
-        if not force and self.relisted == 0 and self.failed == 0:
+        # Nessun report se non c'è stata attività reale (rilist o fallimenti).
+        if self.relisted == 0 and self.failed == 0:
+            if force:
+                self.reset()
             return
 
         if not app_config.notifications.telegram_token or not app_config.notifications.telegram_chat_id:

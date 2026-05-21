@@ -53,7 +53,7 @@ class TestGoldenRetryLoopReturnValues:
     @patch("logic.relist_engine.is_in_golden_window", return_value=True)
     def test_returns_three_values_on_reboot(self, mock_gw, mock_dt):
         """CR-02 fix: _golden_retry_loop must return 3 values, not 4 when reboot."""
-        now = datetime(2026, 4, 13, 16, 10)
+        now = datetime(2026, 4, 13, 17, 10)
         mock_dt.now.return_value = now
 
         executor = MagicMock()
@@ -85,7 +85,7 @@ class TestGoldenRetryLoopReturnValues:
     @patch("logic.relist_engine.random.uniform", return_value=5.0)
     def test_returns_three_values_on_success(self, mock_uniform, mock_gw, mock_dt):
         """CR-02 fix: _golden_retry_loop returns 3 values on successful relist."""
-        now = datetime(2026, 4, 13, 16, 10)
+        now = datetime(2026, 4, 13, 17, 10)
         mock_dt.now.return_value = now
 
         executor = MagicMock()
@@ -264,7 +264,7 @@ class TestProcessCycleGoldenRetryAggregation:
         self, mock_min_active, mock_next_gh, mock_hold, mock_period, mock_gw, mock_dt
     ):
         """When golden retry recovers a failed item, failed count must decrease."""
-        now = datetime(2026, 4, 13, 16, 10)
+        now = datetime(2026, 4, 13, 17, 10)
         mock_dt.now.return_value = now
         # is_in_golden_window is called multiple times:
         # 1. process_cycle line 226 — golden retry check → True

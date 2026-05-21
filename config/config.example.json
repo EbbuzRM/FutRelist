@@ -18,8 +18,8 @@
   },
   "scan_interval_seconds": 3600,
   "rate_limiting": {
-    "min_delay_ms": 2000,
-    "max_delay_ms": 5000
+    "min_delay_ms": 1200,
+    "max_delay_ms": 2800
   },
   "notifications": {
     "telegram_token": "INSERISCI_QUI_IL_TUO_TOKEN",
