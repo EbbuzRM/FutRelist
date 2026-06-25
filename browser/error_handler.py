@@ -120,6 +120,12 @@ def is_session_expired(page: Page) -> bool:
     return True
 
 
+def _is_session_alive(page: Page, auth: AuthManager, timeout_ms: int) -> bool:
+    if "probe_session_alive" in dir(auth):
+        return auth.probe_session_alive(page, timeout_ms=timeout_ms)
+    return auth.is_logged_in(page, timeout_ms=timeout_ms)
+
+
 def ensure_session(
     page: Page,
     auth: AuthManager,
@@ -161,7 +167,7 @@ def ensure_session(
             raise AuthError(f"Recupero sessione fallito: {e}") from e
         return
     elif not is_session_expired(page):
-        if auth.is_logged_in(page, timeout_ms=timeout_ms):
+        if _is_session_alive(page, auth, timeout_ms):
             return
         # Sessione incerta: potrebbe essere solo caricamento lento o modale non intercettato
         logger.warning("Sessione incerta, tentativo di ricaricamento...")
@@ -170,7 +176,7 @@ def ensure_session(
         # Riprova il check del modale dopo il reload
         auth.check_and_handle_disconnect_modal(page)
 
-        if not is_session_expired(page) and auth.is_logged_in(page, timeout_ms=timeout_ms):
+        if not is_session_expired(page) and _is_session_alive(page, auth, timeout_ms):
             return
         # Dopo reload ancora non loggato: cade nel blocco di re-auth sotto
 

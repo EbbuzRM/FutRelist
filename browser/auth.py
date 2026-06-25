@@ -34,6 +34,7 @@ class AuthManager:
     def __init__(self, config: dict):
         self.config = config
         self.PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+        self._menu_probe_failures = 0
 
     def wait_for_click_shield(self, page: Page, timeout_ms: int = 15000) -> bool:
         """Aspetta che l'overlay ut-click-shield di EA scompaia.
@@ -178,6 +179,115 @@ class AuthManager:
         except Exception as e:
             logger.debug(f"Errore durante is_logged_in: {e}")
             return False
+
+    def probe_session_alive(self, page: Page, timeout_ms: int = 8000) -> bool:
+        """Verifica attivamente la sessione forzando un cambio menu.
+
+        `is_logged_in()` vede la shell WebApp, ma EA puo lasciare quella UI
+        visibile anche dopo aver invalidato la sessione server. Questo probe
+        induce una navigazione reale e intercetta logout/modali generati da EA.
+        """
+        if self.check_and_handle_disconnect_modal(page):
+            return False
+        if self.is_console_session_active(page):
+            return False
+        if self._is_login_url(page):
+            return False
+
+        try:
+            probe_result = self._run_menu_session_probe(page)
+            if probe_result == "failed":
+                return self._handle_menu_probe_failure(page, timeout_ms)
+            if probe_result == "invalid":
+                self._menu_probe_failures = 0
+                return False
+
+            self._menu_probe_failures = 0
+
+            if self.check_and_handle_disconnect_modal(page):
+                return False
+            if self.is_console_session_active(page):
+                return False
+            if self._is_login_url(page):
+                return False
+
+            return self.is_logged_in(page, timeout_ms=min(timeout_ms, 3000))
+        except Exception as e:
+            logger.warning(f"Menu probe sessione fallito: {type(e).__name__}: {e}")
+            return self._handle_menu_probe_failure(page, timeout_ms)
+
+    def _run_menu_session_probe(self, page: Page) -> str:
+        alternate_clicked = self._click_first_visible_menu(
+            page,
+            ["Home", " Home", "Casa", " Club", "Club"],
+        )
+        if not alternate_clicked:
+            logger.warning("Menu probe: nessun menu alternativo trovato")
+            return "failed"
+
+        page.wait_for_timeout(1000)
+        if self.check_and_handle_disconnect_modal(page) or self.is_console_session_active(page) or self._is_login_url(page):
+            return "invalid"
+
+        transfers_clicked = self._click_first_visible_menu(
+            page,
+            ["Transfers", " Transfers", "Trasferimenti", " Trasferimenti"],
+        )
+        if not transfers_clicked:
+            logger.warning("Menu probe: menu Transfers non trovato")
+            return "failed"
+
+        page.wait_for_timeout(1500)
+        if self.check_and_handle_disconnect_modal(page) or self.is_console_session_active(page) or self._is_login_url(page):
+            return "invalid"
+
+        return "ok"
+
+    def _click_first_visible_menu(self, page: Page, names: list[str]) -> bool:
+        for name in names:
+            try:
+                btn = page.get_by_role("button", name=name)
+                if btn.count() and btn.first.is_visible(timeout=500):
+                    btn.first.click(timeout=3000)
+                    logger.debug(f"Menu probe: click su '{name.strip()}'")
+                    return True
+            except Exception:
+                continue
+        return False
+
+    def _handle_menu_probe_failure(self, page: Page, timeout_ms: int) -> bool:
+        self._menu_probe_failures += 1
+        refresh_after = int(self.config.get("session_probe_refresh_after_failures", 3))
+
+        if self._menu_probe_failures < refresh_after:
+            logger.warning(
+                f"Menu probe non conclusivo ({self._menu_probe_failures}/{refresh_after}); sessione considerata incerta"
+            )
+            return False
+
+        logger.warning("Menu probe fallito ripetutamente; fallback a refresh completo")
+        self._menu_probe_failures = 0
+        try:
+            page.reload()
+            page.wait_for_timeout(5000)
+        except Exception as e:
+            logger.warning(f"Refresh fallback fallito: {type(e).__name__}: {e}")
+            return False
+
+        if self.check_and_handle_disconnect_modal(page):
+            return False
+        if self.is_console_session_active(page):
+            return False
+        if self._is_login_url(page):
+            return False
+        return self.is_logged_in(page, timeout_ms=timeout_ms)
+
+    def _is_login_url(self, page: Page) -> bool:
+        try:
+            url = page.url.lower()
+        except Exception:
+            return False
+        return "signin.ea.com" in url or "login" in url
 
     def is_console_session_active(self, page: Page) -> bool:
         """Controlla se appare il messaggio 'Signed Into Another Device' o simili.
@@ -327,39 +437,120 @@ class AuthManager:
                 logger.info("Login istantaneo (già autorizzato).")
                 return True
 
-            # Step 1: Email
-            email_input = page.get_by_role("textbox", name="Phone or Email")
-            if not email_input.count():
-                logger.error("Campo email non trovato")
-                return False
-            email_input.first.fill(email)
-            logger.info("Email inserita")
+            # Rilevamento della schermata "utente pre-selezionato" (Remember me)
+            is_remember_me_screen = False
+            logout_link = None
+            logout_selectors = [
+                "a:has-text('Log out and log in as a different user')",
+                "a:has-text('Log out')",
+                "a:has-text('different user')",
+                "a:has-text('Disconnettiti')",
+                "a:has-text('accedi come')",
+                "#logoutLink",
+                ".rememberMe_logout"
+            ]
 
-            # Step 2: NEXT
-            page.wait_for_timeout(1000)
-            next_btn = page.get_by_role("button", name="NEXT")
-            if not next_btn.count():
-                logger.error("Bottone NEXT non trovato")
-                return False
-            next_btn.first.click()
-            logger.info("NEXT cliccato")
-            page.wait_for_timeout(3000)
+            for selector in logout_selectors:
+                try:
+                    el = page.locator(selector)
+                    if el.count() and el.first.is_visible():
+                        logout_link = el.first
+                        is_remember_me_screen = True
+                        break
+                except Exception:
+                    continue
 
-            # Step 3: Password
-            pwd_input = page.get_by_role("textbox", name="Password")
-            if not pwd_input.count():
-                logger.error("Campo password non trovato dopo NEXT")
-                return False
-            pwd_input.first.fill(password)
-            logger.info("Password inserita")
+            if not is_remember_me_screen:
+                try:
+                    pwd_visible = page.get_by_role("textbox", name="Password").is_visible(timeout=2000)
+                    email_visible = page.get_by_role("textbox", name="Phone or Email").is_visible(timeout=500)
+                    if pwd_visible and not email_visible:
+                        is_remember_me_screen = True
+                except Exception:
+                    pass
 
-            # Step 4: Sign in
-            sign_in_btn = page.get_by_role("button", name="Sign in")
-            if not sign_in_btn.count():
-                logger.error("Bottone Sign in non trovato")
-                return False
-            sign_in_btn.first.click()
-            logger.info("Sign in cliccato")
+            if is_remember_me_screen:
+                logger.info("Schermata login EA con utente memorizzato ('Remember Me') rilevata")
+                email_username = email.split("@")[0] if "@" in email else email
+                email_matched = False
+
+                try:
+                    body_text = page.locator("body").inner_text().lower()
+                    if email.lower() in body_text or email_username.lower() in body_text:
+                        email_matched = True
+                except Exception as e:
+                    logger.debug(f"Errore durante controllo email memorizzata: {e}")
+
+                if email_matched:
+                    logger.info(f"L'utente memorizzato coincide con quello configurato ({email}). Procedo con l'inserimento della password.")
+
+                    pwd_input = page.get_by_role("textbox", name="Password")
+                    if not pwd_input.count():
+                        logger.error("Campo password non trovato nella schermata 'Remember Me'")
+                        return False
+                    pwd_input.first.fill(password)
+                    logger.info("Password inserita")
+
+                    sign_in_btn = page.get_by_role("button", name=re.compile("Sign in", re.IGNORECASE))
+                    if not sign_in_btn.count():
+                        sign_in_btn = page.locator("a#btnSubmit, button#btnSubmit, .btn-standard.primary")
+
+                    if not sign_in_btn.count() or not sign_in_btn.first.is_visible():
+                        logger.error("Bottone Sign in non trovato nella schermata 'Remember Me'")
+                        return False
+
+                    sign_in_btn.first.click()
+                    logger.info("Sign in / SIGN IN cliccato")
+                else:
+                    logger.info(f"L'utente memorizzato NON coincide con quello configurato ({email}). Eseguo lo switch utente...")
+                    if logout_link:
+                        logout_link.click()
+                    else:
+                        try:
+                            page.locator("a:has-text('different user'), a:has-text('Log out')").first.click()
+                        except Exception as e:
+                            logger.error(f"Impossibile cambiare utente: {e}")
+                            return False
+
+                    logger.info("Attesa ricaricamento pagina login standard...")
+                    page.wait_for_timeout(4000)
+                    is_remember_me_screen = False
+
+            # Se non era la schermata remember_me, o se abbiamo eseguito lo switch dell'utente
+            if not is_remember_me_screen:
+                # Step 1: Email
+                email_input = page.get_by_role("textbox", name="Phone or Email")
+                if not email_input.count():
+                    logger.error("Campo email non trovato")
+                    return False
+                email_input.first.fill(email)
+                logger.info("Email inserita")
+
+                # Step 2: NEXT
+                page.wait_for_timeout(1000)
+                next_btn = page.get_by_role("button", name="NEXT")
+                if not next_btn.count():
+                    logger.error("Bottone NEXT non trovato")
+                    return False
+                next_btn.first.click()
+                logger.info("NEXT cliccato")
+                page.wait_for_timeout(3000)
+
+                # Step 3: Password
+                pwd_input = page.get_by_role("textbox", name="Password")
+                if not pwd_input.count():
+                    logger.error("Campo password non trovato dopo NEXT")
+                    return False
+                pwd_input.first.fill(password)
+                logger.info("Password inserita")
+
+                # Step 4: Sign in
+                sign_in_btn = page.get_by_role("button", name="Sign in")
+                if not sign_in_btn.count():
+                    logger.error("Bottone Sign in non trovato")
+                    return False
+                sign_in_btn.first.click()
+                logger.info("Sign in cliccato")
 
             logger.info("Attesa redirect a WebApp...")
             page.wait_for_timeout(5000)

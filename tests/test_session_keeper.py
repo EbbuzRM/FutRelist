@@ -16,6 +16,9 @@ class TestSessionKeeper:
     def setup_session_keeper(self):
         mock_controller = MagicMock()
         mock_auth = MagicMock()
+        mock_auth.probe_session_alive.side_effect = (
+            lambda page, timeout_ms=8000: mock_auth.is_logged_in(page, timeout_ms=timeout_ms)
+        )
         mock_bot_state = MagicMock()
         mock_page = MagicMock()
         mock_get_credentials = MagicMock(return_value=("user", "pass"))
@@ -61,6 +64,20 @@ class TestSessionKeeper:
         components["session_keeper"]._execute_heartbeat()
 
         assert components["auth"].is_logged_in.call_count == 2
+
+    def test_execute_heartbeat_recovers_when_active_probe_fails(self, setup_session_keeper):
+        """_execute_heartbeat recovers if the active menu probe cannot confirm the session."""
+        components = setup_session_keeper
+        components["auth"].probe_session_alive.side_effect = None
+        components["auth"].probe_session_alive.return_value = False
+        components["auth"].is_logged_in.return_value = True
+        components["auth"].is_console_session_active.return_value = False
+        components["page"].locator.return_value.count.return_value = 1
+
+        with patch.object(components["session_keeper"], "ensure_session") as ensure_mock:
+            components["session_keeper"]._execute_heartbeat()
+
+        ensure_mock.assert_called_once_with(timeout_ms=10000)
 
     def test_execute_heartbeat_session_expired_and_recovery_fails(self, setup_session_keeper):
         """_execute_heartbeat raises RebootRequestError if ensure_session fails."""

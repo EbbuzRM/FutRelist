@@ -206,8 +206,8 @@ class SessionKeeper:
                     self.bot_state.set_console_mode(True, hours=0.5)
                 return  # ME-07: ESCI SUBITO dopo aver attivato console mode
 
-            if not self.auth.is_logged_in(self.page, timeout_ms=3000):
-                logger.warning("Heartbeat ha rilevato sessione scaduta.")
+            if not self.auth.probe_session_alive(self.page, timeout_ms=5000):
+                logger.warning("Heartbeat ha rilevato sessione scaduta o incerta tramite menu probe.")
 
                 try:
                     logger.info("Tentativo di recupero sessione...")

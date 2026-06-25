@@ -1,5 +1,5 @@
 status: production
-last_updated: "2026-05-19T00:00:00.000Z"
+last_updated: "2026-05-25T00:00:00.000Z"
 ---
 
 # Project State — FIFA 26 Auto-Relist Bot
@@ -18,7 +18,7 @@ Questa è la mappatura reale dei componenti dopo il refactoring della Fase 9.
   - **Hours:** 17, 18 (solo 17:10 e 18:10).
   - **HOLD period start:** 16:10 (non è una golden hour).
   - **Protocol:** :09 (Pre-Nav) → :10 (Relist) → :11 (Ritardatari).
-- **Session Keeper (`browser/session_keeper.py`):** Gestisce la salute della sessione, il **Heartbeat** (click su tab 'Transfers') e le attese in Pausa/Console.
+- **Session Keeper (`browser/session_keeper.py`):** Gestisce la salute della sessione, il **Heartbeat** con menu probe attivo e le attese in Pausa/Console.
 - **Bot State (`bot_state.py`):** Gestore dello stato thread-safe (comandi Telegram, statistiche, reboot events).
 
 ## 3. Control & Interaction (Telegram Commands)
@@ -41,7 +41,7 @@ Il bot risponde a **11 comandi** reali via Telegram.
 ## 4. Critical Logic & Guardrails (DA NON MODIFICARE)
 Regole fondamentali verificate nel codice sorgente:
 - **Stealth Polling:** Durante Pausa o Console Mode, il bot aspetta **300s** (5 min). `wait_interruptible` garantisce che il bot risponda subito ai comandi nonostante il lungo sleep.
-- **Heartbeat:** Eseguito ogni 2.5-5 min tramite click sulla tab **'Transfers'** (icon-transfer). Non usare più 'Clear Sold' come heartbeat primario.
+- **Heartbeat:** Eseguito ogni 2.5-5 min tramite **menu probe** (`Home/Casa/Club -> Transfers`) con controllo modali logout, console session e URL login. Dopo fallimenti consecutivi del probe usa refresh completo come fallback estremo. Non usare piu 'Clear Sold' come heartbeat primario.
 - **Verification Protocol:**
   1. Relist → 5s wait → Scan.
   2. Se restano oggetti scaduti (non in "Processing") → Secondo Relist → 3s wait → Scan finale.
@@ -60,6 +60,22 @@ Regole fondamentali verificate nel codice sorgente:
 
 
 ## 5. Current Activity & Known Issues
+
+### Today's Fixes (May 28, 2026)
+### Feature: Rilevamento e Gestione Nuovo Metodo di Login EA (Remember Me)
+- **Problema**: L'introduzione della nuova schermata di login EA con utente pre-selezionato (e solo campo password) interrompeva il flusso di login classico del bot.
+- **Fix**: Integrato il rilevamento dinamico della schermata "Remember Me" in `AuthManager.perform_login()`. Il bot inserisce la password direttamente se l'utente corrisponde a quello di sistema, altrimenti esegue uno switch utente in automatico verso il flusso classico.
+- **File modificati**: `browser/auth.py`
+- **Verifica**: Flusso approvato dall'utente e validato sintatticamente con successo. Massima resilienza per entrambe le tipologie di accesso.
+
+### Today's Fixes (May 25, 2026)
+### Fix: Menu probe per rilevamento sessione scaduta
+- **Problema**: La shell WebApp poteva restare visibile anche con sessione EA scaduta; `is_logged_in()` vedeva Home/Transfers e produceva falsi positivi.
+- **Root cause**: L'heartbeat basato sul solo click `Transfers` non forzava sempre EA a mostrare logout/modale; cambiando menu il problema emergeva piu spesso.
+- **Fix**: `AuthManager.probe_session_alive()` forza un cambio menu `Home/Casa/Club -> Transfers`, controlla modali di disconnessione, console session e URL login. `SessionKeeper` ed `ensure_session()` usano il probe prima di fidarsi della UI.
+- **Fallback**: dopo 3 probe non conclusivi parte un refresh completo (`session_probe_refresh_after_failures` configurabile).
+- **File modificati**: `browser/auth.py`, `browser/session_keeper.py`, `browser/error_handler.py`, `tests/test_auth_probe.py`, `tests/test_session_keeper.py`, `tests/test_error_handler.py`.
+- **Verifica**: `python -m pytest` -> 746 test passano.
 
 ### IMPORTANTE — Golden Hour 16:10 RIMOSSA (maggio 2026)
 

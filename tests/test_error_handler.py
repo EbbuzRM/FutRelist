@@ -113,6 +113,22 @@ class TestEnsureSession:
         mock_auth.is_logged_in.assert_called_once_with(mock_page, timeout_ms=5000)
         mock_auth.authenticate.assert_not_called()
 
+    def test_active_webapp_uses_probe_before_trusting_logged_in_shell(self):
+        """ensure_session recovers when the WebApp shell is visible but active probe fails."""
+        mock_page = MagicMock()
+        mock_page.url = "https://www.ea.com/fifa/ultimate-team/web-app/"
+        mock_auth = MagicMock()
+        mock_auth.probe_session_alive = MagicMock(return_value=False)
+        mock_auth.check_and_handle_disconnect_modal.return_value = False
+        mock_auth.is_logged_in.return_value = True
+        mock_controller = MagicMock()
+
+        ensure_session(mock_page, mock_auth, mock_controller)
+
+        assert mock_auth.probe_session_alive.call_count == 2
+        mock_auth.probe_session_alive.assert_called_with(mock_page, timeout_ms=5000)
+        mock_auth.perform_full_login.assert_called_once_with(mock_page, mock_controller, get_credentials_fn=None)
+
     def test_session_expired_but_recovered_after_reload(self):
         """ensure_session recovers session after reload if initially not logged in."""
         mock_page = MagicMock()
